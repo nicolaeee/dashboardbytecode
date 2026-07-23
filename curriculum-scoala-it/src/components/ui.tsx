@@ -5,10 +5,10 @@ import { useEffect } from 'react';
 type Variant = 'primary' | 'ghost' | 'outline' | 'danger';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand-500 text-white hover:bg-brand-600 shadow-sm',
-  outline: 'bg-white text-ink border border-line hover:border-brand-300 hover:text-brand-600',
+  primary: 'bg-brand-500 text-black shadow-glow-sm hover:bg-brand-600 hover:shadow-glow',
+  outline: 'glass text-ink border border-line hover:border-brand-300 hover:text-brand-500 hover:shadow-glow-sm',
   ghost: 'text-lock hover:text-ink hover:bg-slate-150/60',
-  danger: 'bg-white text-[#C0392B] border border-[#F2D4D0] hover:bg-[#FDF3F2]',
+  danger: 'glass text-[#FF6B6B] border border-[#FF6B6B]/30 hover:bg-[#FF6B6B]/10',
 };
 
 export function Button({
@@ -25,14 +25,14 @@ export function Button({
 }
 
 export function Card({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={`rounded-2xl border border-line bg-white shadow-card ${className}`} />;
+  return <div {...props} className={`glass rounded-2xl border border-line shadow-card ${className}`} />;
 }
 
 export function Input({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`h-10 w-full rounded-xl border border-line bg-white px-3 text-sm
+      className={`glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink
         placeholder:text-lock/70 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 ${className}`}
     />
   );
@@ -42,7 +42,7 @@ export function Textarea({ className = '', ...props }: React.TextareaHTMLAttribu
   return (
     <textarea
       {...props}
-      className={`w-full rounded-xl border border-line bg-white p-3 text-sm leading-relaxed
+      className={`glass w-full rounded-xl border border-line p-3 text-sm leading-relaxed text-ink
         placeholder:text-lock/70 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 ${className}`}
     />
   );
@@ -72,8 +72,8 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-4 py-10 backdrop-blur-[2px]">
-      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl bg-white shadow-pop`}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10 backdrop-blur-md">
+      <div className={`glass-strong w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl border border-line shadow-pop`}>
         <header className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="font-display text-lg font-semibold">{title}</h2>
           <button onClick={onClose} aria-label="Închide" className="rounded-lg p-1 text-lock hover:bg-slate-150 hover:text-ink">
@@ -90,9 +90,9 @@ export function Modal({
 export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'brand' | 'lock' | 'ok'; children: React.ReactNode }) {
   const tones = {
     neutral: 'bg-slate-150 text-ink/70',
-    brand: 'bg-brand-50 text-brand-700',
+    brand: 'bg-brand-50 text-brand-500',
     lock: 'bg-slate-150 text-lock',
-    ok: 'bg-[#E7F6F1] text-[#0E7C63]',
+    ok: 'bg-[#3DDCB9]/15 text-[#3DDCB9]',
   }[tone];
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${tones}`}>{children}</span>;
 }

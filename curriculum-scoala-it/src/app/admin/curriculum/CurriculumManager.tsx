@@ -1,11 +1,14 @@
 'use client';
 import { useState, useTransition } from 'react';
+import NextLink from 'next/link';
 import {
   ChevronDown, ChevronRight, Pencil, Plus, Trash2, ArrowUp, ArrowDown, PlayCircle,
+  ExternalLink, Video, Eye,
 } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Textarea } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
 import { deleteNode, moveNode, saveNode } from '@/app/admin/actions';
+import { toEmbedUrl } from '@/lib/embed';
 import type { EntityKind, Lesson, Tree } from '@/lib/types';
 
 const ACCENTS = ['#F2564B', '#F2A93B', '#12A594', '#D6409F', '#7C5CFF', '#3A55E8'];
@@ -101,7 +104,7 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
   return (
     <div className="space-y-4">
       {error && (
-        <p className="rounded-xl border border-[#F2D4D0] bg-[#FDF3F2] px-4 py-2.5 text-sm text-[#C0392B]">{error}</p>
+        <p className="rounded-xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-4 py-2.5 text-sm text-[#FF6B6B]">{error}</p>
       )}
 
       <div className="flex justify-end">
@@ -185,7 +188,7 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                       )}
 
                       {course.modules.map((mod, mi) => (
-                        <div key={mod.id} className="rounded-xl border border-line bg-white px-3 py-2.5">
+                        <div key={mod.id} className="glass rounded-xl border border-line px-3 py-2.5">
                           <div className="flex items-start gap-2">
                             <button onClick={() => toggle(mod.id)} className="mt-0.5 text-lock hover:text-ink" aria-label="Extinde">
                               {open.has(mod.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -220,6 +223,7 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                                   <span className="tag w-8 shrink-0">L{li + 1}</span>
                                   <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
                                   <RowActions
+                                    viewHref={`/lectie/${lesson.id}`}
                                     onEdit={() => startEdit('lesson', lesson.id, mod.id)}
                                     onUp={li > 0 ? () => move('lesson', lesson.id, 'up', mod.id) : undefined}
                                     onDown={li < mod.lessons.length - 1 ? () => move('lesson', lesson.id, 'down', mod.id) : undefined}
@@ -315,6 +319,45 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
             <Field label="Link pentru temă">
               <Input value={draft.values.homework_url} onChange={(e) => set('homework_url', e.target.value)} placeholder="https://…" />
             </Field>
+
+            {/* Previzualizare identică cu ce vede profesorul: video real + butoane funcționale */}
+            <div className="border-t border-line pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-[13px] font-medium text-ink">
+                  <Video size={15} /> Previzualizare — cum vede profesorul lecția
+                </h3>
+                {draft.id && (
+                  <NextLink
+                    href={`/lectie/${draft.id}`}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-500 hover:text-brand-600"
+                  >
+                    <Eye size={14} /> Deschide pagina completă
+                  </NextLink>
+                )}
+              </div>
+
+              <div className="mt-2 overflow-hidden rounded-2xl border border-line bg-black">
+                {draft.values.video_url && toEmbedUrl(draft.values.video_url) ? (
+                  <div className="aspect-video">
+                    <iframe
+                      src={toEmbedUrl(draft.values.video_url)!} title="Previzualizare video"
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <div className="flex aspect-video items-center justify-center text-sm text-white/50">
+                    {draft.values.video_url ? 'Link video invalid.' : 'Fără link video încă.'}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <PreviewProjectLink href={draft.values.teacher_project_url} label="Proiect profesor" primary />
+                <PreviewProjectLink href={draft.values.student_project_url} label="Proiect copil" />
+              </div>
+            </div>
           </>
         )}
       </Modal>
@@ -323,9 +366,9 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
 }
 
 function RowActions({
-  onAdd, addLabel, onEdit, onUp, onDown, onDelete, disabled,
+  onAdd, addLabel, viewHref, onEdit, onUp, onDown, onDelete, disabled,
 }: {
-  onAdd?: () => void; addLabel?: string; onEdit: () => void;
+  onAdd?: () => void; addLabel?: string; viewHref?: string; onEdit: () => void;
   onUp?: () => void; onDown?: () => void; onDelete: () => void; disabled?: boolean;
 }) {
   return (
@@ -334,6 +377,15 @@ function RowActions({
         <Button size="sm" variant="outline" onClick={onAdd} disabled={disabled} className="mr-1">
           <Plus size={14} /> {addLabel}
         </Button>
+      )}
+      {viewHref && (
+        <NextLink
+          href={viewHref}
+          title="Vezi lecția ca profesorul" aria-label="Vezi lecția ca profesorul"
+          className="rounded-lg p-1.5 text-lock transition hover:bg-brand-50 hover:text-brand-500"
+        >
+          <Eye size={15} />
+        </NextLink>
       )}
       <IconBtn onClick={onUp} disabled={disabled || !onUp} label="Mută mai sus"><ArrowUp size={15} /></IconBtn>
       <IconBtn onClick={onDown} disabled={disabled || !onDown} label="Mută mai jos"><ArrowDown size={15} /></IconBtn>
@@ -350,9 +402,28 @@ function IconBtn({
     <button
       type="button" onClick={onClick} disabled={disabled} title={label} aria-label={label}
       className={`rounded-lg p-1.5 transition disabled:opacity-25
-        ${danger ? 'text-lock hover:bg-[#FDF3F2] hover:text-[#C0392B]' : 'text-lock hover:bg-slate-150 hover:text-ink'}`}
+        ${danger ? 'text-lock hover:bg-[#FF6B6B]/10 hover:text-[#FF6B6B]' : 'text-lock hover:bg-slate-150 hover:text-ink'}`}
     >
       {children}
     </button>
+  );
+}
+
+function PreviewProjectLink({ href, label, primary }: { href: string; label: string; primary?: boolean }) {
+  if (!href) {
+    return (
+      <span className="inline-flex h-10 cursor-not-allowed items-center gap-2 rounded-xl border border-dashed border-line px-4 text-sm text-lock">
+        {label} · lipsă
+      </span>
+    );
+  }
+  return (
+    <a
+      href={href} target="_blank" rel="noopener noreferrer"
+      className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition
+        ${primary ? 'bg-brand-500 text-black shadow-glow-sm hover:bg-brand-600 hover:shadow-glow' : 'glass border border-line text-ink hover:border-brand-300 hover:text-brand-500 hover:shadow-glow-sm'}`}
+    >
+      {label} <ExternalLink size={14} />
+    </a>
   );
 }

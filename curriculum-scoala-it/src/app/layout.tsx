@@ -7,7 +7,7 @@ const body = Inter({ subsets: ['latin', 'latin-ext'], variable: '--font-body', d
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Curriculum · Școala de IT',
+  title: 'Bytecode School',
   description: 'Platformă internă de curriculum pentru administratori și profesori.',
 };
 

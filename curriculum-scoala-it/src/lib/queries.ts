@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
+import { moduleUnlocked } from '@/lib/access';
 import type {
   AccessMap, Course, LessonStub, Module, Platform, Profile, Tree, Lesson,
 } from '@/lib/types';
+
+export { toEmbedUrl } from '@/lib/embed';
+export { moduleUnlocked, lessonUnlocked } from '@/lib/access';
 
 /** Permisiunile profesorului curent (adminul are acces la tot). */
 export async function getAccessMap(profile: Profile): Promise<AccessMap> {
@@ -15,13 +19,6 @@ export async function getAccessMap(profile: Profile): Promise<AccessMap> {
     modules: new Set((mp ?? []).map((r) => r.module_id as string)),
     lessons: new Set((lp ?? []).map((r) => r.lesson_id as string)),
   };
-}
-
-export function moduleUnlocked(access: AccessMap, moduleId: string) {
-  return access.modules.has('*') || access.modules.has(moduleId);
-}
-export function lessonUnlocked(access: AccessMap, lesson: LessonStub) {
-  return access.lessons.has('*') || access.lessons.has(lesson.id) || moduleUnlocked(access, lesson.module_id);
 }
 
 /**
@@ -99,22 +96,4 @@ export async function getLessonContext(lessonId: string): Promise<LessonContext 
     platform: platform as Platform,
     siblings: (siblings ?? []) as LessonStub[],
   };
-}
-
-/** Transformă orice link YouTube într-un URL de embed. */
-export function toEmbedUrl(url: string): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtu.be')) return `https://www.youtube.com/embed${u.pathname}`;
-    if (u.hostname.includes('youtube.com')) {
-      if (u.pathname.startsWith('/embed/')) return url;
-      const v = u.searchParams.get('v');
-      if (v) return `https://www.youtube.com/embed/${v}`;
-    }
-    if (u.hostname.includes('vimeo.com')) return `https://player.vimeo.com/video${u.pathname}`;
-    return url;
-  } catch {
-    return null;
-  }
 }

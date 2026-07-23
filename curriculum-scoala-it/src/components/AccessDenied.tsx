@@ -4,7 +4,7 @@ import { Lock } from 'lucide-react';
 /** Mesajul standard afișat la orice încercare de acces neautorizat. */
 export default function AccessDenied() {
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border border-line bg-white px-8 py-12 text-center shadow-card">
+    <div className="glass mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border border-line px-8 py-12 text-center shadow-card">
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-150 text-lock">
         <Lock size={20} />
       </span>

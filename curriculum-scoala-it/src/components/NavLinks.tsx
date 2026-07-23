@@ -15,8 +15,8 @@ export default function NavLinks({ items }: { items: NavItem[] }) {
             key={item.href}
             href={item.href}
             aria-current={active ? 'page' : undefined}
-            className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition
-              ${active ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+            className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition
+              ${active ? 'bg-brand-500 text-black shadow-glow' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
           >
             {item.icon}
             {item.label}

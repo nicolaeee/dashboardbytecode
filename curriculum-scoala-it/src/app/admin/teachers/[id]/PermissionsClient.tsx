@@ -50,10 +50,10 @@ export default function PermissionsClient({
   return (
     <div className="space-y-4">
       {error && (
-        <p className="rounded-xl border border-[#F2D4D0] bg-[#FDF3F2] px-4 py-2.5 text-sm text-[#C0392B]">{error}</p>
+        <p className="rounded-xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-4 py-2.5 text-sm text-[#FF6B6B]">{error}</p>
       )}
 
-      <div className="flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3">
+      <div className="glass flex items-center justify-between rounded-xl border border-line px-4 py-3">
         <p className="text-sm">
           <span className="font-display text-lg font-semibold tabular-nums">{modules.size}</span>
           <span className="text-ink/60"> din {totalModules} module deblocate</span>
@@ -100,7 +100,7 @@ export default function PermissionsClient({
                         {course.modules.map((mod, mi) => {
                           const on = modules.has(mod.id);
                           return (
-                            <li key={mod.id} className="rounded-xl border border-line bg-white px-3 py-2.5">
+                            <li key={mod.id} className="glass rounded-xl border border-line px-3 py-2.5">
                               <div className="flex items-center gap-3">
                                 <span className="tag w-7 shrink-0">M{mi + 1}</span>
                                 <span className="min-w-0 flex-1 truncate text-[15px]">{mod.title}</span>
@@ -124,7 +124,7 @@ export default function PermissionsClient({
                                         return (
                                           <li key={lesson.id} className="flex items-center gap-2 rounded-lg px-1 py-1.5">
                                             {viaModule || single
-                                              ? <LockOpen size={14} className="text-[#0E7C63]" />
+                                              ? <LockOpen size={14} className="text-[#3DDCB9]" />
                                               : <Lock size={14} className="text-lock" />}
                                             <span className="tag w-7 shrink-0">L{li + 1}</span>
                                             <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>

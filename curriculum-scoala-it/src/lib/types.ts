@@ -43,6 +43,26 @@ export type Tree = PlatformNode[];
 /** id-urile de continut deblocat pentru profesorul curent */
 export type AccessMap = { modules: Set<string>; lessons: Set<string> };
 
+export type TrackerGroup = {
+  id: string;
+  teacher_id: string;
+  group_name: string;
+  module_count: number;
+  reward_type: string;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+export type TrackerStudent = {
+  id: string;
+  teacher_id: string;
+  group_id: string;
+  name: string;
+  progress: number;
+  deleted_at: string | null;
+  created_at: string;
+};
+
 export const ENTITY_LABELS = {
   platform: 'Platformă',
   course: 'Curs',

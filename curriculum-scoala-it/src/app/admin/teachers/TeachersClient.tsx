@@ -24,7 +24,7 @@ export default function TeachersClient({
   return (
     <div className="space-y-4">
       {error && (
-        <p className="rounded-xl border border-[#F2D4D0] bg-[#FDF3F2] px-4 py-2.5 text-sm text-[#C0392B]">{error}</p>
+        <p className="rounded-xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-4 py-2.5 text-sm text-[#FF6B6B]">{error}</p>
       )}
 
       <div className="flex justify-end">
@@ -37,7 +37,7 @@ export default function TeachersClient({
         {profiles.map((p) => (
           <div key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3.5">
             <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full
-              ${p.role === 'admin' ? 'bg-brand-50 text-brand-600' : 'bg-slate-150 text-lock'}`}>
+              ${p.role === 'admin' ? 'bg-brand-50 text-brand-500' : 'bg-slate-150 text-lock'}`}>
               {p.role === 'admin' ? <ShieldCheck size={17} /> : <UserRound size={17} />}
             </span>
 
@@ -68,7 +68,7 @@ export default function TeachersClient({
                 value={p.role}
                 disabled={pending || p.id === meId}
                 onChange={(e) => run(() => setUserRole(p.id, e.target.value as Role))}
-                className="h-8 rounded-xl border border-line bg-white px-2 text-[13px] disabled:opacity-50"
+                className="glass h-8 rounded-xl border border-line px-2 text-[13px] text-ink disabled:opacity-50"
                 aria-label="Rol"
               >
                 <option value="teacher">Profesor</option>
@@ -115,7 +115,7 @@ export default function TeachersClient({
           <select
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-            className="h-10 w-full rounded-xl border border-line bg-white px-3 text-sm"
+            className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
           >
             <option value="teacher">Profesor — vede doar ce deblochezi</option>
             <option value="admin">Administrator — acces total</option>

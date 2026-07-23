@@ -13,13 +13,10 @@ export default function Shell({
       {/* Sincronizare live cu modificările adminului */}
       <RealtimeRefresher />
 
-      <aside className="relative bg-ink px-4 py-4 text-white lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:shrink-0 lg:px-5 lg:py-6">
+      <aside className="glass relative border-b border-line px-4 py-4 text-white lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
         <Link href="/" className="mb-6 flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 font-mono text-sm font-bold">{'</>'}</span>
-          <span className="font-display text-[15px] font-semibold leading-tight">
-            Curriculum
-            <span className="block text-[11px] font-normal text-white/50">Școala de IT</span>
-          </span>
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 font-mono text-sm font-bold text-black">{'</>'}</span>
+          <span className="font-display text-[15px] font-semibold leading-tight">Bytecode School</span>
         </Link>
 
         <NavLinks items={nav} />
