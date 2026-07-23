@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+
+body {
+  background: #F2F5FA;
+  color: #101B33;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Eticheta mono folosită pentru numerotarea reală a curriculumului (M1, L3) */
+.tag {
+  @apply font-mono text-[11px] uppercase tracking-[0.14em] text-lock;
+}
+
+/* Traseul curriculumului: coloana verticală care leagă nivelurile ierarhiei */
+.rail { @apply relative pl-6; }
+.rail::before {
+  content: '';
+  @apply absolute left-[7px] top-1 bottom-1 w-px bg-line;
+}
+.rail-dot {
+  @apply absolute left-0 top-[10px] h-[15px] w-[15px] rounded-full border-2 border-white;
+  box-shadow: 0 0 0 1px #E1E7F0;
+}
+
+:focus-visible { outline: 2px solid #3A55E8; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
