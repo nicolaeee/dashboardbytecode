@@ -72,7 +72,7 @@ export default function TeachersClient({
               {!p.is_active && <Badge tone="lock">Dezactivat</Badge>}
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
               {p.role === 'teacher' && (
                 <Link href={`/admin/teachers/${p.id}`}>
                   <Button size="sm" variant="outline"><KeyRound size={14} /> Acces</Button>

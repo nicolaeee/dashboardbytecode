@@ -382,7 +382,7 @@ function RowActions({
         <NextLink
           href={viewHref}
           title="Vezi lecția ca profesorul" aria-label="Vezi lecția ca profesorul"
-          className="rounded-lg p-1.5 text-lock transition hover:bg-brand-50 hover:text-brand-500"
+          className="grid h-9 w-9 place-items-center rounded-lg text-lock transition hover:bg-brand-50 hover:text-brand-500"
         >
           <Eye size={15} />
         </NextLink>
@@ -401,7 +401,7 @@ function IconBtn({
   return (
     <button
       type="button" onClick={onClick} disabled={disabled} title={label} aria-label={label}
-      className={`rounded-lg p-1.5 transition disabled:opacity-25
+      className={`grid h-9 w-9 place-items-center rounded-lg transition disabled:opacity-25
         ${danger ? 'text-lock hover:bg-[#FF6B6B]/10 hover:text-[#FF6B6B]' : 'text-lock hover:bg-slate-150 hover:text-ink'}`}
     >
       {children}

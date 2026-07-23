@@ -547,12 +547,6 @@ export default function ProgressTracker({
         ) : null}
       </main>
 
-      <footer className="glass mt-auto px-4 py-4 text-center border-t border-white/10">
-        <a href="https://bytecodeschool.com" target="_blank" rel="noopener noreferrer" className="text-[#C8F023] hover:underline font-semibold">
-          🌐 Website
-        </a>
-      </footer>
-
       {/* Menu overlay + panel */}
       <div
         onClick={() => setMenuOpen(false)}
