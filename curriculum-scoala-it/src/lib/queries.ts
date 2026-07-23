@@ -74,25 +74,45 @@ export type LessonContext = {
   siblings: LessonStub[];
 };
 
-/** Lecția + poziția ei în curriculum. Întoarce null dacă RLS blochează accesul. */
+type LessonWithAncestors = Lesson & {
+  module: Module & { course: Course & { platform: Platform } };
+};
+
+/**
+ * Lecția + poziția ei în curriculum. Întoarce null dacă RLS blochează accesul.
+ * O singură interogare (join server-side prin PostgREST) în loc de un lanț de
+ * 4 cereri secvențiale lecție -> modul -> curs -> platformă.
+ */
 export async function getLessonContext(lessonId: string): Promise<LessonContext | null> {
   const supabase = await createClient();
-  const { data: lesson } = await supabase.from('lessons').select('*').eq('id', lessonId).maybeSingle();
-  if (!lesson) return null;
+  const { data: row } = await supabase
+    .from('lessons')
+    .select(`
+      id, module_id, title, objective, video_url, teacher_project_url, student_project_url,
+      notes, homework, homework_url, position,
+      module:modules(
+        id, course_id, title, description, position,
+        course:courses(
+          id, platform_id, title, description, position,
+          platform:platforms(id, name, description, accent, position)
+        )
+      )
+    `)
+    .eq('id', lessonId)
+    .maybeSingle<LessonWithAncestors>();
 
-  const { data: mod } = await supabase.from('modules').select('*').eq('id', lesson.module_id).single();
-  if (!mod) return null;
-  const { data: course } = await supabase.from('courses').select('*').eq('id', mod.course_id).single();
-  if (!course) return null;
-  const { data: platform } = await supabase.from('platforms').select('*').eq('id', course.platform_id).single();
-  if (!platform) return null;
+  if (!row?.module?.course?.platform) return null;
+  const { module: mod, ...lesson } = row;
+  const { course, ...moduleRest } = mod;
+  const { platform, ...courseRest } = course;
+
   const { data: siblings } = await supabase
-    .from('lesson_index').select('*').eq('module_id', mod.id).order('position');
+    .from('lesson_index').select('*').eq('module_id', moduleRest.id).order('position');
 
   return {
     lesson: lesson as Lesson,
-    module: mod as Module,
-    course: course as Course,
+    module: moduleRest as Module,
+    course: courseRest as Course,
     platform: platform as Platform,
     siblings: (siblings ?? []) as LessonStub[],
   };

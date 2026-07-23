@@ -227,16 +227,30 @@ export default function ProgressTracker({
   }
 
   // ---- mutatii Supabase ----
+  // Optimist: aplica schimbarea local instant, apoi confirma cu serverul in fundal.
+  // Daca serverul refuza, revenim la valoarea dinainte si aratam eroarea.
   async function patchGroup(id: string, patch: Partial<TrackerGroup>) {
+    const previous = groups.find((g) => g.id === id) ?? null;
+    setGroups((gs) => gs.map((g) => (g.id === id ? { ...g, ...patch } : g)));
     const { data, error } = await supabase.from('tracker_groups').update(patch).eq('id', id).select().single();
-    if (error || !data) { showToast('Eroare', 'error'); return null; }
+    if (error || !data) {
+      if (previous) setGroups((gs) => gs.map((g) => (g.id === id ? previous : g)));
+      showToast('Eroare', 'error');
+      return null;
+    }
     setGroups((gs) => gs.map((g) => (g.id === id ? (data as TrackerGroup) : g)));
     return data as TrackerGroup;
   }
 
   async function patchStudent(id: string, patch: Partial<TrackerStudent>) {
+    const previous = students.find((s) => s.id === id) ?? null;
+    setStudents((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
     const { data, error } = await supabase.from('tracker_students').update(patch).eq('id', id).select().single();
-    if (error || !data) { showToast('Eroare', 'error'); return null; }
+    if (error || !data) {
+      if (previous) setStudents((ss) => ss.map((s) => (s.id === id ? previous : s)));
+      showToast('Eroare', 'error');
+      return null;
+    }
     setStudents((ss) => ss.map((s) => (s.id === id ? (data as TrackerStudent) : s)));
     return data as TrackerStudent;
   }
@@ -393,10 +407,10 @@ export default function ProgressTracker({
 
     const rewardEmoji = getRewardEmoji(group.reward_type);
     const newProgress = student.progress + 1;
+    showCelebration(rewardEmoji);
     const ok = await patchStudent(studentId, { progress: newProgress });
     if (!ok) return;
 
-    showCelebration(rewardEmoji);
     if (newProgress > 0 && newProgress % 16 === 0) {
       const needsNewModule = newProgress >= maxSteps;
       setTimeout(() => {
