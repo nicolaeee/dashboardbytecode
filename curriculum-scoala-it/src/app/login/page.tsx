@@ -1,8 +1,7 @@
 'use client';
-import { useActionState } from 'react';
-import Link from 'next/link';
+import { useActionState, useState } from 'react';
 import { signIn } from '@/app/auth-actions';
-import { Button, Card, Field, Input } from '@/components/ui';
+import { Button, Card, Field, Input, Modal } from '@/components/ui';
 
 const HIERARCHY = ['Platformă', 'Curs', 'Modul', 'Lecție'];
 
@@ -39,6 +38,7 @@ function FloatingParticles() {
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(signIn, null as { error?: string } | null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-black">
@@ -93,9 +93,12 @@ export default function LoginPage() {
               </Field>
 
               <div className="text-right">
-                <Link href="/forgot-password" className="text-[13px] font-medium text-lock hover:text-brand-500">
+                <button
+                  type="button" onClick={() => setShowForgotPassword(true)}
+                  className="text-[13px] font-medium text-lock hover:text-brand-500"
+                >
                   Ai uitat parola?
-                </Link>
+                </button>
               </div>
 
               {state?.error && (
@@ -109,6 +112,17 @@ export default function LoginPage() {
           </Card>
         </section>
       </div>
+
+      <Modal
+        open={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+        title="Ai uitat parola?"
+        footer={<Button onClick={() => setShowForgotPassword(false)}>Am înțeles</Button>}
+      >
+        <p className="text-sm leading-relaxed text-ink/80">
+          Dacă ai uitat parola, contactează administratorul școlii pentru a ți-o reseta manual.
+        </p>
+      </Modal>
     </div>
   );
 }

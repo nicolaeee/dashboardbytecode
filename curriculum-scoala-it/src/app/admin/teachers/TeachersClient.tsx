@@ -1,9 +1,9 @@
 'use client';
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { KeyRound, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { KeyRound, Lock, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { Badge, Button, Card, Field, Input, Modal } from '@/components/ui';
-import { createTeacher, deleteTeacher, setUserActive, setUserRole } from '@/app/admin/actions';
+import { createTeacher, deleteTeacher, resetTeacherPassword, setUserActive, setUserRole } from '@/app/admin/actions';
 import type { Profile, Role } from '@/lib/types';
 
 export default function TeachersClient({
@@ -14,12 +14,26 @@ export default function TeachersClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const [resetTarget, setResetTarget] = useState<Profile | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetPending, startResetTransition] = useTransition();
+
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     startTransition(async () => {
       const res = await fn();
       setError(res.ok ? null : res.error ?? 'A apărut o eroare.');
       if (res.ok) setAdding(false);
     });
+
+  const submitReset = () => {
+    if (!resetTarget) return;
+    if (newPassword.length < 8) { setResetError('Parola trebuie să aibă minim 8 caractere.'); return; }
+    startResetTransition(async () => {
+      const res = await resetTeacherPassword(resetTarget.id, newPassword);
+      if (res.ok) { setResetTarget(null); setNewPassword(''); setResetError(null); } else setResetError(res.error ?? 'A apărut o eroare.');
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -74,6 +88,10 @@ export default function TeachersClient({
                 <option value="teacher">Profesor</option>
                 <option value="admin">Administrator</option>
               </select>
+              <Button size="sm" variant="outline"
+                onClick={() => { setResetTarget(p); setNewPassword(''); setResetError(null); }}>
+                <Lock size={14} /> Resetează parola
+              </Button>
               <Button size="sm" variant="ghost" disabled={pending || p.id === meId}
                 onClick={() => run(() => setUserActive(p.id, !p.is_active))}>
                 {p.is_active ? 'Dezactivează' : 'Reactivează'}
@@ -124,6 +142,34 @@ export default function TeachersClient({
         <p className="text-xs text-lock">
           Contul nou nu are niciun modul deblocat. Deschide „Acces” după creare.
         </p>
+      </Modal>
+
+      <Modal
+        open={!!resetTarget}
+        onClose={() => { setResetTarget(null); setResetError(null); }}
+        title="Resetează parola"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setResetTarget(null)}>Renunță</Button>
+            <Button disabled={resetPending} onClick={submitReset}>
+              {resetPending ? 'Se salvează…' : 'Salvează parola nouă'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink/70">
+          Setezi o parolă nouă pentru <span className="font-medium text-ink">{resetTarget?.full_name || resetTarget?.email}</span>.
+          Parola veche nu mai e necesară — transmite-i noua parolă direct.
+        </p>
+        <Field label="Parolă nouă">
+          <Input
+            type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="minim 8 caractere" autoFocus
+          />
+        </Field>
+        {resetError && (
+          <p className="rounded-xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-3 py-2 text-[13px] text-[#FF6B6B]">{resetError}</p>
+        )}
       </Modal>
     </div>
   );

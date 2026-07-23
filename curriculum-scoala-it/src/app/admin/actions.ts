@@ -162,6 +162,19 @@ export async function setUserActive(userId: string, is_active: boolean): Promise
   }
 }
 
+export async function resetTeacherPassword(userId: string, password: string): Promise<Result> {
+  try {
+    await adminGuard();
+    if (password.length < 8) return { ok: false, error: 'Parola trebuie să aibă minim 8 caractere.' };
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.updateUserById(userId, { password });
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export async function deleteTeacher(userId: string): Promise<Result> {
   try {
     const { userId: me } = await adminGuard();
