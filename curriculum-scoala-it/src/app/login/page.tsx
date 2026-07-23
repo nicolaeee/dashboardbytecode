@@ -1,5 +1,6 @@
 'use client';
 import { useActionState } from 'react';
+import Link from 'next/link';
 import { signIn } from '@/app/auth-actions';
 import { Button, Card, Field, Input } from '@/components/ui';
 
@@ -90,6 +91,12 @@ export default function LoginPage() {
               <Field label="Parolă">
                 <Input name="password" type="password" autoComplete="current-password" placeholder="••••••••" required />
               </Field>
+
+              <div className="text-right">
+                <Link href="/forgot-password" className="text-[13px] font-medium text-lock hover:text-brand-500">
+                  Ai uitat parola?
+                </Link>
+              </div>
 
               {state?.error && (
                 <p className="rounded-xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-3 py-2 text-[13px] text-[#FF6B6B]">{state.error}</p>

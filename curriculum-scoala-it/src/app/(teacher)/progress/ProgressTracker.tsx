@@ -55,6 +55,20 @@ const PROGRESS_COLORS = [
 const MEDALS = ['🥇', '🥈', '🥉'];
 const MEDAL_CLASSES = ['tracker-medal-gold', 'tracker-medal-silver', 'tracker-medal-bronze'];
 
+const DAYS = [
+  { id: 'luni', label: 'Luni' },
+  { id: 'marti', label: 'Marți' },
+  { id: 'miercuri', label: 'Miercuri' },
+  { id: 'joi', label: 'Joi' },
+  { id: 'vineri', label: 'Vineri' },
+  { id: 'sambata', label: 'Sâmbătă' },
+  { id: 'duminica', label: 'Duminică' },
+];
+
+function dayLabel(id: string | null) {
+  return DAYS.find((d) => d.id === id)?.label ?? null;
+}
+
 // ----------------------------------------------------------------------------
 // Utilitare pure
 // ----------------------------------------------------------------------------
@@ -92,6 +106,12 @@ function getBadgesForPerson(personId: string, progress: number) {
 
 function getRewardEmoji(rewardType: string) {
   return REWARD_TYPES.find((r) => r.id === rewardType)?.emoji ?? '⭐';
+}
+
+/** Comparare fara diacritice/majuscule, pentru cautarea rapida. */
+const DIACRITICS_RE = /[̀-ͯ]/g;
+function norm(s: string) {
+  return s.normalize('NFD').replace(DIACRITICS_RE, '').toLowerCase();
 }
 
 function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank: number })[] {
@@ -139,11 +159,16 @@ export default function ProgressTracker({
   const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; needsNewModule: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [createForm, setCreateForm] = useState({ name: '', count: 1, reward: 'stars', names: [''] });
+  const [createForm, setCreateForm] = useState<{ name: string; count: number; reward: string; names: string[]; day: string | null; time: string }>(
+    { name: '', count: 1, reward: 'stars', names: [''], day: null, time: '' }
+  );
   const [editClassName, setEditClassName] = useState('');
+  const [editClassDay, setEditClassDay] = useState<string | null>(null);
+  const [editClassTime, setEditClassTime] = useState('');
   const [addStudentName, setAddStudentName] = useState('');
   const [editStudentName, setEditStudentName] = useState('');
   const [newModuleReward, setNewModuleReward] = useState('stars');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // ---- selectori ----
   const activeGroups = groups.filter((g) => !g.deleted_at);
@@ -159,6 +184,20 @@ export default function ProgressTracker({
 
   const currentGroup = getGroupById(currentGroupId);
   const totalDataCount = groups.length + students.length;
+
+  // ---- cautare + organizare pe zile ----
+  const searchNorm = norm(searchQuery.trim());
+  const searchedGroups = !searchNorm ? activeGroups : activeGroups.filter((g) => {
+    if (norm(g.group_name).includes(searchNorm)) return true;
+    return getStudentsForGroup(g.id).some((s) => norm(s.name).includes(searchNorm));
+  });
+  const groupsByDay = DAYS.map((d) => ({
+    ...d,
+    groups: searchedGroups
+      .filter((g) => g.day_of_week === d.id)
+      .sort((a, b) => (a.time_of_day || '99:99').localeCompare(b.time_of_day || '99:99')),
+  }));
+  const unscheduledGroups = searchedGroups.filter((g) => !DAYS.some((d) => d.id === g.day_of_week));
 
   // ---- toasts / celebrari ----
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -212,7 +251,10 @@ export default function ProgressTracker({
 
     setBusy(true);
     const { data: group, error } = await supabase.from('tracker_groups')
-      .insert({ teacher_id: teacherId, group_name: name, module_count: 1, reward_type: createForm.reward })
+      .insert({
+        teacher_id: teacherId, group_name: name, module_count: 1, reward_type: createForm.reward,
+        day_of_week: createForm.day, time_of_day: createForm.time || null,
+      })
       .select().single();
     if (error || !group) { setBusy(false); return showToast('Eroare la creare clasa', 'error'); }
 
@@ -226,7 +268,7 @@ export default function ProgressTracker({
     if (sErr) showToast('Eroare la creare elevi', 'error');
 
     setModal({ type: null });
-    setCreateForm({ name: '', count: 1, reward: 'stars', names: [''] });
+    setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '' });
     showToast('Clasa creata cu succes!');
   }
 
@@ -234,7 +276,7 @@ export default function ProgressTracker({
     e.preventDefault();
     const name = editClassName.trim();
     if (!name) return showToast('Introdu numele clasei', 'error');
-    const ok = await patchGroup(groupId, { group_name: name });
+    const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null });
     if (ok) { setModal({ type: null }); showToast('Clasa actualizata!'); }
   }
 
@@ -410,11 +452,20 @@ export default function ProgressTracker({
       <main className="flex-1 p-4 max-w-6xl mx-auto w-full">
         {view === 'home' ? (
           <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-4 gap-3">
               <h2 className="text-lg md:text-xl font-semibold">📚 Clasele Tale</h2>
-              <button onClick={() => setModal({ type: 'createClass' })} className="tracker-btn-primary px-4 py-2 rounded-2xl font-semibold text-sm">
+              <button onClick={() => setModal({ type: 'createClass' })} className="tracker-btn-primary px-4 py-2 rounded-2xl font-semibold text-sm shrink-0">
                 ➕ Adauga Clasa
               </button>
+            </div>
+
+            <div className="relative mb-6">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+              <input
+                type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cauta o clasa (ex: miercuri la 17) sau un elev..."
+                className="w-full bg-gray-900 border border-gray-700 rounded-2xl pl-11 pr-4 py-3 text-white placeholder:text-gray-500"
+              />
             </div>
 
             {activeGroups.length === 0 ? (
@@ -423,31 +474,50 @@ export default function ProgressTracker({
                 <p className="text-gray-400 text-lg">Nicio clasa inca</p>
                 <p className="text-gray-500 text-sm mt-2">Apasa butonul de mai sus pentru a adauga prima ta clasa!</p>
               </div>
+            ) : searchedGroups.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="text-6xl mb-4">🔍</div>
+                <p className="text-gray-400 text-lg">Niciun rezultat pentru &quot;{searchQuery}&quot;</p>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activeGroups.map((group) => {
-                  const list = getStudentsForGroup(group.id);
-                  const rewardEmoji = getRewardEmoji(group.reward_type);
-                  return (
-                    <div key={group.id} className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
-                      <h3 className="text-lg font-bold mb-2">📖 {group.group_name}</h3>
-                      <p className="text-gray-600 text-sm mb-1">👥 {list.length} elevi</p>
-                      <p className="text-gray-600 text-sm mb-1">📚 {group.module_count || 1} module</p>
-                      <p className="text-gray-600 text-sm mb-3">{rewardEmoji} Progres mediu: {calcAvgProgress(group.id)}%</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => openClass(group.id)} className="tracker-btn-primary flex-1 py-2 rounded-2xl font-semibold text-sm">
-                          🚀 Acceseaza
-                        </button>
-                        <button
-                          onClick={() => { setEditClassName(group.group_name); setModal({ type: 'editClass', groupId: group.id }); }}
-                          className="bg-gray-200 hover:bg-gray-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors"
-                        >
-                          ⚙️
-                        </button>
-                      </div>
+              <div className="space-y-8">
+                {groupsByDay.filter((d) => d.groups.length > 0).map((d) => (
+                  <div key={d.id}>
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-[#C8F023] mb-3">{d.label}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {d.groups.map((group) => (
+                        <GroupCard
+                          key={group.id} group={group} studentCount={getStudentsForGroup(group.id).length}
+                          avgProgress={calcAvgProgress(group.id)}
+                          onOpen={() => openClass(group.id)}
+                          onEdit={() => {
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? '');
+                            setModal({ type: 'editClass', groupId: group.id });
+                          }}
+                        />
+                      ))}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
+
+                {unscheduledGroups.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-3">Fara zi stabilita</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {unscheduledGroups.map((group) => (
+                        <GroupCard
+                          key={group.id} group={group} studentCount={getStudentsForGroup(group.id).length}
+                          avgProgress={calcAvgProgress(group.id)}
+                          onOpen={() => openClass(group.id)}
+                          onEdit={() => {
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? '');
+                            setModal({ type: 'editClass', groupId: group.id });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -481,7 +551,7 @@ export default function ProgressTracker({
               recentGroups={[...activeGroups].slice(-5).reverse()}
               deletedCount={deletedGroups.length}
               onOpenClass={openClass}
-              onCreate={() => { setCreateForm({ name: '', count: 1, reward: 'stars', names: [''] }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
+              onCreate={() => { setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '' }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
               onTrash={() => { setModal({ type: 'trashGroups' }); setMenuOpen(false); }}
             />
           ) : currentGroup ? (
@@ -535,6 +605,32 @@ export default function ProgressTracker({
               <input
                 type="text" value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="ex: M1 - Luni - 19:00" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">Ziua saptamanii</label>
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button" onClick={() => setCreateForm((f) => ({ ...f, day: null }))}
+                  className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.day === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                >
+                  Nespecificat
+                </button>
+                {DAYS.map((d) => (
+                  <button
+                    key={d.id} type="button" onClick={() => setCreateForm((f) => ({ ...f, day: d.id }))}
+                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.day === d.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">Ora (optional)</label>
+              <input
+                type="time" value={createForm.time} onChange={(e) => setCreateForm((f) => ({ ...f, time: e.target.value }))}
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
               />
             </div>
             <div className="mb-4">
@@ -600,6 +696,32 @@ export default function ProgressTracker({
                 <input
                   type="text" value={editClassName} onChange={(e) => setEditClassName(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">Ziua saptamanii</label>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    type="button" onClick={() => setEditClassDay(null)}
+                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${editClassDay === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                  >
+                    Nespecificat
+                  </button>
+                  {DAYS.map((d) => (
+                    <button
+                      key={d.id} type="button" onClick={() => setEditClassDay(d.id)}
+                      className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${editClassDay === d.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">Ora (optional)</label>
+                <input
+                  type="time" value={editClassTime} onChange={(e) => setEditClassTime(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
               </div>
               <div className="mb-4">
@@ -839,6 +961,34 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[90%] overflow-y-auto tracker-card-shadow">
         {children}
+      </div>
+    </div>
+  );
+}
+
+function GroupCard({
+  group, studentCount, avgProgress, onOpen, onEdit,
+}: { group: TrackerGroup; studentCount: number; avgProgress: number; onOpen: () => void; onEdit: () => void }) {
+  const rewardEmoji = getRewardEmoji(group.reward_type);
+  const day = dayLabel(group.day_of_week);
+  return (
+    <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
+      <h3 className="text-lg font-bold mb-2">📖 {group.group_name}</h3>
+      {(day || group.time_of_day) && (
+        <p className="inline-flex items-center gap-1 text-xs font-semibold text-black/70 bg-black/5 rounded-full px-2.5 py-1 mb-2">
+          🗓️ {day ?? 'Fara zi'}{group.time_of_day ? ` · ${group.time_of_day}` : ''}
+        </p>
+      )}
+      <p className="text-gray-600 text-sm mb-1">👥 {studentCount} elevi</p>
+      <p className="text-gray-600 text-sm mb-1">📚 {group.module_count || 1} module</p>
+      <p className="text-gray-600 text-sm mb-3">{rewardEmoji} Progres mediu: {avgProgress}%</p>
+      <div className="flex gap-2">
+        <button onClick={onOpen} className="tracker-btn-primary flex-1 py-2 rounded-2xl font-semibold text-sm">
+          🚀 Acceseaza
+        </button>
+        <button onClick={onEdit} className="bg-gray-200 hover:bg-gray-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors">
+          ⚙️
+        </button>
       </div>
     </div>
   );

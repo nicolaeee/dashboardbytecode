@@ -49,6 +49,8 @@ export type TrackerGroup = {
   group_name: string;
   module_count: number;
   reward_type: string;
+  day_of_week: string | null;
+  time_of_day: string | null;
   deleted_at: string | null;
   created_at: string;
 };

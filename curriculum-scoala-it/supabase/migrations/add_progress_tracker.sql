@@ -10,6 +10,8 @@ create table public.tracker_groups (
   group_name   text not null,
   module_count int  not null default 1,
   reward_type  text not null default 'stars',
+  day_of_week  text,   -- 'luni' .. 'duminica', null = nespecificat
+  time_of_day  text,   -- 'HH:MM', optional
   deleted_at   timestamptz,
   created_at   timestamptz not null default now()
 );
