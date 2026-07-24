@@ -236,6 +236,7 @@ create table public.tracker_groups (
   reward_type  text not null default 'stars',
   day_of_week  text,   -- 'luni' .. 'duminica', null = nespecificat
   time_of_day  text,   -- 'HH:MM', optional
+  diploma_milestone int not null default 0,  -- cel mai mare multiplu de 16 lectii deja notificat/trimis
   deleted_at   timestamptz,
   created_at   timestamptz not null default now()
 );
@@ -250,22 +251,85 @@ create table public.tracker_students (
   created_at  timestamptz not null default now()
 );
 
+-- O lectie/sedinta tinuta pentru o grupa (numerotata secvential in cadrul grupei).
+-- `format` e dedus AUTOMAT la creare din numarul de elevi din grupa (1 = individual,
+-- >1 = grup) - baza pentru raportul Payslip din /registru, fara alegere manuala.
+create table public.tracker_lessons (
+  id             uuid primary key default gen_random_uuid(),
+  teacher_id     uuid not null references public.profiles(id) on delete cascade,
+  group_id       uuid not null references public.tracker_groups(id) on delete cascade,
+  session_number int  not null,
+  lesson_date    date not null default current_date,
+  lesson_time    text,   -- 'HH:MM', optional
+  format         text not null default 'grup' check (format in ('grup', 'individual')),
+  created_at     timestamptz not null default now(),
+  unique (group_id, session_number)
+);
+
+-- Prezenta + steluta per elev, per lectie. Complet separate:
+-- prezenta (status) se inregistreaza mereu; steluta (has_star) se acorda strict daca elevul
+-- si-a facut tema - profesorul o poate adauga oricand retroactiv pe o lectie anterioara.
+-- recovery_date/recovery_time = data/ora reala a sedintei 1-la-1 de recuperare (diferita de
+-- data lectiei ratate initial) - alimenteaza automat coloana "Recuperari" din Payslip.
+create table public.tracker_attendance (
+  id             uuid primary key default gen_random_uuid(),
+  teacher_id     uuid not null references public.profiles(id) on delete cascade,
+  lesson_id      uuid not null references public.tracker_lessons(id) on delete cascade,
+  student_id     uuid not null references public.tracker_students(id) on delete cascade,
+  status         text not null default 'absent' check (status in ('present', 'absent', 'made_up')),
+  has_star       boolean not null default false,
+  recovery_date  date,
+  recovery_time  text,   -- 'HH:MM', optional
+  updated_at     timestamptz not null default now(),
+  unique (lesson_id, student_id)
+);
+
 create index on public.tracker_groups (teacher_id);
 create index on public.tracker_students (teacher_id);
 create index on public.tracker_students (group_id);
+create index on public.tracker_lessons (group_id);
+create index on public.tracker_attendance (lesson_id);
+create index on public.tracker_attendance (student_id);
 
-alter table public.tracker_groups   enable row level security;
-alter table public.tracker_students enable row level security;
+create trigger tracker_attendance_touch before update on public.tracker_attendance
+  for each row execute function public.touch_updated_at();
 
--- Izolare stricta: fiecare profesor/admin vede si scrie doar propriile grupe/elevi.
+alter table public.tracker_groups     enable row level security;
+alter table public.tracker_students   enable row level security;
+alter table public.tracker_lessons    enable row level security;
+alter table public.tracker_attendance enable row level security;
+
+-- Izolare stricta: fiecare profesor vede si scrie doar propriile grupe/elevi/lectii/prezenta.
 create policy "profesorul isi gestioneaza grupele" on public.tracker_groups
   for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
 
 create policy "profesorul isi gestioneaza elevii" on public.tracker_students
   for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
 
+create policy "profesorul isi gestioneaza lectiile" on public.tracker_lessons
+  for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+
+create policy "profesorul isi gestioneaza prezenta" on public.tracker_attendance
+  for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+
+-- Adminul are acces complet peste toate grupele/elevii/lectiile/prezenta tuturor profesorilor
+-- (necesar pentru panoul de admin si alerta de diploma la nivel global).
+create policy "adminul gestioneaza toate grupele" on public.tracker_groups
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "adminul gestioneaza toti elevii" on public.tracker_students
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "adminul gestioneaza toate lectiile" on public.tracker_lessons
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "adminul gestioneaza toata prezenta" on public.tracker_attendance
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
 alter publication supabase_realtime add table public.tracker_groups;
 alter publication supabase_realtime add table public.tracker_students;
+alter publication supabase_realtime add table public.tracker_lessons;
+alter publication supabase_realtime add table public.tracker_attendance;
 
 -- ----------------------------------------------------------------------------
 -- 10. PRIMUL ADMINISTRATOR

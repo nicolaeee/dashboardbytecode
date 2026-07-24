@@ -85,8 +85,8 @@ export default function TeachersClient({
                 className="glass h-8 rounded-xl border border-line px-2 text-[13px] text-ink disabled:opacity-50"
                 aria-label="Rol"
               >
-                <option value="teacher">Profesor</option>
-                <option value="admin">Administrator</option>
+                <option value="teacher" className="bg-night text-ink">Profesor</option>
+                <option value="admin" className="bg-night text-ink">Administrator</option>
               </select>
               <Button size="sm" variant="outline"
                 onClick={() => { setResetTarget(p); setNewPassword(''); setResetError(null); }}>
@@ -135,8 +135,8 @@ export default function TeachersClient({
             onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
             className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
           >
-            <option value="teacher">Profesor — vede doar ce deblochezi</option>
-            <option value="admin">Administrator — acces total</option>
+            <option value="teacher" className="bg-night text-ink">Profesor — vede doar ce deblochezi</option>
+            <option value="admin" className="bg-night text-ink">Administrator — acces total</option>
           </select>
         </Field>
         <p className="text-xs text-lock">

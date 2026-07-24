@@ -1,7 +1,8 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, X as XIcon, RotateCcw, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { TrackerGroup, TrackerStudent } from '@/lib/types';
+import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus } from '@/lib/types';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -108,6 +109,10 @@ function getRewardEmoji(rewardType: string) {
   return REWARD_TYPES.find((r) => r.id === rewardType)?.emoji ?? '⭐';
 }
 
+function getRewardName(rewardType: string) {
+  return REWARD_TYPES.find((r) => r.id === rewardType)?.name.toLowerCase() ?? 'recompense';
+}
+
 /** Comparare fara diacritice/majuscule, pentru cautarea rapida. */
 const DIACRITICS_RE = /[̀-ͯ]/g;
 function norm(s: string) {
@@ -127,6 +132,9 @@ function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank:
 let uid = 0;
 function nextLocalId() { uid += 1; return `local-${Date.now()}-${uid}`; }
 
+function nowDate() { return new Date().toISOString().slice(0, 10); }
+function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+
 type ToastItem = { id: string; message: string; type: 'success' | 'error' };
 type CelebrationItem = { id: string; kind: 'text' | 'emoji'; content: string };
 type ConfettiItem = { id: string; left: number; duration: number; delay: number; emoji: string };
@@ -140,15 +148,22 @@ type ModalState =
   | { type: 'trashGroups' }
   | { type: 'trashStudents' }
   | { type: 'confirmDeleteStudent'; studentId: string }
-  | { type: 'confirmDeleteClass'; groupId: string };
+  | { type: 'confirmDeleteClass'; groupId: string }
+  | { type: 'newLesson'; groupId: string }
+  | { type: 'recordRecovery'; studentId: string; lessonId: string };
 
 export default function ProgressTracker({
-  teacherId, initialGroups, initialStudents,
-}: { teacherId: string; initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[] }) {
+  teacherId, initialGroups, initialStudents, initialLessons, initialAttendance,
+}: {
+  teacherId: string; initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
+  initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
+}) {
   const supabase = useMemo(() => createClient(), []);
 
   const [groups, setGroups] = useState<TrackerGroup[]>(initialGroups);
   const [students, setStudents] = useState<TrackerStudent[]>(initialStudents);
+  const [lessons, setLessons] = useState<TrackerLesson[]>(initialLessons);
+  const [attendance, setAttendance] = useState<TrackerAttendance[]>(initialAttendance);
   const [view, setView] = useState<'home' | 'class'>('home');
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -156,7 +171,7 @@ export default function ProgressTracker({
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [celebrations, setCelebrations] = useState<CelebrationItem[]>([]);
   const [confetti, setConfetti] = useState<ConfettiItem[]>([]);
-  const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; needsNewModule: boolean } | null>(null);
+  const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [createForm, setCreateForm] = useState<{ name: string; count: number; reward: string; names: string[]; day: string | null; time: string }>(
@@ -169,6 +184,8 @@ export default function ProgressTracker({
   const [editStudentName, setEditStudentName] = useState('');
   const [newModuleReward, setNewModuleReward] = useState('stars');
   const [searchQuery, setSearchQuery] = useState('');
+  const [newLessonForm, setNewLessonForm] = useState({ date: nowDate(), time: nowTime() });
+  const [recoveryForm, setRecoveryForm] = useState({ date: nowDate(), time: nowTime() });
 
   // ---- selectori ----
   const activeGroups = groups.filter((g) => !g.deleted_at);
@@ -397,34 +414,154 @@ export default function ProgressTracker({
     if (ok) { showToast('Modul adaugat!'); setMagicPopup(null); }
   }
 
-  async function stepForward(studentId: string) {
+  // Ajusteaza progresul (stelutele) unui elev cu +1/-1, tinand cont de plafonul modulelor
+  // si declansand celebrarea + popup-ul magic exact la pragul de 16.
+  async function applyStarDelta(studentId: string, delta: number, group: TrackerGroup) {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
-    const group = getGroupById(student.group_id);
-    if (!group) return;
     const maxSteps = (group.module_count || 1) * 16;
-    if (student.progress >= maxSteps) return showToast('Adauga un modul nou pentru a continua!', 'error');
+    const newProgress = Math.max(0, Math.min(student.progress + delta, maxSteps));
+    if (newProgress === student.progress) return;
 
     const rewardEmoji = getRewardEmoji(group.reward_type);
-    const newProgress = student.progress + 1;
-    showCelebration(rewardEmoji);
+    if (delta > 0) showCelebration(rewardEmoji);
     const ok = await patchStudent(studentId, { progress: newProgress });
     if (!ok) return;
 
-    if (newProgress > 0 && newProgress % 16 === 0) {
+    if (delta > 0 && newProgress > 0 && newProgress % 16 === 0) {
       const needsNewModule = newProgress >= maxSteps;
       setTimeout(() => {
         launchConfetti(rewardEmoji);
         setNewModuleReward('stars');
-        setMagicPopup({ rewardEmoji, needsNewModule });
+        setMagicPopup({ rewardEmoji, rewardType: group.reward_type, needsNewModule });
       }, 800);
     }
   }
 
-  async function stepBack(studentId: string) {
+  // Creeaza o lectie noua (sedinta) pentru o grupa - numerotata secvential. Tipul se deduce
+  // AUTOMAT din numarul de elevi (1 = individuala, >1 = grup) - fara alegere manuala, si
+  // alimenteaza direct Payslip-ul din /registru (pe luna extrasa din data lectiei).
+  async function createLesson(groupId: string, lessonDate: string, lessonTime: string) {
+    const group = getGroupById(groupId);
+    if (!group) return undefined;
+    const groupLessons = lessons.filter((l) => l.group_id === groupId);
+    const nextNumber = groupLessons.length === 0 ? 1 : Math.max(...groupLessons.map((l) => l.session_number)) + 1;
+    const activeCount = getStudentsForGroup(groupId).length;
+    const format = activeCount <= 1 ? 'individual' : 'grup';
+    const { data, error } = await supabase.from('tracker_lessons')
+      .insert({
+        teacher_id: group.teacher_id, group_id: groupId, session_number: nextNumber,
+        lesson_date: lessonDate, lesson_time: lessonTime || null, format,
+      })
+      .select().single();
+    if (error || !data) { showToast('Eroare la crearea lectiei', 'error'); return undefined; }
+    setLessons((ls) => [...ls, data as TrackerLesson]);
+    showToast(`Lectia ${nextNumber} creata!`);
+    return data as TrackerLesson;
+  }
+
+  // Prezenta (status) e complet separata de steluta: schimbarea statusului nu acorda
+  // niciodata steluta automat. Daca elevul devine "absent", steluta acordata anterior
+  // se retrage (progresul scade), pentru ca ramane consistent cu regula de business.
+  // recoveryDate/recoveryTime se completeaza doar cand status = 'made_up' (sesiune 1-la-1) -
+  // aceasta data alimenteaza automat coloana "Recuperari" din Payslip-ul din /registru.
+  async function setAttendanceStatus(
+    studentId: string, lessonId: string, status: AttendanceStatus, recoveryDate?: string, recoveryTime?: string
+  ) {
     const student = students.find((s) => s.id === studentId);
-    if (!student || student.progress <= 0) return;
-    await patchStudent(studentId, { progress: student.progress - 1 });
+    if (!student) return;
+    const group = getGroupById(student.group_id);
+    if (!group) return;
+    const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
+    const prevStar = current?.has_star ?? false;
+    const nextStar = status === 'absent' ? false : prevStar;
+    const nextRecoveryDate = status === 'made_up' ? (recoveryDate ?? current?.recovery_date ?? nowDate()) : null;
+    const nextRecoveryTime = status === 'made_up' ? (recoveryTime ?? current?.recovery_time ?? null) : null;
+
+    const previousAttendance = attendance;
+    if (current) {
+      setAttendance((as) => as.map((a) => (a.id === current.id
+        ? { ...a, status, has_star: nextStar, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime } : a)));
+    } else {
+      const tempId = nextLocalId();
+      setAttendance((as) => [...as, {
+        id: tempId, teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId,
+        status, has_star: nextStar, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
+        updated_at: new Date().toISOString(),
+      }]);
+    }
+
+    const { data, error } = await supabase.from('tracker_attendance')
+      .upsert(
+        {
+          teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId, status, has_star: nextStar,
+          recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
+        },
+        { onConflict: 'lesson_id,student_id' }
+      )
+      .select().single();
+
+    if (error || !data) {
+      setAttendance(previousAttendance);
+      return showToast('Eroare', 'error');
+    }
+    setAttendance((as) => [...as.filter((a) => !(a.lesson_id === lessonId && a.student_id === studentId)), data as TrackerAttendance]);
+
+    if (prevStar && !nextStar) await applyStarDelta(studentId, -1, group);
+  }
+
+  function openNewLessonModal(groupId: string) {
+    setNewLessonForm({ date: nowDate(), time: nowTime() });
+    setModal({ type: 'newLesson', groupId });
+  }
+
+  function openRecoveryModal(studentId: string, lessonId: string) {
+    const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
+    setRecoveryForm({ date: current?.recovery_date ?? nowDate(), time: current?.recovery_time ?? nowTime() });
+    setModal({ type: 'recordRecovery', studentId, lessonId });
+  }
+
+  async function handleSubmitNewLesson(e: React.FormEvent, groupId: string) {
+    e.preventDefault();
+    setBusy(true);
+    const created = await createLesson(groupId, newLessonForm.date, newLessonForm.time);
+    setBusy(false);
+    if (created) setModal({ type: null });
+  }
+
+  async function handleSubmitRecovery(e: React.FormEvent, studentId: string, lessonId: string) {
+    e.preventDefault();
+    setBusy(true);
+    await setAttendanceStatus(studentId, lessonId, 'made_up', recoveryForm.date, recoveryForm.time);
+    setBusy(false);
+    setModal({ type: null });
+  }
+
+  // Steluta se acorda strict daca elevul a fost prezent sau a recuperat lectia - niciodata
+  // pentru o lectie marcata "absent". Profesorul o poate bifa/debifa oricand, retroactiv.
+  async function toggleStar(studentId: string, lessonId: string) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+    const group = getGroupById(student.group_id);
+    if (!group) return;
+    const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
+    if (!current || current.status === 'absent') {
+      return showToast('Elevul trebuie sa fie prezent sau sa fi recuperat lectia', 'error');
+    }
+    const nextStar = !current.has_star;
+    const maxSteps = (group.module_count || 1) * 16;
+    if (nextStar && student.progress >= maxSteps) return showToast('Adauga un modul nou pentru a continua!', 'error');
+
+    const previousAttendance = attendance;
+    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, has_star: nextStar } : a)));
+    const { data, error } = await supabase.from('tracker_attendance')
+      .update({ has_star: nextStar }).eq('id', current.id).select().single();
+    if (error || !data) {
+      setAttendance(previousAttendance);
+      return showToast('Eroare', 'error');
+    }
+    setAttendance((as) => as.map((a) => (a.id === current.id ? (data as TrackerAttendance) : a)));
+    await applyStarDelta(studentId, nextStar ? 1 : -1, group);
   }
 
   function openClass(groupId: string) {
@@ -539,10 +676,14 @@ export default function ProgressTracker({
           <ClassView
             group={currentGroup}
             students={rankStudents([...getStudentsForGroup(currentGroup.id)].sort((a, b) => b.progress - a.progress))}
+            lessons={lessons}
+            attendance={attendance}
             onBack={goHome}
             onEditStudent={(s) => { setEditStudentName(s.name); setModal({ type: 'editStudent', studentId: s.id }); }}
-            onStepForward={stepForward}
-            onStepBack={stepBack}
+            onRequestNewLesson={openNewLessonModal}
+            onRequestRecovery={openRecoveryModal}
+            onSetAttendanceStatus={setAttendanceStatus}
+            onToggleStar={toggleStar}
           />
         ) : null}
       </main>
@@ -863,6 +1004,86 @@ export default function ProgressTracker({
         );
       })()}
 
+      {modal.type === 'newLesson' && (() => {
+        const group = getGroupById(modal.groupId);
+        if (!group) return null;
+        const activeCount = getStudentsForGroup(group.id).length;
+        const formatLabel = activeCount <= 1 ? 'Lecție individuală' : 'Lecție de grup';
+        return (
+          <ModalShell onClose={() => setModal({ type: null })}>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">➕ Lecție nouă</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Tip dedus automat: <span className="text-white font-semibold">{formatLabel}</span> ({activeCount} {activeCount === 1 ? 'elev' : 'elevi'})
+            </p>
+            <form onSubmit={(e) => handleSubmitNewLesson(e, group.id)}>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Data</label>
+                  <input
+                    type="date" value={newLessonForm.date} onChange={(e) => setNewLessonForm((f) => ({ ...f, date: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Ora</label>
+                  <input
+                    type="time" value={newLessonForm.time} onChange={(e) => setNewLessonForm((f) => ({ ...f, time: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                  ✖️ Anuleaza
+                </button>
+                <button type="submit" disabled={busy} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
+                  ✅ Salveaza
+                </button>
+              </div>
+            </form>
+          </ModalShell>
+        );
+      })()}
+
+      {modal.type === 'recordRecovery' && (() => {
+        const student = students.find((s) => s.id === modal.studentId);
+        if (!student) return null;
+        return (
+          <ModalShell onClose={() => setModal({ type: null })}>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">🔄 Înregistrare Recuperare</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Sesiune 1 la 1 pentru <span className="text-white font-semibold">{student.name}</span>
+            </p>
+            <form onSubmit={(e) => handleSubmitRecovery(e, modal.studentId, modal.lessonId)}>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Data</label>
+                  <input
+                    type="date" value={recoveryForm.date} onChange={(e) => setRecoveryForm((f) => ({ ...f, date: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Ora</label>
+                  <input
+                    type="time" value={recoveryForm.time} onChange={(e) => setRecoveryForm((f) => ({ ...f, time: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                  ✖️ Anuleaza
+                </button>
+                <button type="submit" disabled={busy} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
+                  ✅ Confirma recuperarea
+                </button>
+              </div>
+            </form>
+          </ModalShell>
+        );
+      })()}
+
       {(modal.type === 'trashGroups' || modal.type === 'trashStudents') && (
         <ModalShell onClose={() => setModal({ type: null })}>
           {modal.type === 'trashGroups' ? (
@@ -923,9 +1144,14 @@ export default function ProgressTracker({
           <div className="tracker-magic-popup rounded-3xl p-8 text-center relative z-10 max-w-sm w-full tracker-card-shadow">
             <div className="text-5xl mb-4">🎉</div>
             <h3 className="text-2xl font-bold text-black mb-2">Felicitari!</h3>
+            <p className="text-black/90 font-semibold mb-4">
+              {magicPopup.rewardType === 'stars'
+                ? 'Ura! Ai colectat toate cele 16 steluțe.'
+                : `Ura! Ai colectat toate cele 16 ${getRewardName(magicPopup.rewardType)}.`}
+            </p>
             {magicPopup.needsNewModule ? (
               <>
-                <p className="text-black/80 mb-4">Ai terminat modulul! Alege premiul pentru urmatorul modul:</p>
+                <p className="text-black/80 mb-4">Alege premiul pentru urmatorul modul:</p>
                 <div className="grid grid-cols-4 gap-2 mb-6">
                   {REWARD_TYPES.map((r) => (
                     <button
@@ -1084,14 +1310,23 @@ function ClassMenu({
 }
 
 function ClassView({
-  group, students, onBack, onEditStudent, onStepForward, onStepBack,
+  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onToggleStar,
 }: {
-  group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; onBack: () => void;
-  onEditStudent: (s: TrackerStudent) => void; onStepForward: (id: string) => void; onStepBack: (id: string) => void;
+  group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
+  onBack: () => void; onEditStudent: (s: TrackerStudent) => void;
+  onRequestNewLesson: (groupId: string) => void;
+  onRequestRecovery: (studentId: string, lessonId: string) => void;
+  onSetAttendanceStatus: (studentId: string, lessonId: string, status: AttendanceStatus) => void;
+  onToggleStar: (studentId: string, lessonId: string) => void;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const topRanked = students.filter((s) => s.rank <= 3);
   const firstPlaceCount = topRanked.filter((s) => s.rank === 1).length;
+  const groupLessons = lessons.filter((l) => l.group_id === group.id);
+  const groupLessonIds = new Set(groupLessons.map((l) => l.id));
+  const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
+  const attendanceCountFor = (studentId: string) =>
+    groupAttendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
 
   return (
     <div>
@@ -1106,23 +1341,38 @@ function ClassView({
           <p className="text-gray-400 text-center py-4">Niciun elev inca</p>
         ) : (
           <div className="space-y-2">
-            {topRanked.map((s) => (
-              <div key={s.id} className={`flex items-center gap-3 ${MEDAL_CLASSES[s.rank - 1]} rounded-2xl p-3 text-black`}>
-                <span className="text-2xl">{MEDALS[s.rank - 1]}</span>
-                <div className="flex-1">
-                  <div className="font-bold">{s.name}</div>
-                  {s.rank === 1 && firstPlaceCount > 1 && (
-                    <div className="text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 inline-block px-2 py-0.5 rounded-full text-white">
-                      ⚡ Prieteni Fulgeri
+            {topRanked.map((s) => {
+              const progressPct = ((s.progress % 16) / 16) * 100;
+              return (
+                <div key={s.id} className={`${MEDAL_CLASSES[s.rank - 1]} rounded-2xl p-3 text-black`}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{MEDALS[s.rank - 1]}</span>
+                    <div className="flex-1">
+                      <div className="font-bold">{s.name}</div>
+                      <div className="text-[11px] font-medium text-black/60">🗓️ {attendanceCountFor(s.id)} prezențe</div>
+                      {s.rank === 1 && firstPlaceCount > 1 && (
+                        <div className="text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 inline-block px-2 py-0.5 rounded-full text-white">
+                          ⚡ Prieteni Fulgeri
+                        </div>
+                      )}
                     </div>
-                  )}
+                    <span className="font-semibold">{s.progress} {rewardEmoji}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-black/15 overflow-hidden">
+                    <div className="h-full rounded-full bg-[#C8F023] transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                  </div>
                 </div>
-                <span className="font-semibold">{s.progress} {rewardEmoji}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
+
+      <AttendanceBoard
+        group={group} students={students} lessons={groupLessons} attendance={groupAttendance}
+        onRequestNewLesson={onRequestNewLesson} onRequestRecovery={onRequestRecovery}
+        onSetStatus={onSetAttendanceStatus} onToggleStar={onToggleStar}
+      />
 
       <div className="space-y-4">
         {students.length === 0 ? (
@@ -1131,7 +1381,7 @@ function ClassView({
           students.map((s, i) => (
             <StudentCard
               key={s.id} student={s} index={i} totalStudents={students.length} moduleCount={group.module_count || 1}
-              rewardEmoji={rewardEmoji} onEdit={() => onEditStudent(s)} onStepForward={() => onStepForward(s.id)} onStepBack={() => onStepBack(s.id)}
+              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} onEdit={() => onEditStudent(s)}
             />
           ))
         )}
@@ -1140,11 +1390,134 @@ function ClassView({
   );
 }
 
+function AttendanceBoard({
+  group, students, lessons, attendance, onRequestNewLesson, onRequestRecovery, onSetStatus, onToggleStar,
+}: {
+  group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
+  onRequestNewLesson: (groupId: string) => void;
+  onRequestRecovery: (studentId: string, lessonId: string) => void;
+  onSetStatus: (studentId: string, lessonId: string, status: AttendanceStatus) => void;
+  onToggleStar: (studentId: string, lessonId: string) => void;
+}) {
+  const sortedLessons = [...lessons].sort((a, b) => a.session_number - b.session_number);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(sortedLessons.length > 0 ? sortedLessons[sortedLessons.length - 1].id : null);
+  const rewardEmoji = getRewardEmoji(group.reward_type);
+  const prevLenRef = useRef(sortedLessons.length);
+
+  // Urmareste lista de lectii a grupei: cand apare una noua (creata din modalul "+ Lectie
+  // noua"), sarim automat pe ea. Altfel, daca nu era nimic selectat, luam ultima existenta.
+  useEffect(() => {
+    const grew = sortedLessons.length > prevLenRef.current;
+    if (grew || (!selectedLessonId && sortedLessons.length > 0)) {
+      setSelectedLessonId(sortedLessons[sortedLessons.length - 1].id);
+    }
+    prevLenRef.current = sortedLessons.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedLessons.length]);
+
+  const selectedIndex = sortedLessons.findIndex((l) => l.id === selectedLessonId);
+  const selectedLesson = selectedIndex >= 0 ? sortedLessons[selectedIndex] : null;
+
+  function goPrev() { if (selectedIndex > 0) setSelectedLessonId(sortedLessons[selectedIndex - 1].id); }
+  function goNext() { if (selectedIndex >= 0 && selectedIndex < sortedLessons.length - 1) setSelectedLessonId(sortedLessons[selectedIndex + 1].id); }
+
+  return (
+    <div className="mb-6 bg-gray-900 border border-gray-700 rounded-3xl p-4 tracker-card-shadow">
+      <div className="flex items-center justify-between mb-1 gap-3">
+        <h3 className="text-lg font-semibold">📋 Prezență &amp; Stelute</h3>
+        <button
+          onClick={() => onRequestNewLesson(group.id)} title="Adauga lectie noua"
+          className="tracker-btn-primary w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+        >
+          <Plus size={16} strokeWidth={3} />
+        </button>
+      </div>
+      <p className="text-[11px] text-gray-500 mb-3">
+        Legendă: ✓ = Prezent &nbsp;|&nbsp; ✗ = Absent &nbsp;|&nbsp; 🔄 = Recuperat &nbsp;|&nbsp; ⭐ = Temă
+      </p>
+
+      {sortedLessons.length === 0 ? (
+        <p className="text-gray-400 text-center py-6 text-sm">Nicio lectie inca. Apasa + pentru a adauga prima lectie.</p>
+      ) : selectedLesson && (
+        <>
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <button
+              onClick={goPrev} disabled={selectedIndex <= 0} title="Lectia anterioara"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <select
+              value={selectedLesson.id}
+              onChange={(e) => setSelectedLessonId(e.target.value)}
+              className="bg-transparent text-center font-bold text-base md:text-lg cursor-pointer focus:outline-none max-w-[220px] truncate"
+            >
+              {sortedLessons.map((l) => (
+                <option key={l.id} value={l.id} className="bg-gray-900 text-white">
+                  Lectia {l.session_number} · {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' })}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={goNext} disabled={selectedIndex >= sortedLessons.length - 1} title="Lectia urmatoare"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {students.map((s) => {
+              const record = attendance.find((a) => a.lesson_id === selectedLesson.id && a.student_id === s.id);
+              const status: AttendanceStatus = record?.status ?? 'absent';
+              const hasStar = record?.has_star ?? false;
+              const starDisabled = status === 'absent';
+              return (
+                <div key={s.id} className="flex items-center gap-2 bg-gray-800/70 rounded-2xl px-3 py-2">
+                  <span className="flex-1 min-w-0 truncate font-semibold text-sm">{s.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => onSetStatus(s.id, selectedLesson.id, 'present')} title="Prezent"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${status === 'present' ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                    >
+                      <Check size={16} strokeWidth={3} />
+                    </button>
+                    <button
+                      onClick={() => onSetStatus(s.id, selectedLesson.id, 'absent')} title="Absent"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${status === 'absent' ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                    >
+                      <XIcon size={16} strokeWidth={3} />
+                    </button>
+                    <button
+                      onClick={() => onRequestRecovery(s.id, selectedLesson.id)} title="Recuperat"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${status === 'made_up' ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                    >
+                      <RotateCcw size={15} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => !starDisabled && onToggleStar(s.id, selectedLesson.id)}
+                    disabled={starDisabled}
+                    title={starDisabled ? 'Elevul trebuie sa fie prezent sau sa fi recuperat lectia' : 'Tema facuta'}
+                    className={`ml-1 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${starDisabled ? 'bg-gray-800 text-gray-700 opacity-40 cursor-not-allowed' : hasStar ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                  >
+                    {rewardEmoji}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StudentCard({
-  student, index, totalStudents, moduleCount, rewardEmoji, onEdit, onStepForward, onStepBack,
+  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit,
 }: {
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
-  rewardEmoji: string; onEdit: () => void; onStepForward: () => void; onStepBack: () => void;
+  rewardEmoji: string; attendanceCount: number; onEdit: () => void;
 }) {
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
@@ -1153,7 +1526,6 @@ function StudentCard({
   const progressPercent = (progressInLevel / 16) * 100;
   const studentColor = PROGRESS_COLORS[index % PROGRESS_COLORS.length];
   const maxSteps = moduleCount * 16;
-  const canAdvance = student.progress < maxSteps;
 
   return (
     <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
@@ -1163,8 +1535,13 @@ function StudentCard({
             <h4 className="text-lg font-bold">{student.name}</h4>
             {totalStudents >= 2 && student.rank <= 3 && <span className="text-3xl ml-2">{MEDALS[student.rank - 1]}</span>}
           </div>
-          <div className="tracker-level-badge inline-block px-3 py-1 rounded-full text-white text-sm font-semibold mt-1">
-            Nivel {levelInfo.level} - {levelInfo.name}
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            <div className="tracker-level-badge inline-block px-3 py-1 rounded-full text-white text-sm font-semibold">
+              Nivel {levelInfo.level} - {levelInfo.name}
+            </div>
+            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
+              🗓️ {attendanceCount} prezențe
+            </div>
           </div>
         </div>
         <div className="text-right">
@@ -1182,7 +1559,7 @@ function StudentCard({
       )}
 
       <div className="bg-gray-200 rounded-full h-4 mb-4 overflow-hidden">
-        <div className="tracker-progress-bar h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, background: studentColor, backgroundSize: '200% 100%' }} />
+        <div className="tracker-progress-bar h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundImage: studentColor, backgroundSize: '200% 100%' }} />
       </div>
 
       <div className="grid grid-cols-8 gap-1 mb-4">
@@ -1194,18 +1571,8 @@ function StudentCard({
       </div>
 
       <div className="flex gap-2">
-        <button onClick={onEdit} className="bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors">⚙️</button>
-        <button
-          onClick={onStepBack} disabled={student.progress <= 0}
-          className="bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex-1 py-2 rounded-2xl font-semibold text-sm transition-colors"
-        >
-          ⬅️ Inapoi
-        </button>
-        <button
-          onClick={onStepForward} disabled={!canAdvance}
-          className="tracker-btn-primary flex-1 py-2 rounded-2xl font-semibold text-sm"
-        >
-          {rewardEmoji} Inainte
+        <button onClick={onEdit} className="bg-gray-200 hover:bg-gray-300 flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors">
+          ⚙️ Editeaza elev
         </button>
       </div>
     </div>
