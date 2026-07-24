@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispecerat WOW - Monitorizare Live</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: 1px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card h2 {
+            font-size: 16px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        /* Status Box */
+        .status-indicator {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .status-ok { background-color: rgba(16, 185, 129, 0.2); color: var(--success); border: 2px solid var(--success); }
+        .status-alert { background-color: rgba(239, 68, 68, 0.2); color: var(--danger); border: 2px solid var(--danger); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Log Alerte */
+        .log-container {
+            flex-grow: 1;
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+            max-height: 150px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .log-item { margin-bottom: 8px; border-bottom: 1px solid #1e293b; padding-bottom: 4px; }
+        .log-time { color: var(--accent); margin-right: 10px; }
+        .log-msg-alert { color: var(--danger); font-weight: bold; }
+
+        /* Grafic lat */
+        .chart-card {
+            grid-column: span 3;
+            height: 350px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Sistem Avansat de Monitorizare Șoferi</h1>
+        <p>Prezentare Licență CTI - Panou de Control în Timp Real</p>
+    </div>
+
+    <div class="dashboard-grid">
+
+        <div class="card">
+            <h2>Date Vehicul / Șofer</h2>
+            <div style="font-size: 18px; margin-bottom: 15px;">
+                <strong>ID Șofer:</strong> <span id="sofer-id">Se încarcă...</span><br><br>
+                <strong>Scor Somnolență:</strong> <span id="scor-somn" style="font-size: 24px; font-weight: bold; color: var(--accent);">0</span>%
+            </div>
+            <p id="mesaj-sistem" style="color: var(--text-muted); font-style: italic;">Așteptare conexiune cameră...</p>
+        </div>
+
+        <div class="card">
+            <h2>Stare Curentă</h2>
+            <div id="status-box" class="status-indicator status-ok">
+                <span id="status-text">CONECTARE</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Jurnal Alerte (Sesiune Curentă)</h2>
+            <div class="log-container" id="alert-log">
+                <div class="log-item" style="color: var(--text-muted);">Sistem pornit. Nu sunt alerte.</div>
+            </div>
+        </div>
+
+        <div class="card chart-card">
+            <h2>Evoluție Scor Somnolență (Istoric Live)</h2>
+            <canvas id="scorChart"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        // Setari initiale pentru grafic
+        const ctx = document.getElementById('scorChart').getContext('2d');
+        const scorChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Aici punem orele/minutele
+                datasets: [{
+                    label: 'Scor Somnolență (%)',
+                    data: [], // Aici punem scorurile
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f8fafc' } }
+                }
+            }
+        });
+
+        let ultimaStare = "";
+
+        // Functia care aduce date de la server
+        setInterval(() => {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update Text
+                    document.getElementById('sofer-id').innerText = data.sofer_id;
+                    document.getElementById('scor-somn').innerText = data.scor_somn;
+                    document.getElementById('mesaj-sistem').innerText = data.mesaj;
+
+                    // Update Status Culoare
+                    const statusBox = document.getElementById('status-box');
+                    const statusText = document.getElementById('status-text');
+                    statusText.innerText = data.status;
+
+                    // Gestionare Alerte
+                    if(data.status === "SOMN") {
+                        statusBox.className = "status-indicator status-alert";
+
+                        // Daca tocmai a adormit, adaugam in jurnal o inregistrare cu ora exacta
+                        if(ultimaStare !== "SOMN") {
+                            adaugaInJurnal("SOMNOLENȚĂ DETECTATĂ!");
+                        }
+                    } else {
+                        statusBox.className = "status-indicator status-ok";
+                    }
+
+                    ultimaStare = data.status;
+
+                    // Update Grafic (adaugam timpul curent si scorul)
+                    const acum = new Date();
+                    const oraFormatata = acum.getHours().toString().padStart(2, '0') + ":" +
+                                         acum.getMinutes().toString().padStart(2, '0') + ":" +
+                                         acum.getSeconds().toString().padStart(2, '0');
+
+                    // Adaugam datele in grafic
+                    scorChart.data.labels.push(oraFormatata);
+                    scorChart.data.datasets[0].data.push(data.scor_somn);
+
+                    // Pastram in grafic doar ultimele 30 de inregistrari ca sa arate bine
+                    if(scorChart.data.labels.length > 30) {
+                        scorChart.data.labels.shift();
+                        scorChart.data.datasets[0].data.shift();
+                    }
+                    scorChart.update();
+                })
+                .catch(err => console.error("Asteptare server..."));
+        }, 1500); // Se actualizeaza la fiecare 1.5 secunde
+
+        function adaugaInJurnal(mesaj) {
+            const logContainer = document.getElementById('alert-log');
+            const acum = new Date();
+            const oraFormatata = acum.getHours().toString().padStart(2, '0') + ":" +
+                                 acum.getMinutes().toString().padStart(2, '0') + ":" +
+                                 acum.getSeconds().toString().padStart(2, '0');
+
+            const logItem = document.createElement('div');
+            logItem.className = 'log-item';
+            logItem.innerHTML = `<span class="log-time">[${oraFormatata}]</span> <span class="log-msg-alert">${mesaj}</span>`;
+
+            // Daca e prima inregistrare, stergem mesajul de inceput
+            if(logContainer.innerText.includes("Sistem pornit")) {
+                logContainer.innerHTML = "";
+            }
+
+            // Punem alerta noua sus
+            logContainer.insertBefore(logItem, logContainer.firstChild);
+        }
+    </script>
+</body>
+</html>

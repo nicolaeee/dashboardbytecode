@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diploma Modul 1 - Alfabetizare</title>
+    <link rel="shortcut icon" href="../res/favicon.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800;900&family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+
+            --page-bg: linear-gradient(135deg, #7dd3fc 0%, #fef08a 100%);
+            --page-bg-solid: #7dd3fc;
+            --card-bg: rgba(255,255,255,0.72);
+            --frame-color: rgba(234,88,12,0.45);
+            --card-radius: 32px;
+            --card-shadow: 0 20px 50px rgba(15,23,42,0.14);
+            --seal-shadow: none;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --accent: #ea580c;
+            --star-empty: rgba(0,0,0,0.12);
+            --edit-focus-bg: rgba(0,0,0,0.04);
+
+        }
+
+        :root {
+            --brand-color: #C8F023; /* mereu lime - identic cu stelutele din Progress Tracker */
+        }
+        * { box-sizing: border-box; }
+        body {
+            background-color: var(--page-bg-solid, #000);
+            color: var(--text-main);
+            font-family: var(--font-display);
+            margin: 0; padding: 40px 20px;
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        }
+        .toolbar {
+            background: rgba(15, 15, 17, 0.95); border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px); padding: 15px 30px; border-radius: 16px; margin-bottom: 40px;
+            display: flex; gap: 20px; align-items: center; z-index: 100; position: sticky; top: 20px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.6); flex-wrap: wrap; justify-content: center;
+            font-family: 'Montserrat', sans-serif;
+        }
+        button.download-btn, button.action-btn {
+            background: var(--brand-color); color: #000; border: none; padding: 12px 28px;
+            font-size: 14px; font-family: 'Montserrat', sans-serif; font-weight: 800; border-radius: 10px;
+            cursor: pointer; transition: all 0.3s ease; box-shadow: 0 0 16px rgba(200, 240, 35, 0.25);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        button.download-btn:hover, button.action-btn:hover { transform: scale(1.02); box-shadow: 0 0 24px rgba(200, 240, 35, 0.4); }
+        button.cancel-btn {
+            background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2);
+            padding: 12px 28px; font-size: 14px; font-weight: 600; border-radius: 10px;
+            cursor: pointer; transition: all 0.3s ease; font-family: 'Montserrat', sans-serif;
+        }
+        button.cancel-btn:hover { background: rgba(255,255,255,0.1); }
+        .instructions { font-size: 13px; color: #a1a1aa; font-weight: 400; text-align: center; }
+        .instructions b { color: #fff; }
+        .pages-wrapper { display: flex; flex-direction: column; gap: 60px; max-width: 100%; }
+        .page {
+            width: 1200px; height: 800px; position: relative; overflow: hidden; flex-shrink: 0;
+            background: var(--page-bg); border-radius: 18px;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 30px 60px rgba(0,0,0,0.65);
+        }
+        .floating-element { position: absolute; z-index: 2; pointer-events: none; }
+        [contenteditable="true"] { outline: none; cursor: text; transition: all 0.2s; border-bottom: 1px dashed transparent; }
+        [contenteditable="true"]:hover { border-bottom: 1px dashed var(--accent); }
+        [contenteditable="true"]:focus { background: var(--edit-focus-bg); border-radius: 4px; }
+
+        /* =========================================================================
+           CARDUL (pagina 1 si pagina 2) - aspect de Certificat: chenar dublu
+           (border + outline cu outline-offset) + colturi geometrice explicite.
+           content-top si footer-p1 sunt pozitionate ABSOLUT in interior, ca subsolul
+           (Profesor / Data) sa ramana mereu ancorat jos, indiferent cat text e deasupra.
+           ========================================================================= */
+        #page-1 .glass-container, #page-2 .stars-card {
+            position: absolute; top: 58px; left: 78px; right: 78px; bottom: 58px;
+            background: var(--card-bg); border: 1px solid var(--frame-color);
+            outline: 1px solid var(--frame-color); outline-offset: 7px;
+            border-radius: var(--card-radius, 6px); z-index: 10;
+            box-shadow: var(--card-shadow);
+        }
+        .corner { position: absolute; width: 20px; height: 20px; z-index: 12; border-color: var(--frame-color); pointer-events: none; }
+        .corner-tl { top: 16px; left: 16px; border-top: 2px solid; border-left: 2px solid; }
+        .corner-tr { top: 16px; right: 16px; border-top: 2px solid; border-right: 2px solid; }
+        .corner-bl { bottom: 16px; left: 16px; border-bottom: 2px solid; border-left: 2px solid; }
+        .corner-br { bottom: 16px; right: 16px; border-bottom: 2px solid; border-right: 2px solid; }
+
+        .content-top {
+            position: absolute; top: 34px; left: 46px; right: 46px; bottom: 132px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+            max-width: 840px; margin: 0 auto; overflow: hidden;
+        }
+        .diploma-label { color: var(--accent); font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 3.5px; text-transform: uppercase; margin-bottom: 16px; max-width: 100%; overflow-wrap: break-word; }
+        .main-title {
+            font-size: 38px; font-weight: 800; color: var(--text-main); margin: 0; letter-spacing: -0.3px;
+            line-height: 1.2; font-family: 'Montserrat', sans-serif; text-shadow: none;
+            max-width: 100%; white-space: nowrap;
+        }
+        .subtitle { font-size: 14px; color: var(--text-muted); margin: 16px 0 4px 0; font-weight: 500; max-width: 100%; overflow-wrap: break-word; font-family: 'Montserrat', sans-serif; letter-spacing: .2px; }
+        /* Numele elevului - STRICT Playfair Display, ca sa aiba greutate de semnatura oficiala. */
+        .student-name {
+            font-size: 46px; font-weight: 700; color: var(--text-main); margin: 6px 0 16px 0; text-shadow: none;
+            letter-spacing: 0; font-family: 'Playfair Display', serif; max-width: 100%;
+            overflow-wrap: break-word; word-break: break-word;
+        }
+        /* Text liber, FARA fundal/pill/umbra. */
+        .course-title {
+            font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 500; color: var(--text-muted);
+            margin: 4px 0 0 0; padding: 0 20px; background: none; border: none; box-shadow: none;
+            max-width: 600px; overflow-wrap: break-word; line-height: 1.6;
+        }
+        .footer-p1 { position: absolute; left: 50px; right: 50px; bottom: 38px; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 18px; border-top: 1px solid var(--frame-color); }
+        .signature-block { display: flex; flex-direction: column; align-items: center; width: 220px; }
+        .sig-value { font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; max-width: 100%; overflow-wrap: break-word; font-family: 'Montserrat', sans-serif; }
+        .sig-line { width: 100%; height: 1px; background: var(--frame-color); margin-bottom: 8px; }
+        .sig-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2.5px; font-weight: 700; text-align: center; font-family: 'Montserrat', sans-serif; }
+        .logo-center { display: flex; align-items: center; justify-content: center; }
+        .logo-text { font-family: 'Fira Code', monospace; font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+        .logo-text span { color: var(--text-main); }
+
+        /* ===== PAGINA 2: STELUTE ===== */
+        #page-2 .stars-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 46px; }
+        .stars-header { text-align: center; margin-bottom: 30px; }
+        .sh-top { font-family: 'Montserrat', sans-serif; font-weight: 700; color: var(--accent); font-size: 13px; letter-spacing: 2.5px; margin-bottom: 8px; text-transform: uppercase; }
+        .sh-main { font-size: 32px; font-weight: 800; color: var(--text-main); margin: 0; letter-spacing: -0.3px; font-family: 'Montserrat', sans-serif; white-space: nowrap; }
+        .diamond-grid { display: flex; flex-direction: column; align-items: center; gap: 11px; margin-bottom: 8px; }
+        .diamond-row { display: flex; gap: 14px; justify-content: center; }
+        .tech-star { width: 42px; height: 42px; }
+
+        /* Sigiliu / insigna CSS pentru "X / 16 Steluțe" - colt de jos-dreapta al cardului. */
+        .stars-seal {
+            position: absolute; right: 46px; bottom: 46px; width: 124px; height: 124px; border-radius: 50%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--card-bg); border: 1px solid var(--accent); outline: 1px solid var(--accent); outline-offset: 5px;
+            z-index: 11; box-shadow: var(--seal-shadow);
+        }
+        .seal-count { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 28px; color: var(--accent); line-height: 1; }
+        .seal-count .seal-total { font-size: 15px; color: var(--text-muted); font-weight: 600; }
+        .seal-label { font-family: 'Montserrat', sans-serif; font-size: 8.5px; letter-spacing: 2px; color: var(--text-muted); margin-top: 5px; text-transform: uppercase; font-weight: 700; }
+
+        /* ===== MODALE (UI aplicatie - separat de designul diplomei) ===== */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px);
+            z-index: 1000; display: none; align-items: center; justify-content: center;
+        }
+        .modal-box {
+            background: #18181b; border: 1px solid rgba(200, 240, 35, 0.3); font-family: 'Montserrat', sans-serif;
+            padding: 40px; border-radius: 16px; max-width: 500px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9); transform: translateY(20px); opacity: 0; animation: slideUp 0.3s forwards;
+        }
+        @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
+        .modal-icon {
+            width: 56px; height: 56px; background: rgba(200, 240, 35, 0.1); color: var(--brand-color);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;
+        }
+        .modal-icon svg { width: 28px; height: 28px; }
+        .modal-text { font-size: 16px; line-height: 1.5; color: #fff; margin-bottom: 26px; font-weight: 500; }
+        .modal-buttons { display: flex; gap: 15px; justify-content: center; }
+        .copy-box {
+            background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 15px;
+            border-radius: 10px; font-family: 'Fira Code', monospace; font-size: 14px; color: var(--brand-color);
+            margin-bottom: 22px; text-align: left; word-break: break-word; line-height: 1.5;
+        }
+
+
+
+        body { font-family: 'Nunito', sans-serif; }
+        .diploma-label, .main-title, .sh-main, .seal-count, .seal-label { font-family: 'Fredoka', sans-serif; }
+        .subtitle, .course-title, .sig-value, .sig-label, .sh-top { font-family: 'Nunito', sans-serif; }
+        .student-name { font-family: 'Fredoka', sans-serif; font-weight: 700; }
+        .diploma-label { font-weight: 600; text-transform: none; letter-spacing: .5px; font-size: 18px; }
+        .main-title { font-weight: 600; letter-spacing: 0; }
+        .subtitle { font-weight: 700; }
+        .course-title { font-weight: 700; }
+        .sig-value { font-weight: 800; }
+        .sig-label { font-weight: 700; }
+        #page-1 .glass-container, #page-2 .stars-card {
+            backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
+            border-width: 2px;
+        }
+        /* Medalie de aur pentru stelute - contur alb gros, gradient auriu-portocaliu, "shine". */
+        .stars-seal {
+            background: radial-gradient(circle at 35% 30%, #fff9db 0%, #ffd43b 42%, #f59e0b 78%, #d97706 100%);
+            border: 4px solid #ffffff; outline: 3px solid #f59e0b; outline-offset: 3px;
+        }
+        .seal-count { color: #7c2d12; text-shadow: 0 1px 0 rgba(255,255,255,.4); }
+        .seal-count .seal-total { color: #92400e; }
+        .seal-label { color: #78350f; }
+        /* Forme decorative de joaca, discrete, doar in marginea paginii. */
+        .deco { font-size: 42px; opacity: .85; filter: drop-shadow(0 6px 10px rgba(0,0,0,.12)); }
+
+        .main-title { font-size: 36px; }
+        .student-name { font-size: 44px; }
+        .balloon-1 { top: 16px; left: 16px; }
+        .balloon-2 { top: 12px; right: 22px; }
+        .cloud-1 { bottom: 14px; left: 24px; font-size: 34px; }
+        .star-deco-1 { bottom: 16px; right: 22px; }
+
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <button class="download-btn" id="main-download-btn" onclick="openConfirmModal()">📥 Descarcă Diploma PDF</button>
+        <div class="instructions">
+            ✏️ <b>Modul 1 (Alfabetizare):</b> Editează numele, profesorul și steluțele - restul e gata!
+        </div>
+    </div>
+
+    <div class="pages-wrapper">
+
+        <!-- ==========================================
+             PAGINA 1: DIPLOMA
+             ========================================== -->
+        <div class="page" id="page-1">
+
+            <div class="floating-element deco balloon-1">🎈</div>
+            <div class="floating-element deco balloon-2">🎈</div>
+            <div class="floating-element deco cloud-1">☁️</div>
+            <div class="glass-container">
+                
+                <div class="content-top">
+                    <div class="diploma-label" contenteditable="true" spellcheck="false">✨ Diploma ta ✨</div>
+                    <h1 class="main-title" contenteditable="true" spellcheck="false">Primii Pași Digitali!</h1>
+
+                    <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă lui:</p>
+
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">David Matei</h2>
+
+                    <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru că a învățat lucruri super tari!</p>
+                    <div class="course-title" contenteditable="true" spellcheck="false">Știi să folosești mouse-ul și tastatura ca un adevărat explorator!</div>
+                </div>
+
+                <div class="footer-p1">
+                    <div class="signature-block">
+                        <div class="sig-value" contenteditable="true" spellcheck="false">Nume Prenume</div>
+                        <div class="sig-line"></div>
+                        <div class="sig-label" contenteditable="true" spellcheck="false">Profesor</div>
+                    </div>
+
+                    <div class="logo-center">
+                        <div class="logo-text" contenteditable="true" spellcheck="false">&lt;ByteCode <span>School</span>&gt;</div>
+                    </div>
+
+                    <div class="signature-block">
+                        <div class="sig-value" style="font-family: 'Montserrat', sans-serif;" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                        <div class="sig-line"></div>
+                        <div class="sig-label" contenteditable="true" spellcheck="false">Data</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 2: STELUTE
+             ========================================== -->
+        <div class="page" id="page-2">
+
+            <div class="floating-element deco" style="top: 20px; left: 24px; font-size: 30px;">⭐</div>
+            <div class="floating-element deco star-deco-1" style="font-size: 30px;">✨</div>
+            <div class="stars-card">
+                
+                <div class="stars-header">
+                    <div class="sh-top" contenteditable="true" spellcheck="false">AI REUȘIT</div>
+                    <h2 class="sh-main" contenteditable="true" spellcheck="false">COLECȚIA DE STELUȚE</h2>
+                </div>
+
+                <div class="diamond-grid" id="stars-grid-container">
+                </div>
+
+                <div class="stars-seal" style="box-shadow: 0 0 20px rgba(245,158,11,0.35), 0 8px 20px rgba(0,0,0,0.15);">
+                    <div class="seal-count"><span id="earned-stars" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span><span class="seal-total">/16</span></div>
+                    <div class="seal-label">Steluțe</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================
+         MODALE (POP-UP-URI DE CONFIRMARE)
+         ========================================== -->
+
+    <div class="modal-overlay" id="confirm-overlay">
+        <div class="modal-box">
+            <div class="modal-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <div class="modal-text">
+                Sigur ai completat toate datele corect (nume, profesor, dată, steluțe) și nu ai încurcat nimic?
+            </div>
+            <div class="modal-buttons">
+                <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
+                <button class="cancel-btn" onclick="closeModal('confirm-overlay')">Anulează</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="success-overlay">
+        <div class="modal-box">
+            <div class="modal-icon" style="color: #4ade80; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="modal-text">
+                Fișierul PDF a fost descărcat cu succes! 🎉
+            </div>
+            <div class="copy-box" id="team-message">
+                Salutare echipă, diploma a fost dată. Copilul <span id="msg-child-name" style="color:#fff; font-weight:bold;">[Nume]</span> a finalizat cu succes modulul 1 - Alfabetizare!
+            </div>
+            <div class="modal-text" style="font-size: 13px; color: #a1a1aa; margin-bottom: 20px;">
+                Acum lasă acest mesaj echipei pe grupul de comunicare.
+            </div>
+            <div class="modal-buttons">
+                <button class="action-btn" onclick="copyMessage()">📋 Copiază mesajul</button>
+                <button class="cancel-btn" onclick="closeModal('success-overlay')">Închide</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- SCRIPTURI FUNCTIONALITATE -->
+
+    <script>
+        function syncNames() {
+            const fullName = document.getElementById('name-p1').innerText;
+            const firstName = fullName.split(' ')[0] || fullName;
+            const p3 = document.getElementById('name-p3');
+            if (p3) p3.innerText = firstName;
+        }
+
+        function updateStarsGrid() {
+            const earnedStr = document.getElementById('earned-stars').innerText;
+            let earned = parseInt(earnedStr, 10);
+            if (isNaN(earned)) earned = 0;
+            if (earned > 16) earned = 16;
+            if (earned < 0) earned = 0;
+
+            const grid = document.getElementById('stars-grid-container');
+            const starFilled = `
+                <svg class="tech-star" viewBox="0 0 24 24" fill="var(--brand-color)" stroke="var(--brand-color)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+            `;
+            const starEmpty = `
+                <svg class="tech-star" viewBox="0 0 24 24" fill="transparent" stroke="var(--star-empty)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+            `;
+            grid.innerHTML = '';
+            const pyramidRows = [1, 3, 5, 7];
+            let currentStarIndex = 0;
+            pyramidRows.forEach(count => {
+                let rowHtml = '<div class="diamond-row">';
+                for (let i = 0; i < count; i++) {
+                    rowHtml += currentStarIndex < earned ? starFilled : starEmpty;
+                    currentStarIndex++;
+                }
+                rowHtml += '</div>';
+                grid.innerHTML += rowHtml;
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', updateStarsGrid);
+
+        function openConfirmModal() { document.getElementById('confirm-overlay').style.display = 'flex'; }
+        function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+        function startGeneration() { closeModal('confirm-overlay'); downloadPDF(); }
+
+        function copyMessage() {
+            const msgText = document.getElementById('team-message').innerText;
+            navigator.clipboard.writeText(msgText).then(showCopiedFeedback).catch(() => {
+                const textArea = document.createElement("textarea");
+                textArea.value = msgText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("Copy");
+                textArea.remove();
+                showCopiedFeedback();
+            });
+        }
+
+        function showCopiedFeedback() {
+            const btn = document.querySelector('#success-overlay .action-btn');
+            btn.innerHTML = "✅ Copiat!";
+            setTimeout(() => { btn.innerHTML = "📋 Copiază mesajul"; }, 2000);
+        }
+
+        async function downloadPDF() {
+            const pages = document.querySelectorAll('.page');
+            const btn = document.getElementById('main-download-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "⏳ Se generează PDF...";
+            btn.style.opacity = "0.7";
+            btn.disabled = true;
+
+            const editables = document.querySelectorAll('[contenteditable="true"]');
+            editables.forEach(el => el.style.borderBottom = "none");
+            document.body.classList.add('exporting-pdf');
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('l', 'px', [1200, 800]);
+                for (let i = 0; i < pages.length; i++) {
+                    const canvas = await html2canvas(pages[i], { scale: 2, backgroundColor: "#7dd3fc", useCORS: true, logging: false });
+                    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+                    if (i > 0) pdf.addPage([1200, 800], 'l');
+                    pdf.addImage(imgData, 'JPEG', 0, 0, 1200, 800);
+                }
+                const rawName = document.getElementById('name-p1').innerText.trim();
+                const fileName = `Diploma - ${rawName}.pdf`;
+                pdf.save(fileName);
+                document.getElementById('msg-child-name').innerText = rawName;
+                document.getElementById('success-overlay').style.display = 'flex';
+            } catch (err) {
+                alert("Eroare la generarea PDF-ului: " + err);
+            } finally {
+                document.body.classList.remove('exporting-pdf');
+                btn.innerHTML = originalText;
+                btn.style.opacity = "1";
+                btn.disabled = false;
+                editables.forEach(el => el.style.borderBottom = "");
+            }
+        }
+
+        function formatTodayRO() {
+            var d = new Date();
+            var dd = String(d.getDate()).padStart(2, '0');
+            var mm = String(d.getMonth() + 1).padStart(2, '0');
+            return dd + '.' + mm + '.' + d.getFullYear();
+        }
+
+        // Preia datele reale (elev, profesor, data, stelute) din query string, injectate de
+        // Progress Tracker la momentul generarii diplomei. Daca profesorul/data NU vin din URL
+        // (deschidere manuala a sablonului), se completeaza automat un fallback editabil:
+        // "Nume Prenume" si data curenta.
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var studentName = params.get('elev');
+            var teacherName = params.get('profesor');
+            var dateStr = params.get('data');
+            var earnedStars = params.get('stelute');
+
+            document.addEventListener('DOMContentLoaded', function () {
+                if (studentName) {
+                    var nameEl = document.getElementById('name-p1');
+                    if (nameEl) { nameEl.innerText = studentName; if (typeof syncNames === 'function') syncNames(); }
+                }
+                var sigValues = document.querySelectorAll('.sig-value');
+                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Prenume';
+                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
+                if (earnedStars !== null) {
+                    var starsEl = document.getElementById('earned-stars');
+                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
+                }
+            });
+        })();
+    </script>
+
+</body>
+</html>

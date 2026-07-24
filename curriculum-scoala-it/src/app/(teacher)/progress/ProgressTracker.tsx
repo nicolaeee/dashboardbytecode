@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, X as XIcon, RotateCcw, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus } from '@/lib/types';
+import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId } from '@/lib/types';
+import { COURSES } from '@/lib/diplomas';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -174,12 +175,13 @@ export default function ProgressTracker({
   const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [createForm, setCreateForm] = useState<{ name: string; count: number; reward: string; names: string[]; day: string | null; time: string }>(
-    { name: '', count: 1, reward: 'stars', names: [''], day: null, time: '' }
+  const [createForm, setCreateForm] = useState<{ name: string; count: number; reward: string; names: string[]; day: string | null; time: string; course: CourseId | null }>(
+    { name: '', count: 1, reward: 'stars', names: [''], day: null, time: '', course: null }
   );
   const [editClassName, setEditClassName] = useState('');
   const [editClassDay, setEditClassDay] = useState<string | null>(null);
   const [editClassTime, setEditClassTime] = useState('');
+  const [editClassCourse, setEditClassCourse] = useState<CourseId | null>(null);
   const [addStudentName, setAddStudentName] = useState('');
   const [editStudentName, setEditStudentName] = useState('');
   const [newModuleReward, setNewModuleReward] = useState('stars');
@@ -284,7 +286,7 @@ export default function ProgressTracker({
     const { data: group, error } = await supabase.from('tracker_groups')
       .insert({
         teacher_id: teacherId, group_name: name, module_count: 1, reward_type: createForm.reward,
-        day_of_week: createForm.day, time_of_day: createForm.time || null,
+        day_of_week: createForm.day, time_of_day: createForm.time || null, course: createForm.course,
       })
       .select().single();
     if (error || !group) { setBusy(false); return showToast('Eroare la creare clasa', 'error'); }
@@ -299,7 +301,7 @@ export default function ProgressTracker({
     if (sErr) showToast('Eroare la creare elevi', 'error');
 
     setModal({ type: null });
-    setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '' });
+    setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '', course: null });
     showToast('Clasa creata cu succes!');
   }
 
@@ -307,7 +309,7 @@ export default function ProgressTracker({
     e.preventDefault();
     const name = editClassName.trim();
     if (!name) return showToast('Introdu numele clasei', 'error');
-    const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null });
+    const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null, course: editClassCourse });
     if (ok) { setModal({ type: null }); showToast('Clasa actualizata!'); }
   }
 
@@ -642,7 +644,7 @@ export default function ProgressTracker({
                           avgProgress={calcAvgProgress(group.id)}
                           onOpen={() => openClass(group.id)}
                           onEdit={() => {
-                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? '');
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null);
                             setModal({ type: 'editClass', groupId: group.id });
                           }}
                         />
@@ -661,7 +663,7 @@ export default function ProgressTracker({
                           avgProgress={calcAvgProgress(group.id)}
                           onOpen={() => openClass(group.id)}
                           onEdit={() => {
-                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? '');
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null);
                             setModal({ type: 'editClass', groupId: group.id });
                           }}
                         />
@@ -700,7 +702,7 @@ export default function ProgressTracker({
               recentGroups={[...activeGroups].slice(-5).reverse()}
               deletedCount={deletedGroups.length}
               onOpenClass={openClass}
-              onCreate={() => { setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '' }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
+              onCreate={() => { setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '', course: null }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
               onTrash={() => { setModal({ type: 'trashGroups' }); setMenuOpen(false); }}
             />
           ) : currentGroup ? (
@@ -796,6 +798,25 @@ export default function ProgressTracker({
               </div>
             </div>
             <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">Curs (pentru diplome)</label>
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button" onClick={() => setCreateForm((f) => ({ ...f, course: null }))}
+                  className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.course === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                >
+                  Nespecificat
+                </button>
+                {COURSES.map((c) => (
+                  <button
+                    key={c.id} type="button" onClick={() => setCreateForm((f) => ({ ...f, course: c.id }))}
+                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.course === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
               <label className="block text-sm font-semibold mb-2">Tipul de premiu</label>
               <div className="grid grid-cols-4 gap-2">
                 {REWARD_TYPES.map((r) => (
@@ -872,6 +893,25 @@ export default function ProgressTracker({
                   type="time" value={editClassTime} onChange={(e) => setEditClassTime(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">Curs (pentru diplome)</label>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    type="button" onClick={() => setEditClassCourse(null)}
+                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${editClassCourse === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                  >
+                    Nespecificat
+                  </button>
+                  {COURSES.map((c) => (
+                    <button
+                      key={c.id} type="button" onClick={() => setEditClassCourse(c.id)}
+                      className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${editClassCourse === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2">Elevi</label>

@@ -237,6 +237,7 @@ create table public.tracker_groups (
   day_of_week  text,   -- 'luni' .. 'duminica', null = nespecificat
   time_of_day  text,   -- 'HH:MM', optional
   diploma_milestone int not null default 0,  -- cel mai mare multiplu de 16 lectii deja notificat/trimis
+  course       text check (course in ('coblocks', 'python', 'roblox', 'alfabetizare', 'unity', 'delighted')),  -- leaga grupa de folderul de sabloane de diploma
   deleted_at   timestamptz,
   created_at   timestamptz not null default now()
 );

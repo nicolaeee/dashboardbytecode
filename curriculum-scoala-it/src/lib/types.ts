@@ -43,6 +43,9 @@ export type Tree = PlatformNode[];
 /** id-urile de continut deblocat pentru profesorul curent */
 export type AccessMap = { modules: Set<string>; lessons: Set<string> };
 
+/** Cursul grupei - leaga grupa de folderul de sabloane de diploma corespunzator. */
+export type CourseId = 'coblocks' | 'python' | 'roblox' | 'alfabetizare' | 'unity' | 'delighted';
+
 export type TrackerGroup = {
   id: string;
   teacher_id: string;
@@ -53,6 +56,7 @@ export type TrackerGroup = {
   time_of_day: string | null;
   /** Cel mai mare multiplu de 16 lectii deja notificat/trimis (0 = niciunul inca). */
   diploma_milestone: number;
+  course: CourseId | null;
   deleted_at: string | null;
   created_at: string;
 };
