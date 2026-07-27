@@ -52,7 +52,7 @@ export default function LoginPage() {
         <section className="hidden flex-col justify-between bg-night/60 px-12 py-12 text-white lg:flex">
           <div className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 font-mono text-sm font-bold text-black">{'</>'}</span>
-            <span className="font-display text-[15px] font-semibold">Bytecode School</span>
+            <span className="font-display text-[15px] font-semibold">ByteCode Portal</span>
           </div>
 
           <div className="max-w-md">

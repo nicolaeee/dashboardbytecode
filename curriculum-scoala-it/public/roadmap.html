@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Roadmap Profesori | ByteCode Portal</title>
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        :root {
+            --brand-color: #C8F023;
+            --bg-color: #050505;
+            --glass-bg: rgba(255, 255, 255, 0.04);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --danger-bg: rgba(255, 60, 60, 0.05);
+            --danger-border: rgba(255, 60, 60, 0.2);
+            --danger-text: #ff6b6b;
+            --text-main: #ffffff;
+            --text-muted: #b0b0b0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, system-ui, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 30px 15px;
+            background-image: radial-gradient(circle at 50% 0%, rgba(200, 240, 35, 0.07) 0%, transparent 60%);
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
+        }
+
+        .top-bar { max-width: 1300px; margin: 0 auto 10px auto; }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: var(--brand-color); }
+
+        header { text-align: center; margin-bottom: 40px; padding: 0 10px; }
+        header h1 { font-size: 2.4rem; margin-bottom: 12px; font-weight: 800; }
+        header h1 span { color: var(--brand-color); }
+        header p { color: var(--text-muted); font-size: 1rem; max-width: 650px; margin: 0 auto; }
+
+        /* Banner "Nivelul tau curent" - populat dinamic via /api/my-profile, ascuns pana atunci */
+        .my-level-banner {
+            display: none;
+            background: rgba(200, 240, 35, 0.12);
+            border: 1px solid var(--brand-color);
+            border-radius: 16px;
+            padding: 18px 22px;
+            margin: 0 auto 30px auto;
+            max-width: 1300px;
+            text-align: center;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--brand-color);
+        }
+        .my-level-banner .sub {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+
+        .bonus-banner {
+            background: rgba(200, 240, 35, 0.1);
+            border: 1px solid var(--brand-color);
+            border-radius: 16px;
+            padding: 20px;
+            margin: 0 auto 30px auto;
+            max-width: 1300px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .bonus-banner-icon { font-size: 2.5rem; }
+        .bonus-banner-text h4 { color: var(--brand-color); font-size: 1.1rem; margin-bottom: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .bonus-banner-text p { font-size: 0.95rem; color: #e0e0e0; margin: 0; line-height: 1.5; }
+        @media (max-width: 768px) { .bonus-banner { flex-direction: column; text-align: center; } }
+
+        .roadmap-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 1024px) {
+            .roadmap-container { flex-direction: row; align-items: stretch; }
+            .card { flex: 1; }
+        }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 30px 25px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover { border-color: rgba(200, 240, 35, 0.4); transform: translateY(-3px); }
+
+        /* Cardul nivelului curent al profesorului logat, evidentiat de JS */
+        .card.current-level-card {
+            border-color: var(--brand-color);
+            box-shadow: 0 0 0 1px var(--brand-color), 0 20px 45px -20px rgba(200, 240, 35, 0.45);
+        }
+        .card.current-level-card .level-badge::after {
+            content: "✓ Nivelul tău actual";
+            margin-left: 8px;
+            font-size: 0.7rem;
+            text-transform: none;
+            letter-spacing: 0;
+            opacity: 0.9;
+        }
+
+        .level-badge {
+            background: rgba(200, 240, 35, 0.15);
+            color: var(--brand-color);
+            padding: 5px 14px;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
+        .card h2 { font-size: 1.8rem; margin-bottom: 6px; }
+        .pay-rate { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px; display: block; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; }
+
+        .section-title { font-size: 1.1rem; font-weight: 700; color: #fff; margin: 25px 0 15px 0; border-left: 3px solid var(--brand-color); padding-left: 10px; }
+        .section-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; display: block; }
+
+        .list { list-style: none; margin-bottom: 25px; }
+        .list li { font-size: 0.9rem; color: #d5d5d5; margin-bottom: 12px; padding-left: 20px; position: relative; }
+        .list li::before { content: "•"; position: absolute; left: 0; color: var(--brand-color); font-weight: bold; font-size: 1.2rem; line-height: 1; top: -2px; }
+
+        .downgrade-box {
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-border);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 25px;
+        }
+
+        .downgrade-box h4 { color: var(--danger-text); font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-weight: 700; }
+        .downgrade-box ul { list-style: none; padding-left: 0; }
+        .downgrade-box ul li { font-size: 0.85rem; color: #e0e0e0; margin-bottom: 6px; padding-left: 15px; position: relative; }
+        .downgrade-box ul li::before { content: "-"; position: absolute; left: 0; color: var(--danger-text); }
+
+        .initiative-box {
+            background: rgba(200, 240, 35, 0.08);
+            border-left: 3px solid var(--brand-color);
+            padding: 15px;
+            border-radius: 0 12px 12px 0;
+            margin-bottom: 25px;
+        }
+
+        .initiative-box h4 { color: var(--brand-color); font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.5px;}
+        .initiative-box p { font-size: 0.85rem; color: #e0e0e0; margin-bottom: 5px; }
+
+        .checklist { display: flex; flex-direction: column; gap: 12px; flex-grow: 1; margin-bottom: 20px; }
+
+        .check-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            cursor: pointer;
+            padding: 12px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .check-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(200, 240, 35, 0.2); }
+
+        .check-item input[type="checkbox"] {
+            appearance: none; -webkit-appearance: none;
+            width: 22px; height: 22px;
+            border: 2px solid var(--brand-color);
+            border-radius: 6px;
+            flex-shrink: 0;
+            margin-top: 2px;
+            position: relative;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .check-item input[type="checkbox"]:checked { background: var(--brand-color); }
+        .check-item input[type="checkbox"]:checked::after {
+            content: "✓"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            color: #000; font-weight: bold; font-size: 14px;
+        }
+
+        .check-item span { font-size: 0.9rem; color: #d0d0d0; transition: 0.2s; line-height: 1.4; padding-right: 40px; }
+        .check-item input[type="checkbox"]:checked ~ span { color: #fff; opacity: 0.5; }
+
+        .pts-badge {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .score-display {
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            border: 1px dashed var(--glass-border);
+            transition: 0.3s;
+        }
+
+        .score-success { color: var(--brand-color); border-color: var(--brand-color); background: rgba(200, 240, 35, 0.05); }
+
+        /* Mesajul de succes sub forma de banner text, FARA link/buton */
+        .success-banner {
+            background: rgba(200, 240, 35, 0.15);
+            border: 1px solid var(--brand-color);
+            color: var(--brand-color);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.95rem;
+            display: none;
+            margin-top: auto;
+            line-height: 1.4;
+        }
+
+        .action-btn {
+            background: var(--brand-color);
+            color: #000;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1rem;
+            display: none;
+            transition: transform 0.2s;
+            margin-top: auto;
+        }
+        .action-btn:hover { transform: scale(1.02); }
+        .tutorial-section {
+    max-width: 1300px;
+    margin: 0 auto 40px auto;
+    display: flex;
+    justify-content: center;
+}
+
+.tutorial-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    padding: 12px 25px;
+    border-radius: 50px; /* Stil pastilă Apple */
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.tutorial-btn:hover {
+    border-color: var(--brand-color);
+    background: rgba(200, 240, 35, 0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.tutorial-icon {
+    background: var(--brand-color);
+    color: #000;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    padding-left: 3px; /* Aliniere vizuală iconiță play */
+}
+
+.tutorial-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.tutorial-text span {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.tutorial-text small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* Adaptare pentru mobil */
+@media (max-width: 768px) {
+    .tutorial-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <a href="/curriculum" class="back-link">← Înapoi în aplicație</a>
+    </div>
+
+    <header>
+        <h1>Roadmap <span>Profesori</span> Programare</h1>
+        <p>Promovarea se face pe baza performanței dovedite. Fiecare obiectiv are un punctaj. Trebuie să acumulezi minim <strong>90 din 100 de puncte</strong> pentru a fi eligibil pentru nivelul următor.</p>
+    </header>
+
+    <div class="my-level-banner" id="my-level-banner"></div>
+
+    <div class="bonus-banner">
+        <div class="bonus-banner-icon">🏆</div>
+        <div class="bonus-banner-text">
+            <h4>Bonus de Excelență (100 RON)</h4>
+            <p>Dacă pe un interval de 4 luni <strong>rata de abandon este 0%</strong>, se acordă un premiu de 100 RON.<br>
+            <em>Condiții de eligibilitate:</em> Profesorul trebuie să gestioneze <strong>minim 20 de elevi activi</strong> în acel interval. (Notă: Abandonul din motive medicale, financiare sau situații excepționale confirmate de management cu părinții nu se contorizează ca abandon al profesorului și nu anulează bonusul).</p>
+        </div>
+    </div>
+    <div class="tutorial-section">
+    <a href="https://youtu.be/b2DRHpV1kjk" target="_blank" class="tutorial-btn">
+        <span class="tutorial-icon">▶</span>
+        <div class="tutorial-text">
+            <span>Tutorial Utilizare Roadmap</span>
+            <small>Vezi cum funcționează sistemul de punctaj</small>
+        </div>
+    </a>
+</div>
+
+    <div class="roadmap-container">
+
+        <div class="card" id="card-junior">
+            <div>
+                <span class="level-badge">N1</span>
+                <h2>Nivel 1 - Junior</h2>
+                <span class="pay-rate">20 RON net / lecție • Rol de execuție</span>
+            </div>
+
+            <div class="section-title">📌 Condiții de menținere & Responsabilități</div>
+            <ul class="list">
+                <li>Adaptează și livrează corect materia (respectă materialele și slide-urile școlii).</li>
+                <li>Se loghează pe platforma de predare cu minim 5 minute înainte, cu camera și microfonul pornite.</li>
+                <li>Asigură mereu o conexiune de rezervă (ex: hotspot telefon) și o soluție de backup tehnic.</li>
+                <li>Implementează schimbările sugerate de Seniori după primirea feedback-ului.</li>
+                <li>Gestionează proactiv reprogramarea orelor în caz de indisponibilitate (anunță managementul cu 48h înainte).</li>
+                <li>Ghidează copiii în utilizarea funcției Share Screen fără asistență externă.</li>
+                <li>Completează prezența în 24h și raportul de progres în 48h după lecția 16.</li>
+                <li>Răspunde prompt la mesajele interne (maxim 1-2 ore în timpul orelor agreate).</li>
+                <li>Emite și transmite factura corectă la data stabilită.</li>
+            </ul>
+
+            <div class="downgrade-box">
+                <h4>⚠️ Sancțiuni & Performanță</h4>
+                <ul>
+                    <li><strong>Avertisment + Plan de redresare (30 zile)</strong>: la primul feedback negativ justificat sau rată abandon > 15%.</li>
+                    <li><strong>Încetarea colaborării</strong>: performanța nu revine la standarde după 30 zile SAU 2 plângeri justificate în 4 luni sau nerespectarea responsabilităților sau refuzul implicării la oră.</li>
+                </ul>
+            </div>
+
+            <div class="section-title">✅ Cerințe de promovare spre Middle</div>
+            <div class="initiative-box">
+                <h4>💡 Inițiativa Profesorului</h4>
+                <p>Promovarea nu este automată; ea se obține prin rezultate. Dorința de a trece la nivelul Middle trebuie comunicată echipei de management.</p>
+                <p><em>Ex: „Doresc să avansez la nivelul Middle. Vă rog să îmi alocați grupe de Python și Roblox Studio.”</em> Atenție: <strong>preluarea</strong> acestor grupe implică studiul serios al noțiunilor noi!</p>
+            </div>
+            <span class="section-subtitle">Atinge pragul minim de 90 pct pentru promovare.</span>
+
+            <div class="checklist">
+                <label class="check-item"><input type="checkbox" data-points="20" onchange="calculateScore('junior')">
+                    <span><strong>Experiență:</strong> 5-6 luni de activitate și peste 100+ lecții predate.</span>
+                    <div class="pts-badge">20 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('junior')">
+                    <span><strong>Volum:</strong> Minim 15 grupe de copii (inclusiv individuale).</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="15" onchange="calculateScore('junior')">
+                    <span><strong>Python:</strong> Minim 10 ore efectuate.</span>
+                    <div class="pts-badge">15 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('junior')">
+                    <span><strong>Roblox Studio:</strong> Minim 5 lecții efectuate.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="15" onchange="calculateScore('junior')">
+                    <span><strong>CoBlocks:</strong> Minim 24 ore efectuate în Blocuri.</span>
+                    <div class="pts-badge">15 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('junior')">
+                    <span><strong>Retenție:</strong> Rata de abandon de maxim 15%.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('junior')">
+                    <span><strong>Performanță:</strong> Maximum un feedback negativ justificat în 4 luni.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('junior')">
+                    <span><strong>Interviu de promovare:</strong> Discuție promovată cu un Senior.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+            </div>
+
+            <div class="score-display" id="score-junior">Scor: 0 / 100 pct</div>
+            <div class="success-banner" id="success-junior">🎉 Scor atins! Scrie-ne acum un mesaj pe grupul de WhatsApp pentru a începe evaluarea oficială!</div>
+        </div>
+
+        <div class="card" id="card-middle">
+            <div>
+                <span class="level-badge">N2</span>
+                <h2>Nivel 2 - Middle</h2>
+                <span class="pay-rate">25 RON net/ lecție • Rol de autonomie</span>
+            </div>
+
+            <div class="section-title">📌 Condiții de menținere & Responsabilități</div>
+            <ul class="list">
+                <li>Îndeplinește toate responsabilitățile nivelului Junior.</li>
+                <li>Stăpânește la nivel avansat Roblox Studio, demonstrând o înțelegere aprofundată a ecosistemului.</li>
+                <li>Menține o rată de abandon a elevilor sub 10%.</li>
+                <li>Rezolvă independent situațiile apărute la clasă și temperează comportamentele dificile.</li>
+                <li>Oferă task-uri suplimentare elevilor cu un ritm de lucru rapid.</li>
+                <li>Adaptează materia și creează mini-proiecte personalizate în funcție de nevoile specifice ale copiilor (ex: pentru cei cu un ritm diferit de învățare sau cu interese distincte).</li>
+                <li>Oferă suport tehnic copiilor (probleme cu microfonul, partajarea).</li>
+                <li>Vine proactiv cu propuneri pentru îmbunătățirea curriculei.</li>
+            </ul>
+
+            <div class="downgrade-box">
+                <h4>⚠️ Clauza de Revenire la Nivelul Junior</h4>
+                <ul>
+                    <li><strong>Minim 2 feedback-uri negative</strong> justificate în ultimele 3 luni.</li>
+                    <li>Nerespectarea responsabilităților sau refuzul implicării tehnice la oră.</li>
+                    <li>Performanța nu revine la standarde după un plan de redresare.</li>
+                </ul>
+            </div>
+
+            <div class="section-title">✅ Cerințe de promovare spre Senior</div>
+            <div class="initiative-box">
+                <h4>💡 Inițiativa Profesorului</h4>
+                <p>Demonstrarea aptitudinilor de Senior prin crearea de proiecte educaționale complexe și dovezi de excelență.</p>
+                <p><em>Ex: „Sunt pregătit să construiesc un mini-modul nou pentru curiculă și să analizez înregistrările unui Junior.”</em></p>
+            </div>
+            <span class="section-subtitle">Atinge pragul minim de 90 pct pentru promovare.</span>
+
+            <div class="checklist">
+                <label class="check-item"><input type="checkbox" data-points="15" onchange="calculateScore('middle')">
+                    <span><strong>Experiență:</strong> Minim 6 luni performanță ca Middle.</span>
+                    <div class="pts-badge">15 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="15" onchange="calculateScore('middle')">
+                    <span><strong>Retenție:</strong> Rata de abandon maxim 7% (pe 4 luni).</span>
+                    <div class="pts-badge">15 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="20" onchange="calculateScore('middle')">
+                    <span><strong>Proiect Certificare Extins (Modul, nu Lecție):</strong> A construit un Mini-Modul complet (4 lecții legate): cu jocuri, slide-uri, teorie și video-uri explicative pentru profesori.</span>
+                    <div class="pts-badge">20 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('middle')">
+                    <span><strong>Zero Întârzieri Admin:</strong> Istoric impecabil (facturi, prezențe, rapoarte) în ultimele 3 luni.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('middle')">
+                    <span><strong>Gestionarea Crizelor:</strong> Redresare grupă dificilă / recuperare elev.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('middle')">
+                    <span><strong>Evaluare Junior:</strong> Analiza a minim 2 ore înregistrate cu raport de feedback constructiv.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('middle')">
+                    <span><strong>Comunicare:</strong> Limbaj impecabil în toate interacțiunile școlii.</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+                <label class="check-item"><input type="checkbox" data-points="10" onchange="calculateScore('middle')">
+                    <span><strong>Recrutare:</strong> Participă alături de management la interviurile tehnice pentru noii recruți (dacă există campanii active).</span>
+                    <div class="pts-badge">10 pt</div>
+                </label>
+            </div>
+
+            <div class="score-display" id="score-middle">Scor: 0 / 100 pct</div>
+            <div class="success-banner" id="success-middle">🎉 Scor atins! Scrie-ne acum un mesaj pe grupul de WhatsApp pentru a începe evaluarea oficială!</div>
+        </div>
+
+        <div class="card" id="card-senior">
+            <div>
+                <span class="level-badge">N3</span>
+                <h2>Nivel 3 - Senior (Lead)</h2>
+                <span class="pay-rate">30 RON net / lecție + proiecte extra</span>
+            </div>
+
+            <div class="section-title">📌 Condiții de menținere & Responsabilități</div>
+            <ul class="list">
+                <li>Îndeplinește toate responsabilitățile nivelurilor Junior și Middle.</li>
+                <li><strong>Retenție de Top:</strong> Menține o rată de abandon a elevilor sub 5%.</li>
+                <li><strong>Dezvoltare Curriculum:</strong> Creează și livrează managementului minim un proiect/lecție completă la fiecare 2 săptămâni (sau 2 pe lună). Lecția trebuie să conțină obligatoriu: jocul programat, prezentarea vizuală (slide-uri) și un scurt video explicativ (tutorial) pentru restul profesorilor.</li>
+                <li><strong>Mentorat 1-la-1:</strong> Coordonează 1-2 Juniori prin analiza orelor înregistrate.</li>
+                <li><strong>Raport Lunar de Mentorat:</strong> Prezintă managementului un scurt raport lunar (text/audio pe WhatsApp) despre Juniorul pe care îl mentorează: ce greșeli făcea la începutul lunii, ce i s-a corectat și cum se descurcă acum.</li>
+                <li>Verifică prin sondaj rapoartele de progres ale Juniorilor.</li>
+                <li>Susține independent interviurile tehnice pentru noii candidați.</li>
+                <li>Gestionează grupele sau situațiile complexe, inclusiv prin crearea de proiecte și parcursuri educaționale complet personalizate pentru nevoile acestora.</li>
+            </ul>
+
+            <div class="downgrade-box">
+                <h4>⚠️ Clauza de Revenire la Nivelul Middle</h4>
+                <ul>
+                    <li>Neîndeplinirea normei de curiculă (1 lecție completă/2 săptămâni).</li>
+                    <li>Lipsa rapoartelor lunare de mentorat.</li>
+                    <li>Rata de abandon crește peste 5% sau primește 2 plângeri justificate în 2 luni.</li>
+                </ul>
+            </div>
+
+            <div class="section-title">✅ Proiecte Extra </div>
+            <div class="initiative-box">
+                <h4>💡 Inițiativa Profesorului</h4>
+                <p>Seniorul acționează ca un partener al școlii, propunând direcții de îmbunătățire.</p>
+                <p><em>Ex: „Propun construirea unui modul opțional de Office pentru a acoperi lacunele elevilor.”</em></p>
+            </div>
+            <div class="checklist">
+                <label class="check-item"><input type="checkbox" onchange="checkAllSenior()">
+                    <span><strong>Creare Module Noi:</strong> Curiculă pentru cursuri inexistente (Blender, Office etc.).</span>
+                </label>
+                <label class="check-item"><input type="checkbox" onchange="checkAllSenior()">
+                    <span><strong>Suport Strategic:</strong> Asistă Middle în rezolvarea problemelor complexe.</span>
+                </label>
+            </div>
+            <a href="mailto:office@bytecodeschool.com?subject=Confirmare Mentenanta Senior" class="action-btn" id="btn-senior">Confirm Implicarea și Proiectele</a>
+        </div>
+
+
+    </div>
+
+
+    <script>
+        // Funcția de calcul pentru sistemul cu puncte (Junior și Middle)
+        function calculateScore(level) {
+            const container = document.getElementById(`card-${level}`);
+            const checks = container.querySelectorAll('input[type="checkbox"]');
+            const scoreDisplay = document.getElementById(`score-${level}`);
+            const successBanner = document.getElementById(`success-${level}`);
+
+            let currentPoints = 0;
+            const passingScore = 90;
+
+            checks.forEach(c => {
+                if (c.checked) {
+                    currentPoints += parseInt(c.getAttribute('data-points'));
+                }
+            });
+
+            scoreDisplay.innerText = `Scor: ${currentPoints} / 100 pct`;
+
+            // Daca a atins pragul, apare mesajul text si e verde scorul
+            if (currentPoints >= passingScore) {
+                scoreDisplay.classList.add('score-success');
+                successBanner.style.display = 'block';
+            } else {
+                scoreDisplay.classList.remove('score-success');
+                successBanner.style.display = 'none';
+            }
+        }
+
+        // Funcția clasică pentru Senior (bifarea proiectelor extra)
+        function checkAllSenior() {
+            const container = document.getElementById('card-senior');
+            const checks = container.querySelectorAll('input[type="checkbox"]');
+            const btn = document.getElementById('btn-senior');
+
+            const allChecked = Array.from(checks).every(c => c.checked);
+            btn.style.display = allChecked ? 'block' : 'none';
+        }
+    </script>
+
+    <script>
+        // Preia nivelul profesorului logat (din /api/my-profile, autentificat prin cookie-ul
+        // de sesiune) si afiseaza un mesaj personalizat + evidentiaza cardul nivelului sau.
+        (function () {
+            var LEVEL_META = {
+                Junior: { slug: 'junior', message: 'Continuă să acumulezi experiență - fiecare lecție te apropie de nivelul Middle! 🌱' },
+                Middle: { slug: 'middle', message: 'Ești pe val! Mai sunt câțiva pași solizi până la Senior. 🚀' },
+                Senior: { slug: 'senior', message: 'Mulțumim pentru leadership și mentorat - ești un exemplu pentru echipă! 🏆' },
+            };
+
+            fetch('/api/my-profile')
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data || !data.level) return;
+                    var meta = LEVEL_META[data.level] || LEVEL_META.Junior;
+                    var banner = document.getElementById('my-level-banner');
+                    if (banner) {
+                        banner.innerHTML = 'Nivelul tău curent: <strong>' + data.level + '</strong>' +
+                            '<span class="sub">' + meta.message + '</span>';
+                        banner.style.display = 'block';
+                    }
+                    var card = document.getElementById('card-' + meta.slug);
+                    if (card) card.classList.add('current-level-card');
+                })
+                .catch(function () {
+                    // Cerere esuata (retea/sesiune) - roadmap-ul ramane vizibil normal, fara banner.
+                });
+        })();
+    </script>
+</body>
+</html>

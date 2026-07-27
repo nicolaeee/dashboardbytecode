@@ -25,7 +25,7 @@ export default function Shell({
       <div className="glass sticky top-0 z-40 flex items-center justify-between border-b border-line px-4 py-3 lg:hidden">
         <Link href="/" className="flex items-center gap-2.5">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 font-mono text-sm font-bold text-black">{'</>'}</span>
-          <span className="font-display text-[15px] font-semibold leading-tight">Bytecode School</span>
+          <span className="font-display text-[15px] font-semibold leading-tight">ByteCode Portal</span>
         </Link>
         <button
           onClick={() => setMenuOpen(true)} aria-label="Deschide meniul"
@@ -48,7 +48,7 @@ export default function Shell({
         <div className="mb-6 flex items-center justify-between">
           <Link href="/" onClick={closeMenu} className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 font-mono text-sm font-bold text-black">{'</>'}</span>
-            <span className="font-display text-[15px] font-semibold leading-tight">Bytecode School</span>
+            <span className="font-display text-[15px] font-semibold leading-tight">ByteCode Portal</span>
           </Link>
           <button
             onClick={closeMenu} aria-label="Închide meniul"

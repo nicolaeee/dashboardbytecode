@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { EntityKind, Role } from '@/lib/types';
+import type { EntityKind, Role, TeacherLevel } from '@/lib/types';
 
 const TABLES: Record<EntityKind, string> = {
   platform: 'platforms',
@@ -141,6 +141,18 @@ export async function setUserRole(userId: string, role: Role): Promise<Result> {
       return { ok: false, error: 'Nu îți poți retrage propriul rol de administrator.' };
     }
     const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
+    if (error) throw error;
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export async function setUserLevel(userId: string, level: TeacherLevel): Promise<Result> {
+  try {
+    const { supabase } = await adminGuard();
+    const { error } = await supabase.from('profiles').update({ level }).eq('id', userId);
     if (error) throw error;
     refresh();
     return { ok: true };

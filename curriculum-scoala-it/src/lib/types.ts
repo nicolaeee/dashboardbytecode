@@ -1,11 +1,15 @@
 export type Role = 'admin' | 'teacher';
 
+/** Nivelul profesorului in grila de promovare (vezi /roadmap.html). */
+export type TeacherLevel = 'Junior' | 'Middle' | 'Senior';
+
 export type Profile = {
   id: string;
   email: string;
   full_name: string;
   role: Role;
   is_active: boolean;
+  level: TeacherLevel;
   created_at: string;
 };
 
@@ -57,6 +61,8 @@ export type TrackerGroup = {
   /** Cel mai mare multiplu de 16 lectii deja notificat/trimis (0 = niciunul inca). */
   diploma_milestone: number;
   course: CourseId | null;
+  /** Link-ul Google Meet al clasei (editabil din antetul clasei in Tracker). */
+  meet_link: string | null;
   deleted_at: string | null;
   created_at: string;
 };

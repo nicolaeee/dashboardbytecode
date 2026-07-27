@@ -3,8 +3,14 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { KeyRound, Lock, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { Badge, Button, Card, Field, Input, Modal } from '@/components/ui';
-import { createTeacher, deleteTeacher, resetTeacherPassword, setUserActive, setUserRole } from '@/app/admin/actions';
-import type { Profile, Role } from '@/lib/types';
+import { createTeacher, deleteTeacher, resetTeacherPassword, setUserActive, setUserLevel, setUserRole } from '@/app/admin/actions';
+import type { Profile, Role, TeacherLevel } from '@/lib/types';
+
+const LEVEL_TONES: Record<TeacherLevel, 'blue' | 'purple' | 'brand'> = {
+  Junior: 'blue',
+  Middle: 'purple',
+  Senior: 'brand',
+};
 
 export default function TeachersClient({
   profiles, moduleCounts, meId,
@@ -66,9 +72,12 @@ export default function TeachersClient({
             <div className="flex items-center gap-2">
               {p.role === 'admin'
                 ? <Badge tone="brand">Administrator · acces total</Badge>
-                : <Badge tone={moduleCounts[p.id] ? 'ok' : 'lock'}>
-                    {moduleCounts[p.id] ?? 0} module deblocate
-                  </Badge>}
+                : <>
+                    <Badge tone={moduleCounts[p.id] ? 'ok' : 'lock'}>
+                      {moduleCounts[p.id] ?? 0} module deblocate
+                    </Badge>
+                    <Badge tone={LEVEL_TONES[p.level]}>{p.level}</Badge>
+                  </>}
               {!p.is_active && <Badge tone="lock">Dezactivat</Badge>}
             </div>
 
@@ -88,6 +97,19 @@ export default function TeachersClient({
                 <option value="teacher" className="bg-night text-ink">Profesor</option>
                 <option value="admin" className="bg-night text-ink">Administrator</option>
               </select>
+              {p.role === 'teacher' && (
+                <select
+                  value={p.level}
+                  disabled={pending}
+                  onChange={(e) => run(() => setUserLevel(p.id, e.target.value as TeacherLevel))}
+                  className="glass h-8 rounded-xl border border-line px-2 text-[13px] text-ink disabled:opacity-50"
+                  aria-label="Nivel"
+                >
+                  <option value="Junior" className="bg-night text-ink">Junior</option>
+                  <option value="Middle" className="bg-night text-ink">Middle</option>
+                  <option value="Senior" className="bg-night text-ink">Senior</option>
+                </select>
+              )}
               <Button size="sm" variant="outline"
                 onClick={() => { setResetTarget(p); setNewPassword(''); setResetError(null); }}>
                 <Lock size={14} /> Resetează parola

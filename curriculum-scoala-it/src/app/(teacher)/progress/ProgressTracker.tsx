@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X as XIcon, RotateCcw, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Check, X as XIcon, RotateCcw, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
@@ -409,6 +409,13 @@ export default function ProgressTracker({
     if (ok) showToast('Modul sters!');
   }
 
+  // Salveaza/editeaza/sterge link-ul Google Meet al clasei - refoloseste patchGroup
+  // (optimist + rollback la eroare), la fel ca restul campurilor grupei (zi, ora, curs...).
+  async function saveMeetLink(groupId: string, meetLink: string | null) {
+    const ok = await patchGroup(groupId, { meet_link: meetLink });
+    if (ok) showToast(meetLink ? 'Link Meet salvat!' : 'Link Meet șters');
+  }
+
   async function addModuleWithReward() {
     if (!currentGroup) return;
     const count = currentGroup.module_count || 1;
@@ -692,6 +699,7 @@ export default function ProgressTracker({
             onSetAttendanceStatus={setAttendanceStatus}
             onToggleStar={toggleStar}
             onOpenHistory={openStudentHistory}
+            onSaveMeetLink={(meetLink) => saveMeetLink(currentGroup.id, meetLink)}
           />
         ) : null}
       </main>
@@ -1480,8 +1488,98 @@ function ClassMenu({
   );
 }
 
+// Zona de link Google Meet din antetul clasei: buton subtil cand nu exista link,
+// link clickabil (accent #C8F023) + editare inline cand exista - salvare asincrona
+// prin onSave (patchGroup optimist), fara reincarcarea paginii.
+function MeetLinkControl({
+  meetLink, onSave,
+}: { meetLink: string | null; onSave: (meetLink: string | null) => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(meetLink ?? '');
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    setDraft(meetLink ?? '');
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setDraft(meetLink ?? '');
+    setEditing(false);
+  }
+
+  async function save() {
+    const trimmed = draft.trim();
+    const normalized = trimmed && !/^https?:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed;
+    setSaving(true);
+    try {
+      await onSave(normalized || null);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 bg-gray-900/70 border border-gray-700 rounded-2xl px-3 py-2 w-full sm:w-auto">
+        <Video size={16} className="text-[#C8F023] shrink-0" />
+        <input
+          type="text" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancelEdit(); }}
+          placeholder="https://meet.google.com/xxx-xxxx-xxx"
+          className="flex-1 min-w-[200px] bg-transparent text-sm placeholder:text-gray-500 focus:outline-none"
+        />
+        <button
+          onClick={save} disabled={saving} title="Salveaza"
+          className="tracker-btn-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50"
+        >
+          <Check size={14} strokeWidth={3} />
+        </button>
+        <button
+          onClick={cancelEdit} disabled={saving} title="Renunta"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
+        >
+          <XIcon size={14} strokeWidth={3} />
+        </button>
+      </div>
+    );
+  }
+
+  if (!meetLink) {
+    return (
+      <button
+        onClick={startEdit}
+        className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 hover:text-[#C8F023] border border-dashed border-gray-700 hover:border-[#C8F023]/50 rounded-2xl px-3 py-2 transition-colors"
+      >
+        <Video size={15} /> + Adaugă link Meet
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <a
+        href={meetLink} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-2 text-sm font-semibold text-[#C8F023] border border-[#C8F023]/40 hover:border-[#C8F023] hover:bg-[#C8F023]/10 rounded-2xl px-3 py-2 transition-colors max-w-[240px]"
+        title={meetLink}
+      >
+        <Video size={15} className="shrink-0" />
+        <span className="truncate">Google Meet</span>
+        <ExternalLink size={13} className="shrink-0 opacity-70" />
+      </a>
+      <button
+        onClick={startEdit} title="Editeaza link-ul"
+        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
+      >
+        <Pencil size={14} />
+      </button>
+    </div>
+  );
+}
+
 function ClassView({
-  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onToggleStar, onOpenHistory,
+  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onToggleStar, onOpenHistory, onSaveMeetLink,
 }: {
   group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
   onBack: () => void; onEditStudent: (s: TrackerStudent) => void;
@@ -1490,6 +1588,7 @@ function ClassView({
   onSetAttendanceStatus: (studentId: string, lessonId: string, status: AttendanceStatus) => void;
   onToggleStar: (studentId: string, lessonId: string) => void;
   onOpenHistory: (studentId: string) => void;
+  onSaveMeetLink: (meetLink: string | null) => void | Promise<void>;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const topRanked = students.filter((s) => s.rank <= 3);
@@ -1505,7 +1604,10 @@ function ClassView({
       <button onClick={onBack} className="mb-4 text-[#C8F023] font-semibold flex items-center gap-2 hover:opacity-80 transition-opacity">
         ← Inapoi la Clase
       </button>
-      <h2 className="text-xl md:text-2xl font-bold mb-6">📚 {group.group_name}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-xl md:text-2xl font-bold">📚 {group.group_name}</h2>
+        <MeetLinkControl meetLink={group.meet_link} onSave={onSaveMeetLink} />
+      </div>
 
       <div className="mb-6 bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-3xl p-4 tracker-card-shadow">
         <h3 className="text-lg font-semibold mb-3">🏆 Clasament</h3>

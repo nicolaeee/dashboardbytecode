@@ -87,12 +87,14 @@ export function Modal({
   );
 }
 
-export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'brand' | 'lock' | 'ok'; children: React.ReactNode }) {
+export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'brand' | 'lock' | 'ok' | 'blue' | 'purple'; children: React.ReactNode }) {
   const tones = {
     neutral: 'bg-slate-150 text-ink/70',
     brand: 'bg-brand-50 text-brand-500',
     lock: 'bg-slate-150 text-lock',
     ok: 'bg-[#3DDCB9]/15 text-[#3DDCB9]',
+    blue: 'bg-blue-500/15 text-blue-400',
+    purple: 'bg-purple-500/15 text-purple-400',
   }[tone];
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${tones}`}>{children}</span>;
 }

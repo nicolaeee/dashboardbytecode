@@ -17,6 +17,9 @@ create table public.profiles (
   full_name   text not null default '',
   role        public.user_role not null default 'teacher',
   is_active   boolean not null default true,
+  -- Nivelul profesorului in grila de promovare (vezi pagina /roadmap.html) - gestionat
+  -- de admin din Panoul de Profesori, afisat profesorului pe pagina lui de Roadmap.
+  level       text not null default 'Junior' check (level in ('Junior', 'Middle', 'Senior')),
   created_at  timestamptz not null default now()
 );
 
@@ -238,6 +241,7 @@ create table public.tracker_groups (
   time_of_day  text,   -- 'HH:MM', optional
   diploma_milestone int not null default 0,  -- cel mai mare multiplu de 16 lectii deja notificat/trimis
   course       text check (course in ('coblocks', 'python', 'roblox', 'alfabetizare', 'unity', 'delighted')),  -- leaga grupa de folderul de sabloane de diploma
+  meet_link    text,   -- link-ul Google Meet al clasei, editabil din antetul clasei in Tracker
   deleted_at   timestamptz,
   created_at   timestamptz not null default now()
 );
