@@ -212,8 +212,37 @@
         .logo-text span { color: var(--brand-color); }
 
         /* =========================================
-           PAGINA 2: STELUȚE - CSS PASTREAT
+           PAGINA 2 & 3 - CSS PASTREAT
            ========================================= */
+        .header-p2 { position: absolute; top: 60px; left: 80px; z-index: 10; }
+        .p2-name { font-size: 24px; color: var(--text-muted); font-weight: 400; margin: 0 0 5px 0; }
+        .p2-name span { color: #fff; font-weight: 600; }
+        .p2-title { font-size: 46px; font-weight: 900; color: #fff; margin: 0; letter-spacing: -1px; }
+
+        .feedback-grid {
+            position: absolute; top: 180px; left: 80px; width: 1040px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px; z-index: 10;
+        }
+
+        .fb-card {
+            background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px; padding: 35px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+        }
+        .fb-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--brand-color), transparent); opacity: 0.3;
+        }
+
+        .fb-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .fb-icon {
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(200, 240, 35, 0.1); border: 1px solid rgba(200, 240, 35, 0.2);
+            display: flex; align-items: center; justify-content: center; color: var(--brand-color);
+        }
+        .fb-icon svg { width: 24px; height: 24px; stroke-width: 2; }
+        .fb-q { font-size: 18px; font-weight: 700; color: #fff; margin: 0; line-height: 1.3; }
+        .fb-a { font-size: 15px; font-weight: 400; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
         .stars-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
@@ -330,7 +359,7 @@
                     <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă cu mândrie elevului</p>
 
                     <!-- Nume Student -->
-                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Nume Elev</h2>
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Tudor Andrei</h2>
 
                     <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru finalizarea cu succes a</p>
                     <div class="course-title" contenteditable="true" spellcheck="false">Modulului 2 - Logică și Algoritmi în Python</div>
@@ -338,7 +367,7 @@
 
                 <div class="footer-p1">
                     <div class="signature-block">
-                        <div class="sig-value" contenteditable="true" spellcheck="false">Nume Profesor</div>
+                        <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Nume și prenume profesor</div>
                     </div>
@@ -352,7 +381,7 @@
                     </div>
 
                     <div class="signature-block">
-                        <div class="sig-date" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                        <div class="sig-date" contenteditable="true" spellcheck="false">14 Iunie 2026</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Data finalizării</div>
                     </div>
@@ -361,9 +390,72 @@
         </div>
 
         <!-- ==========================================
-             PAGINA 2: STELUȚE
+             PAGINA 2: FEEDBACK (Neschimbat)
              ========================================== -->
         <div class="page" id="page-2">
+            <div class="glow-orb-1" style="left: auto; right: -200px;"></div>
+
+            <div class="header-p2">
+                <p class="p2-name">Elev: <span id="name-p2">Tudor Andrei</span></p>
+                <h2 class="p2-title" contenteditable="true" spellcheck="false">Raport de Progres</h2>
+            </div>
+
+            <div class="feedback-grid">
+                <!-- Cardurile de feedback ramân intacte -->
+                <div class="fb-card">
+                    <div class="fb-card-header">
+                        <div class="fb-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        </div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Gândire Algoritmică<br><span style="font-size:13px; color:var(--text-muted); font-weight:400;">Cum abordează problemele mai complexe?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">
+                        Tudor a făcut un salt impresionant în acest modul. Reușește să descompună problemele mari în pași mici și logici. Înțelege perfect concepte avansate precum buclele (for/while) și structurile decizionale complexe.
+                    </p>
+                </div>
+
+                <div class="fb-card">
+                    <div class="fb-card-header">
+                        <div class="fb-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        </div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Depanare (Debugging)<br><span style="font-size:13px; color:var(--text-muted); font-weight:400;">Cum reacționează când codul dă eroare?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">
+                        Erorile nu îl mai descurajează! Tudor a învățat să citească mesajele pe care i le dă Python-ul, să identifice linia cu problema și să testeze soluții. Această reziliență este o abilitate esențială pentru orice viitor programator.
+                    </p>
+                </div>
+
+                <div class="fb-card">
+                    <div class="fb-card-header">
+                        <div class="fb-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                        </div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Creativitate în Cod<br><span style="font-size:13px; color:var(--text-muted); font-weight:400;">Își pune amprenta personală în proiecte?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">
+                        Absolut. Nu doar că termină cerințele de bază, dar mereu adaugă funcționalități noi jocurilor și aplicațiilor create. Îi place să modifice variabilele pentru a vedea "ce se întâmplă dacă", arătând o curiozitate tehnică excelentă.
+                    </p>
+                </div>
+
+                <div class="fb-card">
+                    <div class="fb-card-header">
+                        <div class="fb-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                        </div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Recomandări pentru acasă<br><span style="font-size:13px; color:var(--text-muted); font-weight:400;">Cum îl puteți susține în continuare?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">
+                        Încurajați-l să vă prezinte proiectele finale! Explicând codul cu voce tare, își fixează și mai bine cunoștințele. Pentru Modulul 3 (care implică grafică/interfețe), are nevoie doar de aceeași determinare pe care a arătat-o până acum.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 3: STELUȚE
+             ========================================== -->
+        <div class="page" id="page-3">
             <div class="glow-orb-2" style="top: -200px; right: auto; left: -200px; width: 1000px; height: 1000px; background: radial-gradient(circle, rgba(200, 240, 35, 0.08) 0%, transparent 60%);"></div>
 
             <div class="stars-container">
@@ -377,7 +469,7 @@
                 </div>
 
                 <div class="stars-footer">
-                    <span id="name-p3">Elev</span> a strălucit și a colectat
+                    <span id="name-p3">Tudor</span> a strălucit și a colectat
                     <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span> din 16 steluțe!
                 </div>
             </div>
@@ -396,7 +488,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <div class="modal-text">
-                Sigur ai completat toate datele corect și ai verificat să fie ca în registru și nu ai încurcat nimic?
+                Sigur ai completat toate datele corect și ai verificat să fie ca în registru, feedback corect gramatical și nu ai încurcat nimic?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
@@ -432,11 +524,11 @@
         // Sincronizează numele peste tot în document
         function syncNames() {
             const fullName = document.getElementById('name-p1').innerText;
+            document.getElementById('name-p2').innerText = fullName;
 
             // Extrage doar prenumele pentru ultima pagină (primul cuvânt)
             const firstName = fullName.split(' ')[0] || fullName;
-            const p3 = document.getElementById('name-p3');
-            if (p3) p3.innerText = firstName;
+            document.getElementById('name-p3').innerText = firstName;
         }
 
         // --- SISTEM STELUȚE DINAMICE ---
@@ -516,7 +608,7 @@
             const pages = document.querySelectorAll('.page');
             const btn = document.getElementById('main-download-btn');
 
-            // Stare UI buton
+            // UI Feedback
             const originalText = btn.innerHTML;
             btn.innerHTML = "⏳ Se procesează...";
             btn.style.opacity = "0.7";
@@ -550,7 +642,7 @@
 
                 // Generare nume fisier conform cerintei
                 const rawName = document.getElementById('name-p1').innerText.trim();
-                const fileName = `Diploma - ${rawName}.pdf`;
+                const fileName = `Diploma, Feedback și steluțe - ${rawName}.pdf`;
 
                 pdf.save(fileName);
 
@@ -569,35 +661,6 @@
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        function formatTodayRO() {
-            var d = new Date();
-            var dd = String(d.getDate()).padStart(2, '0');
-            var mm = String(d.getMonth() + 1).padStart(2, '0');
-            return dd + '.' + mm + '.' + d.getFullYear();
-        }
-
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl) { nameEl.innerText = studentName || 'Nume Elev'; if (typeof syncNames === 'function') syncNames(); }
-                // Notă: Modulul 2 folosește clasa .sig-date (nu .sig-value) pentru câmpul de dată,
-                // așa că selectorul include ambele clase pentru a păstra ordinea [profesor, dată].
-                var sigValues = document.querySelectorAll('.sig-value, .sig-date');
-                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Profesor';
-                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

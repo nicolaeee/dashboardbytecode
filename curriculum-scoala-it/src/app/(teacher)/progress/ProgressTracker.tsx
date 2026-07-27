@@ -151,7 +151,8 @@ type ModalState =
   | { type: 'confirmDeleteStudent'; studentId: string }
   | { type: 'confirmDeleteClass'; groupId: string }
   | { type: 'newLesson'; groupId: string }
-  | { type: 'recordRecovery'; studentId: string; lessonId: string };
+  | { type: 'recordRecovery'; studentId: string; lessonId: string }
+  | { type: 'studentHistory'; studentId: string };
 
 export default function ProgressTracker({
   teacherId, initialGroups, initialStudents, initialLessons, initialAttendance,
@@ -523,6 +524,10 @@ export default function ProgressTracker({
     setModal({ type: 'recordRecovery', studentId, lessonId });
   }
 
+  function openStudentHistory(studentId: string) {
+    setModal({ type: 'studentHistory', studentId });
+  }
+
   async function handleSubmitNewLesson(e: React.FormEvent, groupId: string) {
     e.preventDefault();
     setBusy(true);
@@ -686,6 +691,7 @@ export default function ProgressTracker({
             onRequestRecovery={openRecoveryModal}
             onSetAttendanceStatus={setAttendanceStatus}
             onToggleStar={toggleStar}
+            onOpenHistory={openStudentHistory}
           />
         ) : null}
       </main>
@@ -1124,6 +1130,27 @@ export default function ProgressTracker({
         );
       })()}
 
+      {modal.type === 'studentHistory' && (() => {
+        const student = students.find((s) => s.id === modal.studentId);
+        if (!student) return null;
+        const group = getGroupById(student.group_id);
+        const groupLessons = [...lessons]
+          .filter((l) => l.group_id === student.group_id)
+          .sort((a, b) => a.session_number - b.session_number);
+        const history = groupLessons.map((lesson) => ({
+          lesson,
+          record: attendance.find((a) => a.lesson_id === lesson.id && a.student_id === student.id) ?? null,
+        }));
+        return (
+          <StudentHistoryModal
+            student={student}
+            group={group}
+            history={history}
+            onClose={() => setModal({ type: null })}
+          />
+        );
+      })()}
+
       {(modal.type === 'trashGroups' || modal.type === 'trashStudents') && (
         <ModalShell onClose={() => setModal({ type: null })}>
           {modal.type === 'trashGroups' ? (
@@ -1240,6 +1267,110 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
   );
 }
 
+const HISTORY_STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: React.ReactNode; pill: string; dot: string }> = {
+  present: { label: 'Prezent', icon: <Check size={14} strokeWidth={3} />, pill: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30', dot: 'bg-emerald-500' },
+  absent: { label: 'Absent', icon: <XIcon size={14} strokeWidth={3} />, pill: 'bg-red-500/15 text-red-400 border border-red-500/30', dot: 'bg-red-500' },
+  made_up: { label: 'Recuperat', icon: <RotateCcw size={13} strokeWidth={2.5} />, pill: 'bg-blue-500/15 text-blue-400 border border-blue-500/30', dot: 'bg-blue-500' },
+};
+
+function StudentHistoryModal({
+  student, group, history, onClose,
+}: {
+  student: TrackerStudent; group: TrackerGroup | null;
+  history: { lesson: TrackerLesson; record: TrackerAttendance | null }[];
+  onClose: () => void;
+}) {
+  const rewardEmoji = group ? getRewardEmoji(group.reward_type) : '⭐';
+  const statusOf = (r: TrackerAttendance | null): AttendanceStatus => r?.status ?? 'absent';
+  const presentCount = history.filter((h) => statusOf(h.record) === 'present').length;
+  const absentCount = history.filter((h) => statusOf(h.record) === 'absent').length;
+  const madeUpCount = history.filter((h) => statusOf(h.record) === 'made_up').length;
+  const starsCount = history.filter((h) => h.record?.has_star).length;
+  const sortedDesc = [...history].sort((a, b) => b.lesson.session_number - a.lesson.session_number);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass-strong tracker-card-shadow border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+      >
+        <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-white/10 shrink-0">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#C8F023] mb-1">📋 Fișa Elevului</p>
+            <h3 className="text-xl font-bold">{student.name}</h3>
+            {group && <p className="text-sm text-gray-400 mt-0.5">📖 {group.group_name}</p>}
+          </div>
+          <button
+            onClick={onClose} aria-label="Inchide"
+            className="w-9 h-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+          >
+            <XIcon size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 p-4 shrink-0">
+          <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 py-3 text-center">
+            <div className="text-lg font-bold text-emerald-400">{presentCount}</div>
+            <div className="text-[10px] font-semibold text-emerald-400/80 uppercase tracking-wide">Prezent</div>
+          </div>
+          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 py-3 text-center">
+            <div className="text-lg font-bold text-red-400">{absentCount}</div>
+            <div className="text-[10px] font-semibold text-red-400/80 uppercase tracking-wide">Absent</div>
+          </div>
+          <div className="rounded-2xl bg-blue-500/10 border border-blue-500/20 py-3 text-center">
+            <div className="text-lg font-bold text-blue-400">{madeUpCount}</div>
+            <div className="text-[10px] font-semibold text-blue-400/80 uppercase tracking-wide">Recuperat</div>
+          </div>
+          <div className="rounded-2xl bg-[#C8F023]/10 border border-[#C8F023]/30 py-3 text-center">
+            <div className="text-lg font-bold text-[#C8F023]">{starsCount}</div>
+            <div className="text-[10px] font-semibold text-[#C8F023]/80 uppercase tracking-wide">{rewardEmoji} Teme</div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+          {sortedDesc.length === 0 ? (
+            <p className="text-gray-400 text-center py-10 text-sm">Nicio lecție inregistrata inca pentru aceasta clasa.</p>
+          ) : (
+            sortedDesc.map(({ lesson, record }) => {
+              const status = statusOf(record);
+              const cfg = HISTORY_STATUS_CONFIG[status];
+              const hasStar = record?.has_star ?? false;
+              const starEligible = status !== 'absent';
+              return (
+                <div key={lesson.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5">
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold truncate">
+                      Lecția {lesson.session_number}
+                      <span className="text-gray-400 font-normal ml-2">
+                        {new Date(lesson.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                    </div>
+                    {status === 'made_up' && record?.recovery_date && (
+                      <div className="text-[11px] text-blue-400/80 mt-0.5">
+                        🔄 Recuperat pe {new Date(record.recovery_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' })}
+                      </div>
+                    )}
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${cfg.pill}`}>
+                    {cfg.icon} {cfg.label}
+                  </span>
+                  <span
+                    title={starEligible ? (hasStar ? 'Tema facuta' : 'Fara tema') : 'Nu a fost prezent'}
+                    className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm ${hasStar ? 'bg-[#C8F023] text-black' : 'bg-white/5 text-white/20'}`}
+                  >
+                    {rewardEmoji}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GroupCard({
   group, studentCount, avgProgress, onOpen, onEdit,
 }: { group: TrackerGroup; studentCount: number; avgProgress: number; onOpen: () => void; onEdit: () => void }) {
@@ -1350,7 +1481,7 @@ function ClassMenu({
 }
 
 function ClassView({
-  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onToggleStar,
+  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onToggleStar, onOpenHistory,
 }: {
   group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
   onBack: () => void; onEditStudent: (s: TrackerStudent) => void;
@@ -1358,6 +1489,7 @@ function ClassView({
   onRequestRecovery: (studentId: string, lessonId: string) => void;
   onSetAttendanceStatus: (studentId: string, lessonId: string, status: AttendanceStatus) => void;
   onToggleStar: (studentId: string, lessonId: string) => void;
+  onOpenHistory: (studentId: string) => void;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const topRanked = students.filter((s) => s.rank <= 3);
@@ -1387,15 +1519,19 @@ function ClassView({
                 <div key={s.id} className={`${MEDAL_CLASSES[s.rank - 1]} rounded-2xl p-3 text-black`}>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{MEDALS[s.rank - 1]}</span>
-                    <div className="flex-1">
-                      <div className="font-bold">{s.name}</div>
+                    <button
+                      type="button" onClick={() => onOpenHistory(s.id)}
+                      className="flex-1 text-left group/name"
+                      title="Vezi fisa elevului"
+                    >
+                      <div className="font-bold underline decoration-transparent group-hover/name:decoration-black/40 underline-offset-2 transition-colors">{s.name}</div>
                       <div className="text-[11px] font-medium text-black/60">🗓️ {attendanceCountFor(s.id)} prezențe</div>
                       {s.rank === 1 && firstPlaceCount > 1 && (
                         <div className="text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 inline-block px-2 py-0.5 rounded-full text-white">
                           ⚡ Prieteni Fulgeri
                         </div>
                       )}
-                    </div>
+                    </button>
                     <span className="font-semibold">{s.progress} {rewardEmoji}</span>
                   </div>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-black/15 overflow-hidden">
@@ -1422,6 +1558,7 @@ function ClassView({
             <StudentCard
               key={s.id} student={s} index={i} totalStudents={students.length} moduleCount={group.module_count || 1}
               rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} onEdit={() => onEditStudent(s)}
+              onOpenHistory={() => onOpenHistory(s.id)}
             />
           ))
         )}
@@ -1554,10 +1691,10 @@ function AttendanceBoard({
 }
 
 function StudentCard({
-  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit,
+  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit, onOpenHistory,
 }: {
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
-  rewardEmoji: string; attendanceCount: number; onEdit: () => void;
+  rewardEmoji: string; attendanceCount: number; onEdit: () => void; onOpenHistory: () => void;
 }) {
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
@@ -1572,7 +1709,13 @@ function StudentCard({
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="text-lg font-bold">{student.name}</h4>
+            <button
+              type="button" onClick={onOpenHistory}
+              className="text-lg font-bold underline decoration-transparent hover:decoration-black/40 underline-offset-2 transition-colors text-left"
+              title="Vezi fisa elevului"
+            >
+              {student.name}
+            </button>
             {totalStudents >= 2 && student.rank <= 3 && <span className="text-3xl ml-2">{MEDALS[student.rank - 1]}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
@@ -1611,6 +1754,9 @@ function StudentCard({
       </div>
 
       <div className="flex gap-2">
+        <button onClick={onOpenHistory} className="bg-gray-200 hover:bg-gray-300 flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors">
+          📋 Fisa elevului
+        </button>
         <button onClick={onEdit} className="bg-gray-200 hover:bg-gray-300 flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors">
           ⚙️ Editeaza elev
         </button>

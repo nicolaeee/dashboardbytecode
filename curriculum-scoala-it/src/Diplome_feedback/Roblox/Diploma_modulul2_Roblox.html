@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portofoliu Modul 3 - CoBlocks Avansat</title>
+    <title>Portofoliu Modul 2 - Roblox Studio</title>
     <link rel="shortcut icon" href="../res/favicon.ico" type="image/x-icon">
 
     <!-- Fonturi Premium -->
@@ -15,19 +15,24 @@
 
     <style>
         :root {
-            /* Culori Specifice Modul 3 (Blueprint / Advanced Architecture) */
+            /* Culori Specifice Modul 2 (Cyber Network / Publishing) */
             --brand-color: #C8F023;    /* Verdele Neon ByteCode */
-            --bg-dark: #030712;        /* Dark Blue/Gray foarte inchis */
-            --bg-card: rgba(17, 24, 39, 0.85); /* Fundal paneluri sticla */
-            --text-main: #f8fafc;
+            --bg-dark: #020617;        /* Deep Slate Navy (Mai inchis, tech) */
+            --bg-card: rgba(15, 23, 42, 0.85); /* Fundal paneluri sticla */
+            --text-main: #f1f5f9;
             --text-white: #ffffff;
             --text-muted: #94a3b8;
 
-            /* Culori Categorii M3 */
-            --cat-list: #06b6d4;     /* Cyan - Liste/Structuri de date */
-            --cat-loop: #f97316;     /* Portocaliu - Bucle/Iteratii */
-            --cat-func: #a855f7;     /* Mov - Functii Custom */
-            --cat-arch: #10b981;     /* Verde - Arhitectura/Proiect */
+            /* Culori Accente Modul 2 */
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --accent-emerald: #10b981;
+
+            /* Syntax Lua Colors */
+            --lua-kw: #f43f5e;
+            --lua-func: #38bdf8;
+            --lua-str: #a3e635;
         }
 
         /* === SETĂRI GENERALE === */
@@ -38,10 +43,10 @@
 
         /* === TOOLBAR === */
         .toolbar {
-            background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px); padding: 15px 30px; border-radius: 16px; margin-bottom: 40px;
             display: flex; gap: 20px; align-items: center; z-index: 100; position: sticky; top: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-bottom: 2px solid var(--cat-func);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-bottom: 2px solid var(--accent-cyan);
         }
 
         button.download-btn, button.action-btn {
@@ -70,54 +75,57 @@
             box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 30px 60px rgba(0,0,0,0.8);
         }
 
-        /* === FUNDAL M3: BLUEPRINT & DATA FLOW === */
-        .blueprint-grid {
+        /* === FUNDAL M2: NETWORK NODES & SERVER GRID === */
+        .network-grid {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background-image:
-                radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-            background-size: 30px 30px;
+                radial-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
+                radial-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
             z-index: 1; pointer-events: none;
-            mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%);
-            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%);
-        }
-
-        .data-curve {
-            position: absolute; top: -10%; left: -10%; width: 120%; height: 120%;
-            border: 2px dashed rgba(6, 182, 212, 0.15); border-radius: 50%;
-            z-index: 1; pointer-events: none; transform: scaleY(0.4) rotate(20deg);
-        }
-        .data-curve-2 {
-            position: absolute; top: 0%; left: -20%; width: 140%; height: 100%;
-            border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 40%;
-            z-index: 1; pointer-events: none; transform: scaleY(0.3) rotate(-15deg);
+            mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 80%);
+            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 80%);
         }
 
         .ambient-glow-1 {
-            position: absolute; top: -200px; left: -100px; width: 700px; height: 700px;
-            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%);
+            position: absolute; top: -150px; left: -150px; width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
             border-radius: 50%; pointer-events: none; z-index: 0;
         }
         .ambient-glow-2 {
-            position: absolute; bottom: -200px; right: -100px; width: 700px; height: 700px;
-            background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 70%);
+            position: absolute; bottom: -150px; right: -150px; width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
             border-radius: 50%; pointer-events: none; z-index: 0;
         }
 
-        /* Elemente Plutitoare M3 (Complex Nested Blocks) */
-        .floating-element { position: absolute; z-index: 2; pointer-events: none; animation: float-arch 12s ease-in-out infinite; }
-        @keyframes float-arch {
-            0% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(2deg); }
-            100% { transform: translateY(0px) rotate(0deg); }
+        /* Elemente Plutitoare M2 (Animatie înghețabilă) */
+        .floating-element { position: absolute; z-index: 2; pointer-events: none; animation: float-server 10s ease-in-out infinite; }
+        @keyframes float-server {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
         }
         .exporting-pdf .floating-element { animation: none !important; transform: none !important; }
 
-        .block-complex-left { top: 10%; left: -50px; opacity: 0.8; transform: scale(0.85); filter: drop-shadow(0 20px 30px rgba(0,0,0,0.6)); }
-        .block-complex-right { bottom: 5%; right: -30px; opacity: 0.7; transform: scale(0.7) rotate(-5deg); animation-delay: -6s; filter: drop-shadow(0 20px 30px rgba(0,0,0,0.6)); }
+        /* Lua Advanced Code Snippets */
+        .lua-bg-advanced {
+            position: absolute; font-family: 'Fira Code', monospace;
+            font-size: 15px; line-height: 1.6; opacity: 0.25; z-index: 1; pointer-events: none; user-select: none;
+            background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border-left: 2px solid var(--accent-cyan);
+        }
+        .code-1 { top: 40px; right: 40px; transform: rotate(2deg); animation-delay: -2s;}
+        .code-2 { bottom: 50px; left: 40px; transform: rotate(-2deg); border-left-color: var(--accent-purple); animation-delay: -5s;}
+
+        /* Iconita Publicare/Cloud Plutitoare */
+        .publish-icon {
+            position: absolute; top: 15%; left: 8%; opacity: 0.15; width: 120px; height: 120px; color: var(--accent-cyan);
+            animation: float-server 8s infinite alternate; z-index: 1;
+        }
 
         /* === EDITABLE ELEMENTS === */
         [contenteditable="true"] { outline: none; cursor: text; transition: all 0.2s; border-bottom: 1px dashed transparent; }
-        [contenteditable="true"]:hover { border-bottom: 1px dashed rgba(200, 240, 35, 0.5); }
+        [contenteditable="true"]:hover { border-bottom: 1px dashed rgba(6, 182, 212, 0.5); }
         [contenteditable="true"]:focus { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
 
         /* =========================================
@@ -125,39 +133,39 @@
            ========================================= */
         #page-1 .glass-container {
             position: absolute; top: 60px; left: 80px; right: 80px; bottom: 60px;
-            background: rgba(17, 24, 39, 0.7); border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.1);
             border-left: 1px solid rgba(255, 255, 255, 0.2); border-top: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 24px; z-index: 10; display: flex; flex-direction: column;
-            backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
-            padding: 50px; box-sizing: border-box; box-shadow: 0 40px 80px rgba(0,0,0,0.8);
+            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            padding: 50px; box-sizing: border-box; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
         }
 
         .content-top { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 
         .diploma-label {
-            color: var(--cat-func); font-family: 'Fira Code', monospace; font-size: 16px;
-            letter-spacing: 4px; text-transform: uppercase; margin-bottom: 20px; font-weight: 700;
-            background: rgba(168, 85, 247, 0.1); padding: 8px 24px; border-radius: 8px; border: 1px solid rgba(168, 85, 247, 0.3);
+            color: var(--accent-cyan); font-family: 'Fira Code', monospace; font-size: 16px;
+            letter-spacing: 3px; text-transform: uppercase; margin-bottom: 20px; font-weight: 600;
+            background: rgba(6, 182, 212, 0.1); padding: 8px 24px; border-radius: 8px; border: 1px dashed rgba(6, 182, 212, 0.3);
         }
 
         .main-title {
-            font-family: 'Chakra Petch', sans-serif; font-size: 64px; font-weight: 700; color: #fff; margin: 0; letter-spacing: 1px; line-height: 1.1;
-            text-shadow: 0 4px 20px rgba(0,0,0,0.6); text-transform: uppercase;
+            font-family: 'Chakra Petch', sans-serif; font-size: 64px; font-weight: 700; color: #fff; margin: 0; letter-spacing: 2px; line-height: 1.1;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.8); text-transform: uppercase;
         }
 
         .subtitle { font-size: 20px; color: var(--text-muted); margin: 30px 0 10px 0; font-weight: 400; }
 
         .student-name {
             font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900; color: var(--brand-color); margin: 0 0 30px 0;
-            text-shadow: 0 0 30px rgba(200, 240, 35, 0.3); letter-spacing: -1px;
+            text-shadow: 0 0 30px rgba(200, 240, 35, 0.25); letter-spacing: -1px;
         }
 
         .course-title {
             font-family: 'Fira Code', monospace; font-size: 24px; font-weight: 600; color: #fff; margin: 0;
-            padding: 15px 40px; background: rgba(0,0,0,0.4);
-            border-radius: 12px; border: 1px solid rgba(6, 182, 212, 0.3); box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            padding: 15px 40px; background: linear-gradient(90deg, rgba(6, 182, 212, 0.2), rgba(139, 92, 246, 0.2));
+            border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 20px rgba(0,0,0,0.3);
         }
-        .course-title::before { content: "Call Function: "; color: var(--cat-list); opacity: 0.8;}
+        .course-title::before { content: "game.Published = "; color: var(--lua-kw); opacity: 0.8;}
 
         .footer-p1 {
             display: flex; justify-content: space-between; align-items: flex-end; width: 100%;
@@ -174,26 +182,59 @@
         .logo-text span { color: #fff; }
 
         /* =========================================
-           PAGINA 2: STELUȚE (Data Clusters)
+           PAGINA 2: FEEDBACK (Server / Node Cards)
+           ========================================= */
+        .header-p2 { position: absolute; top: 50px; left: 80px; z-index: 10; }
+        .p2-name { font-family: 'Fira Code'; font-size: 20px; color: var(--accent-cyan); margin: 0 0 5px 0; letter-spacing: 1px;}
+        .p2-name::before { content: "> user_"; opacity: 0.5;}
+        .p2-title { font-family: 'Chakra Petch'; font-size: 45px; font-weight: 700; color: #fff; margin: 0; letter-spacing: 1px; text-transform: uppercase;}
+
+        .feedback-grid {
+            position: absolute; top: 160px; left: 80px; width: 1040px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px; z-index: 10;
+        }
+
+        .fb-card {
+            background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px; padding: 30px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+            backdrop-filter: blur(15px); box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+        }
+
+        /* Efect de bara de server pe stanga */
+        .fb-card::before {
+            content: ''; position: absolute; top: 20px; bottom: 20px; left: 0; width: 4px; border-radius: 0 4px 4px 0;
+        }
+        .card-cyan::before { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); }
+        .card-purple::before { background: var(--accent-purple); box-shadow: 0 0 10px var(--accent-purple); }
+        .card-pink::before { background: var(--accent-pink); box-shadow: 0 0 10px var(--accent-pink); }
+        .card-emerald::before { background: var(--accent-emerald); box-shadow: 0 0 10px var(--accent-emerald); }
+
+        .fb-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .fb-icon { width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);}
+        .fb-icon svg { width: 22px; height: 22px; stroke-width: 2; }
+
+        .fb-q { font-family: 'Inter'; font-size: 18px; font-weight: 700; color: #fff; margin: 0; line-height: 1.3; }
+        .fb-q span { font-family: 'Fira Code'; font-size: 13px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 6px;}
+        .fb-a { font-size: 15px; font-weight: 400; color: #cbd5e1; line-height: 1.6; margin: 0; }
+
+        /* =========================================
+           PAGINA 3: STELUȚE (Data Core Diamond Layout)
            ========================================= */
         .stars-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
         }
-        .stars-header { text-align: center; margin-bottom: 40px; }
-        .sh-top { font-family: 'Fira Code', monospace; color: var(--cat-func); font-size: 18px; letter-spacing: 2px; margin-bottom: 10px;}
+        .stars-header { text-align: center; margin-bottom: 30px; }
+        .sh-top { font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-size: 18px; letter-spacing: 2px; margin-bottom: 10px;}
         .sh-main { font-family: 'Chakra Petch'; font-size: 56px; font-weight: 700; color: #fff; margin: 0; text-transform: uppercase; letter-spacing: 2px;}
 
-        /* Format "Data Clusters" (4 grupuri de cate 4) */
-        .clusters-wrapper {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 50px;
+        /* Format "Data Core" (Diamant Perfect) */
+        .core-grid {
+            display: flex; flex-direction: column; gap: 8px; margin-bottom: 50px; align-items: center;
         }
-        .star-cluster {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
-            background: rgba(0,0,0,0.3); padding: 20px; border-radius: 20px; border: 1px dashed rgba(255,255,255,0.1);
-        }
+        .core-row { display: flex; gap: 12px; justify-content: center; }
 
-        .tech-star { width: 50px; height: 50px; transition: transform 0.2s;}
+        .tech-star { width: 55px; height: 55px; transition: transform 0.2s;}
 
         .stars-footer {
             background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1);
@@ -212,7 +253,7 @@
         }
 
         .modal-box {
-            background: var(--bg-card); border: 1px solid var(--cat-func);
+            background: var(--bg-card); border: 1px solid var(--accent-cyan);
             padding: 40px; border-radius: 20px; max-width: 500px; text-align: center;
             box-shadow: 0 20px 50px rgba(0,0,0,0.9); transform: translateY(20px); opacity: 0; animation: slideUp 0.3s forwards;
             backdrop-filter: blur(20px);
@@ -220,7 +261,7 @@
         @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
 
         .modal-icon {
-            width: 60px; height: 60px; background: rgba(168, 85, 247, 0.1); color: var(--cat-func);
+            width: 60px; height: 60px; background: rgba(6, 182, 212, 0.1); color: var(--accent-cyan);
             border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;
         }
         .modal-icon svg { width: 30px; height: 30px; stroke-width: 2.5;}
@@ -229,7 +270,7 @@
 
         .copy-box {
             background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 15px;
-            border-radius: 10px; font-family: 'Fira Code', monospace; font-size: 14px; color: var(--cat-func);
+            border-radius: 10px; font-family: 'Fira Code', monospace; font-size: 14px; color: var(--accent-cyan);
             margin-bottom: 25px; text-align: left; word-break: break-word; line-height: 1.5;
         }
 
@@ -240,79 +281,72 @@
     <div class="toolbar">
         <button class="download-btn" id="main-download-btn" onclick="openConfirmModal()">📥 Descarcă Portofoliul PDF</button>
         <div class="instructions">
-            ✏️ <b>Modul 3 (Blocuri Avansate):</b> Focus pe funcții și liste. Editează textele, clusterele de stele se generează automat.
+            ✏️ <b>Modul 2 (Roblox Avansat):</b> Tematică Network/Publishing. Editează textele, steluțele formează un nucleu (Diamant).
         </div>
     </div>
 
     <div class="pages-wrapper">
 
         <!-- ==========================================
-             PAGINA 1: DIPLOMA MODUL 3
+             PAGINA 1: DIPLOMA MODUL 2
              ========================================== -->
         <div class="page" id="page-1">
-            <div class="blueprint-grid"></div>
-            <div class="data-curve"></div>
-            <div class="data-curve-2"></div>
+            <div class="network-grid"></div>
             <div class="ambient-glow-1"></div>
             <div class="ambient-glow-2"></div>
 
-            <!-- Complex Nested Blocks (Funcții care conțin alte blocuri) in fundal -->
-            <div class="floating-element block-complex-left">
-                <svg width="450" height="350" viewBox="0 0 450 350" xmlns="http://www.w3.org/2000/svg">
-                    <g transform="translate(20, 20)">
-                        <!-- "Define Function" Block (Mov) -->
-                        <path d="M 0 20 C 0 0, 40 0, 40 20 L 100 20 C 110 0, 130 0, 140 20 L 380 20 L 380 70 L 140 70 C 130 90, 110 90, 100 70 L 40 70 C 40 90, 0 90, 0 70 Z" fill="#a855f7" stroke="#7e22ce" stroke-width="4"/>
-                        <text x="30" y="52" font-family="'Fira Code', monospace" font-size="22" font-weight="bold" fill="#fff">Define Logic()</text>
-
-                        <!-- Inner List/Loop Block (Cyan) -->
-                        <path d="M 30 70 C 30 90, 70 90, 70 70 L 130 70 C 140 90, 160 90, 170 70 L 320 70 L 320 120 L 170 120 C 160 140, 140 140, 130 120 L 70 120 C 70 140, 30 140, 30 120 L 30 200 L 70 200 C 70 220, 30 220, 30 200 L 320 200 L 320 250 L 170 250 C 160 270, 140 270, 130 250 L 70 250 C 70 270, 30 270, 30 250 L 0 250 L 0 70 Z" fill="#06b6d4" stroke="#0369a1" stroke-width="4"/>
-                        <text x="60" y="105" font-family="'Fira Code', monospace" font-size="20" font-weight="bold" fill="#fff">For each item</text>
-
-                        <!-- Nested Action (Orange) -->
-                        <path d="M 60 120 C 60 140, 100 140, 100 120 L 160 120 C 170 140, 190 140, 200 120 L 280 120 L 280 160 L 200 160 C 190 180, 170 180, 160 160 L 100 160 C 100 180, 60 180, 60 160 Z" fill="#f97316" stroke="#c2410c" stroke-width="4"/>
-                        <text x="90" y="150" font-family="'Fira Code', monospace" font-size="18" font-weight="bold" fill="#fff">Add to List</text>
-                    </g>
-                </svg>
+            <!-- Cod Lua Avansat în Fundal -->
+            <div class="floating-element lua-bg-advanced code-1">
+game.Players.PlayerAdded:Connect(<span style="color:var(--lua-kw)">function</span>(player)<br>
+&nbsp;&nbsp;<span style="color:var(--lua-kw)">local</span> leaderstats = Instance.<span style="color:var(--lua-func)">new</span>(<span style="color:var(--lua-str)">"Folder"</span>)<br>
+&nbsp;&nbsp;leaderstats.Name = <span style="color:var(--lua-str)">"leaderstats"</span><br>
+&nbsp;&nbsp;leaderstats.Parent = player<br>
+<span style="color:var(--lua-kw)">end</span>)
             </div>
 
-            <div class="floating-element block-complex-right">
-                <svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
-                    <g transform="translate(20, 20)">
-                        <!-- Block Liste (Verde) -->
-                        <path d="M 0 20 C 0 0, 40 0, 40 20 L 100 20 C 110 0, 130 0, 140 20 L 250 20 L 250 70 L 140 70 C 130 90, 110 90, 100 70 L 40 70 C 40 90, 0 90, 0 70 Z" fill="#10b981" stroke="#047857" stroke-width="4"/>
-                        <text x="30" y="52" font-family="'Fira Code', monospace" font-size="20" font-weight="bold" fill="#fff">Array [ 1, 2, 3 ]</text>
-                    </g>
-                </svg>
+            <div class="floating-element lua-bg-advanced code-2">
+<span style="color:var(--lua-kw)">local function</span> <span style="color:var(--lua-func)">onClick</span>()<br>
+&nbsp;&nbsp;part.Material = Enum.Material.Neon<br>
+&nbsp;&nbsp;part.Color = Color3.<span style="color:var(--lua-func)">new</span>(0, 1, 1)<br>
+<span style="color:var(--lua-kw)">end</span><br>
+clickDetector.MouseClick:<span style="color:var(--lua-func)">Connect</span>(onClick)
             </div>
 
+            <!-- Icon Cloud Publish Fundal -->
+            <svg class="publish-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+                <polyline points="16 11 12 7 8 11"></polyline>
+                <line x1="12" y1="7" x2="12" y2="15"></line>
+            </svg>
 
             <!-- Fereastra principală -->
             <div class="glass-container">
                 <div class="content-top">
-                    <div class="diploma-label" contenteditable="true" spellcheck="false">Dezvoltator Logic Avansat</div>
+                    <div class="diploma-label" contenteditable="true" spellcheck="false">Dezvoltator & Publisher Avansat</div>
                     <h1 class="main-title" contenteditable="true" spellcheck="false">DIPLOMĂ DE<br>EXCELENȚĂ</h1>
 
                     <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă creatorului digital</p>
 
-                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Nume Elev</h2>
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Ion Matei</h2>
 
                     <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru finalizarea cu succes a cursului</p>
-                    <div class="course-title" contenteditable="true" spellcheck="false">Modulul 3 - Structuri de Date și Funcții</div>
+                    <div class="course-title" contenteditable="true" spellcheck="false">Modulul 2 - Scripting, Interactivitate & Publicare</div>
                 </div>
 
                 <div class="footer-p1">
                     <div class="signature-block">
-                        <div class="sig-value" contenteditable="true" spellcheck="false">Nume Profesor</div>
+                        <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Profesor Coordonator</div>
                     </div>
 
                     <div class="logo-center">
                         <div class="logo-text" contenteditable="true" spellcheck="false">&lt;ByteCode<span>.</span>School/&gt;</div>
+                        <div style="font-family: 'Fira Code'; font-size: 11px; color: var(--text-muted); letter-spacing: 2px;">// ROBLOX DEV CORE</div>
                     </div>
 
                     <div class="signature-block">
-                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                        <div class="sig-value" style="font-family: 'Fira Code', monospace; font-size: 20px;" contenteditable="true" spellcheck="false">20.06.2026</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Data Finalizării</div>
                     </div>
@@ -321,28 +355,78 @@
         </div>
 
         <!-- ==========================================
-             PAGINA 3: STELUȚE (Data Clusters 4x4 Grupate)
+             PAGINA 2: FEEDBACK (Advanced Scripting)
              ========================================== -->
         <div class="page" id="page-2">
-            <div class="blueprint-grid" style="opacity: 0.3;"></div>
+            <div class="network-grid" style="opacity: 0.5;"></div>
+
+            <div class="header-p2">
+                <p class="p2-name">Elev: <span id="name-p2">Ion Matei</span></p>
+                <h2 class="p2-title" contenteditable="true" spellcheck="false">Raport Dezvoltare Avansată</h2>
+            </div>
+
+            <div class="feedback-grid">
+                <!-- Card Cyan: Interactivitate (Click/Touch) -->
+                <div class="fb-card card-cyan">
+                    <div class="fb-card-header">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Interactivitate și Evenimente<span>Cum interacționează cu mediul din joc?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A înțeles excelent cum să lege evenimentele de funcții. Folosește cu succes <b>Touched</b> și <b>MouseClick</b> pentru a crea capcane dinamice, butoane interactive și mecanisme care răspund instant la acțiunile jucătorului.</p>
+                </div>
+
+                <!-- Card Pink: Publicare -->
+                <div class="fb-card card-pink">
+                    <div class="fb-card-header">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Publicare și Lansare Joc<span>Cum abordează finalizarea proiectului?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A învățat întregul proces de publicare pe platforma Roblox. Știe cum să configureze setările de bază ale jocului, să îl facă public pentru a fi jucat cu prietenii și înțelege primii pași în game design-ul multiplayer.</p>
+                </div>
+
+                <!-- Card Purple: Variabile/Scor -->
+                <div class="fb-card card-purple">
+                    <div class="fb-card-header">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Gestionarea Datelor (Variabile)<span>Cum funcționează sistemul de scor?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A asimilat concepte vitale de programare în Lua. Folosește variabile pentru a ține evidența datelor și a implementat cu succes <b>Leaderboard-uri</b> (clasamente) pentru a afișa scorul sau viețile jucătorilor în timp real.</p>
+                </div>
+
+                <!-- Card Emerald: Debugging -->
+                <div class="fb-card card-emerald">
+                    <div class="fb-card-header">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="6.5"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Rezolvarea Erorilor (Debugging)<span>Cum reacționează când un script nu merge?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Nu se mai blochează la bug-uri. Analizează cu atenție erorile din consola (Output), știe să folosească comanda <b>print()</b> pentru a depista unde se oprește codul și repară eficient logica din spatele scripturilor sale.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 3: STELUȚE (Data Core Diamond)
+             ========================================== -->
+        <div class="page" id="page-3">
+            <div class="network-grid" style="opacity: 0.3;"></div>
 
             <div class="stars-container">
                 <div class="stars-header">
-                    <div class="sh-top" contenteditable="true" spellcheck="false">ANALIZĂ COMPLETĂ</div>
-                    <h2 class="sh-main" contenteditable="true" spellcheck="false">NUCLEU DE LOGICĂ (STELUȚE)</h2>
+                    <div class="sh-top" contenteditable="true" spellcheck="false">STATUS: SCRIPT COMPILED</div>
+                    <h2 class="sh-main" contenteditable="true" spellcheck="false">NUCLEUL DE STELUȚE</h2>
                 </div>
 
-                <!-- Grila de stele stil Clustere (4 grupuri x 4 stele) -->
-                <div class="clusters-wrapper" id="stars-grid-container">
+                <!-- Grila de stele stil Nucleu/Diamant (1-2-3-4-3-2-1) -->
+                <div class="core-grid" id="stars-grid-container">
                     <!-- Generate de JS -->
                 </div>
 
                 <div class="stars-footer">
-                    <span>Creatorul</span>
-                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Elev</span>
-                    <span>a acumulat</span>
+                    <span>Developer-ul</span>
+                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Ion</span>
+                    <span>a acumulat cu succes</span>
                     <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span>
-                    <span>din 16 steluțe posibile!</span>
+                    <span>/ 16 steluțe!</span>
                 </div>
             </div>
         </div>
@@ -358,7 +442,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <div class="modal-text">
-                Sigur ai completat toate datele corect și ai verificat să fie ca în registru și nu ai încurcat nimic?
+                Sigur ai completat toate datele corect și ai verificat să fie ca în registru, feedback corect gramatical și nu ai încurcat nimic?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
@@ -376,7 +460,7 @@
                 Fișierul PDF a fost descărcat cu succes! 🎉
             </div>
             <div class="copy-box" id="team-message">
-                Salutare echipă, diploma a fost dată. Copilul <span id="msg-child-name" style="color:var(--brand-color); font-weight:bold;">[Nume]</span> a finalizat cu succes modulul 3 - Programare Vizuală Avansată!
+                Salutare echipă, diploma a fost dată. Copilul <span id="msg-child-name" style="color:var(--brand-color); font-weight:bold;">[Nume]</span> a finalizat cu succes modulul 2 - Roblox Studio!
             </div>
             <div class="modal-text" style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">
                 Acum lasă acest mesaj echipei pe grupul de comunicare.
@@ -392,9 +476,9 @@
     <script>
         function syncNames() {
             const fullName = document.getElementById('name-p1').innerText;
+            document.getElementById('name-p2').innerText = fullName;
             const firstName = fullName.split(' ')[0] || fullName;
-            const p3 = document.getElementById('name-p3');
-            if (p3) p3.innerText = firstName;
+            document.getElementById('name-p3').innerText = firstName;
         }
 
         function updateStarsGrid() {
@@ -407,9 +491,9 @@
 
             const grid = document.getElementById('stars-grid-container');
 
-            // Stea M3 "Node" Style
+            // Stea "Data Node" Style
             const starFilled = `
-                <svg class="tech-star" viewBox="0 0 24 24" fill="var(--brand-color)" stroke="var(--brand-color)" stroke-width="1" stroke-linejoin="round" style="filter: drop-shadow(0 0 10px rgba(200, 240, 35, 0.6));">
+                <svg class="tech-star" viewBox="0 0 24 24" fill="var(--accent-cyan)" stroke="var(--brand-color)" stroke-width="1.5" stroke-linejoin="round" style="filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.6));">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                 </svg>
             `;
@@ -421,22 +505,23 @@
 
             grid.innerHTML = '';
 
-            // Format Clustere: 4 grupuri x 4 stele (Liste de liste)
+            // Format Diamant Perfect: 1, 2, 3, 4, 3, 2, 1 = 16 stele
+            const diamondRows = [1, 2, 3, 4, 3, 2, 1];
             let currentStarIndex = 0;
 
-            for(let cluster = 0; cluster < 4; cluster++) {
-                let clusterHtml = '<div class="star-cluster">';
-                for(let i = 0; i < 4; i++) {
+            diamondRows.forEach(count => {
+                let rowHtml = '<div class="core-row">';
+                for(let i = 0; i < count; i++) {
                     if (currentStarIndex < earned) {
-                        clusterHtml += starFilled;
+                        rowHtml += starFilled;
                     } else {
-                        clusterHtml += starEmpty;
+                        rowHtml += starEmpty;
                     }
                     currentStarIndex++;
                 }
-                clusterHtml += '</div>';
-                grid.innerHTML += clusterHtml;
-            }
+                rowHtml += '</div>';
+                grid.innerHTML += rowHtml;
+            });
         }
 
         document.addEventListener('DOMContentLoaded', updateStarsGrid);
@@ -457,7 +542,7 @@
         function copyMessage() {
             const msgText = document.getElementById('team-message').innerText;
             navigator.clipboard.writeText(msgText).then(() => {
-                showCopySuccess();
+                showCopiedFeedback();
             }).catch(err => {
                 const textArea = document.createElement("textarea");
                 textArea.value = msgText;
@@ -465,11 +550,11 @@
                 textArea.select();
                 document.execCommand("Copy");
                 textArea.remove();
-                showCopySuccess();
+                showCopiedFeedback();
             });
         }
 
-        function showCopySuccess() {
+        function showCopiedFeedback() {
             const btn = document.querySelector('#success-overlay .action-btn');
             btn.innerHTML = "✅ Copiat!";
             setTimeout(() => { btn.innerHTML = "📋 Copiază mesajul"; }, 2000);
@@ -498,7 +583,7 @@
                 for (let i = 0; i < pages.length; i++) {
                     const canvas = await html2canvas(pages[i], {
                         scale: 2,
-                        backgroundColor: "#030712", // Blueprint dark background ptr export sigur
+                        backgroundColor: "#020617", // Fundal inchis pentru export
                         useCORS: true,
                         logging: false
                     });
@@ -509,7 +594,7 @@
                 }
 
                 const rawName = document.getElementById('name-p1').innerText.trim();
-                const fileName = `Diploma - ${rawName}.pdf`;
+                const fileName = `Diploma, Feedback și steluțe - ${rawName}.pdf`;
 
                 pdf.save(fileName);
 
@@ -526,33 +611,6 @@
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        function formatTodayRO() {
-            var d = new Date();
-            var dd = String(d.getDate()).padStart(2, '0');
-            var mm = String(d.getMonth() + 1).padStart(2, '0');
-            return dd + '.' + mm + '.' + d.getFullYear();
-        }
-
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl) { nameEl.innerText = studentName || 'Nume Elev'; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Profesor';
-                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

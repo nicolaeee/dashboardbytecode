@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portofoliu Modul 4 - Roblox Master</title>
-    <link rel="shortcut icon" href="../res/favicon.ico" type="image/x-icon">
+    <title>Portofoliu Modul 4 - Python Master</title>
 
     <!-- Fonturi Premium -->
     <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Fira+Code:wght@400;600;700&family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet">
@@ -15,25 +14,19 @@
 
     <style>
         :root {
-            /* Culori Specifice Modul 4 Roblox (Mastery / Metaverse) */
+            /* Culori Specifice M4 Python (Master / Deep Tech) */
             --brand-color: #C8F023;    /* Verdele Neon ByteCode */
-            --bg-dark: #050510;        /* Deep Space Obsidian */
-            --bg-card: rgba(13, 17, 33, 0.85);
+            --bg-dark: #060913;        /* Deep Space Blue/Black */
+            --bg-card: rgba(13, 17, 30, 0.85);
             --text-main: #f8fafc;
             --text-white: #ffffff;
             --text-muted: #94a3b8;
 
             /* Accente Supreme M4 */
-            --rblx-gold: #f59e0b;      /* Gold / Mastery */
-            --rblx-cyan: #06b6d4;      /* Scripting Blue */
-            --rblx-ruby: #e11d48;      /* Ruby / Debugging */
-            --rblx-amethyst: #a855f7;  /* Amethyst / Architecture */
-
-            /* Syntax Lua Avansat */
-            --lua-kw: #ff7b72;
-            --lua-func: #d2a8ff;
-            --lua-str: #a5d6ff;
-            --lua-var: #79c0ff;
+            --py-gold: #f59e0b;        /* Gold/Amber pt Masterat */
+            --py-blue: #0ea5e9;        /* Ocean Blue pt Python */
+            --py-purple: #a855f7;      /* Amethyst pt Logica */
+            --py-green: #10b981;       /* Emerald pt Success */
         }
 
         /* === SETĂRI GENERALE === */
@@ -44,14 +37,14 @@
 
         /* === TOOLBAR === */
         .toolbar {
-            background: rgba(13, 17, 33, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(13, 17, 30, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px); padding: 15px 30px; border-radius: 16px; margin-bottom: 40px;
             display: flex; gap: 20px; align-items: center; z-index: 100; position: sticky; top: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-bottom: 2px solid var(--rblx-gold);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-bottom: 2px solid var(--py-gold);
         }
 
         button.download-btn, button.action-btn {
-            background: linear-gradient(90deg, var(--rblx-gold), var(--brand-color)); color: #000; border: none; padding: 12px 28px;
+            background: linear-gradient(90deg, var(--py-gold), var(--py-blue)); color: #000; border: none; padding: 12px 28px;
             font-size: 15px; font-family: 'Inter', sans-serif; font-weight: 800; border-radius: 12px;
             cursor: pointer; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
             text-transform: uppercase; letter-spacing: 0.5px;
@@ -76,45 +69,53 @@
             box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 30px 60px rgba(0,0,0,0.8);
         }
 
-        /* === FUNDAL M4: METAVERSE HEX GRID & GOLDEN HALO === */
-        .metaverse-grid {
+        /* === FUNDAL M4: ADVANCED DATA CORE === */
+        .data-grid {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background-image:
-                url("data:image/svg+xml,%3Csvg width='60' height='104' viewBox='0 0 60 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 26L60 8.68v34.64L30 60.64 0 43.32V8.68L30 26zm0 52l30-17.32v34.64L30 112.64 0 95.32V60.68L30 78z' fill='%23f59e0b' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+                radial-gradient(rgba(245, 158, 11, 0.1) 1px, transparent 1px),
+                linear-gradient(rgba(14, 165, 233, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px, 150px 150px; background-position: 0 0, 25px 25px;
             z-index: 1; pointer-events: none;
             mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 90%);
             -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 90%);
         }
 
-        .ambient-glow-gold {
+        .glow-gold {
             position: absolute; top: -250px; right: -150px; width: 800px; height: 800px;
-            background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, transparent 70%);
             border-radius: 50%; pointer-events: none; z-index: 0;
         }
-        .ambient-glow-cyan {
-            position: absolute; bottom: -200px; left: -200px; width: 800px; height: 800px;
-            background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 70%);
+        .glow-blue {
+            position: absolute; bottom: -200px; left: -200px; width: 900px; height: 900px;
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.12) 0%, transparent 70%);
             border-radius: 50%; pointer-events: none; z-index: 0;
         }
 
-        /* Elemente Plutitoare M4 (ModuleScripts & Trophies) */
-        .floating-element { position: absolute; z-index: 2; pointer-events: none; animation: float-master 15s ease-in-out infinite; }
-        @keyframes float-master {
+        /* Simboluri Sintaxa Python Flotante */
+        .floating-element { position: absolute; z-index: 2; pointer-events: none; animation: float-data 15s ease-in-out infinite; }
+        @keyframes float-data {
             0% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(2deg); }
+            50% { transform: translateY(-25px) rotate(3deg); }
             100% { transform: translateY(0px) rotate(0deg); }
         }
         .exporting-pdf .floating-element { animation: none !important; transform: none !important; }
 
-        /* Lua Advanced Code Snippets (M4 - ModuleScripts) */
-        .lua-bg-advanced {
-            position: absolute; font-family: 'Fira Code', monospace;
-            font-size: 15px; line-height: 1.6; opacity: 0.35; z-index: 1; pointer-events: none; user-select: none;
-            background: rgba(0,0,0,0.5); padding: 20px; border-radius: 12px; border-left: 3px solid var(--rblx-gold);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+        .py-syntax {
+            font-family: 'Fira Code', monospace; font-size: 140px; font-weight: 700;
+            color: rgba(255,255,255,0.02); filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.1));
         }
-        .code-1 { top: 8%; right: -2%; transform: rotate(5deg) scale(0.9); animation-delay: -2s;}
-        .code-2 { bottom: 15%; left: -2%; transform: rotate(-5deg) scale(0.85); border-left-color: var(--rblx-amethyst); animation-delay: -6s;}
+
+        .syntax-1 { top: 10%; left: 5%; }
+        .syntax-2 { bottom: 15%; right: 10%; font-size: 180px; animation-delay: -5s; color: rgba(14, 165, 233, 0.03);}
+
+        /* Background Code Box */
+        .bg-code-box {
+            position: absolute; font-family: 'Fira Code', monospace; font-size: 16px; line-height: 1.6;
+            background: rgba(0,0,0,0.3); padding: 25px; border-radius: 16px; border-left: 3px solid var(--py-gold);
+            z-index: 2; opacity: 0.8; box-shadow: 0 20px 50px rgba(0,0,0,0.5); pointer-events: none;
+        }
+        .code-pos-1 { top: 30px; right: -40px; transform: rotate(5deg) scale(0.85); }
 
         /* === EDITABLE ELEMENTS === */
         [contenteditable="true"] { outline: none; cursor: text; transition: all 0.2s; border-bottom: 1px dashed transparent; }
@@ -126,17 +127,17 @@
            ========================================= */
         #page-1 .glass-container {
             position: absolute; top: 60px; left: 80px; right: 80px; bottom: 60px;
-            background: rgba(13, 17, 33, 0.7); border: 1px solid rgba(245, 158, 11, 0.2);
+            background: rgba(13, 17, 30, 0.75); border: 1px solid rgba(245, 158, 11, 0.2);
             border-top: 1px solid rgba(245, 158, 11, 0.4); border-left: 1px solid rgba(245, 158, 11, 0.3);
             border-radius: 24px; z-index: 10; display: flex; flex-direction: column;
-            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
             padding: 50px; box-sizing: border-box; box-shadow: 0 40px 100px rgba(0,0,0,0.9), inset 0 0 60px rgba(245, 158, 11, 0.05);
         }
 
         .content-top { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 
         .diploma-label {
-            color: var(--rblx-gold); font-family: 'Fira Code', monospace; font-size: 16px;
+            color: var(--py-gold); font-family: 'Fira Code', monospace; font-size: 16px;
             letter-spacing: 4px; text-transform: uppercase; margin-bottom: 20px; font-weight: 700;
             background: rgba(245, 158, 11, 0.1); padding: 8px 24px; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.3);
         }
@@ -157,9 +158,8 @@
             font-family: 'Fira Code', monospace; font-size: 22px; font-weight: 600; color: #fff; margin: 0;
             padding: 15px 40px; background: linear-gradient(90deg, rgba(245, 158, 11, 0.15), rgba(14, 165, 233, 0.15));
             border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-            max-width: 90%; line-height: 1.4;
         }
-        .course-title::before { content: "require(MasterClass): "; color: var(--rblx-gold); opacity: 0.8;}
+        .course-title::before { content: "class PythonMaster(): "; color: var(--py-gold); opacity: 0.8;}
 
         .footer-p1 {
             display: flex; justify-content: space-between; align-items: flex-end; width: 100%;
@@ -176,23 +176,57 @@
         .logo-text span { color: #fff; }
 
         /* =========================================
-           PAGINA 2: STELUȚE (Creator's Shield Layout)
+           PAGINA 2: FEEDBACK (Mastery Cards)
+           ========================================= */
+        .header-p2 { position: absolute; top: 50px; left: 80px; z-index: 10; }
+        .p2-name { font-family: 'Fira Code'; font-size: 20px; color: var(--py-gold); margin: 0 0 5px 0; letter-spacing: 1px;}
+        .p2-name::before { content: "final_evaluation( '";}
+        .p2-name::after { content: "' )";}
+        .p2-title { font-family: 'Chakra Petch'; font-size: 45px; font-weight: 700; color: #fff; margin: 0; letter-spacing: 1px; text-transform: uppercase;}
+
+        .feedback-grid {
+            position: absolute; top: 160px; left: 80px; width: 1040px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px; z-index: 10;
+        }
+
+        .fb-card {
+            background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px; padding: 30px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+            backdrop-filter: blur(15px); box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+        }
+
+        .fb-card::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px; }
+        .card-data::before { background: var(--py-gold); box-shadow: 0 0 15px var(--py-gold); }
+        .card-loop::before { background: var(--py-blue); box-shadow: 0 0 15px var(--py-blue); }
+        .card-click::before { background: var(--py-purple); box-shadow: 0 0 15px var(--py-purple); }
+        .card-vision::before { background: var(--py-green); box-shadow: 0 0 15px var(--py-green); }
+
+        .fb-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .fb-icon { width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);}
+        .fb-icon svg { width: 22px; height: 22px; stroke-width: 2; }
+
+        .fb-q { font-family: 'Inter'; font-size: 18px; font-weight: 700; color: #fff; margin: 0; line-height: 1.3; }
+        .fb-q span { font-family: 'Fira Code'; font-size: 13px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 6px;}
+        .fb-a { font-size: 15px; font-weight: 400; color: #cbd5e1; line-height: 1.6; margin: 0; }
+
+        /* =========================================
+           PAGINA 3: STELUȚE (Master Badge Form)
            ========================================= */
         .stars-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
         }
-        .stars-header { text-align: center; margin-bottom: 30px; }
-        .sh-top { font-family: 'Fira Code', monospace; color: var(--rblx-gold); font-size: 18px; letter-spacing: 2px; margin-bottom: 10px;}
+        .stars-header { text-align: center; margin-bottom: 40px; }
+        .sh-top { font-family: 'Fira Code', monospace; color: var(--py-gold); font-size: 18px; letter-spacing: 2px; margin-bottom: 10px;}
         .sh-main { font-family: 'Chakra Petch'; font-size: 56px; font-weight: 700; color: #fff; margin: 0; text-transform: uppercase; letter-spacing: 2px;}
 
-        /* Format "Creator's Shield" (4, 4, 4, 3, 1 = 16) */
-        .shield-grid {
+        /* Format "Master Badge" */
+        .badge-grid {
             display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 40px;
-            background: rgba(0,0,0,0.4); padding: 40px 60px; border-radius: 20px; border: 1px solid rgba(245, 158, 11, 0.15);
-            box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 20px 40px rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.3); padding: 40px 60px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
         }
-        .shield-row { display: flex; gap: 15px; justify-content: center; }
+        .badge-row { display: flex; align-items: center; gap: 15px; justify-content: center; }
 
         .tech-star { width: 50px; height: 50px; transition: transform 0.2s;}
 
@@ -202,7 +236,7 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         .stars-footer span { color: #fff; font-weight: 600; }
-        .stars-footer .highlight { color: var(--rblx-gold); font-size: 28px; font-weight: 900; }
+        .stars-footer .highlight { color: var(--py-gold); font-size: 28px; font-weight: 900; }
 
         /* =========================================
            SISTEM DE MODALE (POP-UP-URI)
@@ -214,7 +248,7 @@
         }
 
         .modal-box {
-            background: var(--bg-card); border: 1px solid var(--rblx-gold);
+            background: var(--bg-card); border: 1px solid var(--py-gold);
             padding: 40px; border-radius: 20px; max-width: 500px; text-align: center;
             box-shadow: 0 20px 50px rgba(0,0,0,0.9); transform: translateY(20px); opacity: 0; animation: slideUp 0.3s forwards;
             backdrop-filter: blur(20px);
@@ -222,7 +256,7 @@
         @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
 
         .modal-icon {
-            width: 60px; height: 60px; background: rgba(245, 158, 11, 0.1); color: var(--rblx-gold);
+            width: 60px; height: 60px; background: rgba(245, 158, 11, 0.1); color: var(--py-gold);
             border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;
         }
         .modal-icon svg { width: 30px; height: 30px; stroke-width: 2.5;}
@@ -231,7 +265,7 @@
 
         .copy-box {
             background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 15px;
-            border-radius: 10px; font-family: 'Fira Code', monospace; font-size: 14px; color: var(--rblx-gold);
+            border-radius: 10px; font-family: 'Fira Code', monospace; font-size: 14px; color: var(--py-gold);
             margin-bottom: 25px; text-align: left; word-break: break-word; line-height: 1.5;
         }
 
@@ -242,7 +276,7 @@
     <div class="toolbar">
         <button class="download-btn" id="main-download-btn" onclick="openConfirmModal()">📥 Descarcă Portofoliul PDF</button>
         <div class="instructions">
-            ✏️ <b>Modul 4 Roblox:</b> Masterat & Publicare. Editează textele, steluțele formează un Scut de Creator (Shield).
+            ✏️ <b>Modul 4 Python:</b> Proiecte Complexe / Master. Editează textele, steluțele formează insigna de master.
         </div>
     </div>
 
@@ -252,49 +286,42 @@
              PAGINA 1: DIPLOMA MODUL 4
              ========================================== -->
         <div class="page" id="page-1">
-            <div class="metaverse-grid"></div>
-            <div class="ambient-glow-gold"></div>
-            <div class="ambient-glow-cyan"></div>
+            <div class="data-grid"></div>
+            <div class="glow-gold"></div>
+            <div class="glow-blue"></div>
 
-            <!-- Coduri Complexe Lua (ModuleScripts) în Fundal -->
-            <div class="floating-element lua-bg-advanced code-1">
-<span style="color: var(--lua-kw);">local</span> GameManager = {}<br>
-GameManager.__index = GameManager<br><br>
-<span style="color: var(--lua-kw);">function</span> GameManager.<span style="color: var(--lua-func);">new</span>()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--lua-kw);">local</span> self = <span style="color: var(--lua-func);">setmetatable</span>({}, GameManager)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;self.State = <span style="color: var(--lua-str);">"Running"</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--lua-kw);">return</span> self<br>
-<span style="color: var(--lua-kw);">end</span><br><br>
-<span style="color: var(--lua-kw);">return</span> GameManager
-            </div>
+            <!-- Simboluri Flotante -->
+            <div class="floating-element py-syntax syntax-1">{ }</div>
+            <div class="floating-element py-syntax syntax-2">[ ]</div>
 
-            <div class="floating-element lua-bg-advanced code-2">
-<span style="color: #64748b;">-- DataStore & Analytics Initialization</span><br>
-<span style="color: var(--lua-kw);">local</span> success, err = <span style="color: var(--lua-func);">pcall</span>(<span style="color: var(--lua-kw);">function</span>()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;playerData:<span style="color: var(--lua-func);">SetAsync</span>(key, <span style="color: var(--lua-var);">dataTable</span>)<br>
-<span style="color: var(--lua-kw);">end</span>)<br><br>
-<span style="color: var(--lua-kw);">if not</span> success <span style="color: var(--lua-kw);">then</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--lua-func);">warn</span>(<span style="color: var(--lua-str);">"Failed to save: "</span> .. err)<br>
-<span style="color: var(--lua-kw);">end</span>
+            <!-- Coduri Complexe M4 în Fundal -->
+            <div class="floating-element bg-code-box code-pos-1">
+<span style="color: #ff7b72;">def</span> <span style="color: #d2a8ff;">handle_click</span>(element):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #ff7b72;">for</span> item <span style="color: #ff7b72;">in</span> master_list:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #ff7b72;">if</span> item.id == element.id:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;item.<span style="color: #d2a8ff;">activate_event</span>()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #8b949e;"># Dynamic logic execution</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #d2a8ff;">print</span>(<span style="color: #a5d6ff;">"Action completed successfully!"</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #ff7b72;">return</span> <span style="color: #79c0ff;">True</span>
             </div>
 
             <!-- Fereastra principală -->
             <div class="glass-container">
                 <div class="content-top">
-                    <div class="diploma-label" contenteditable="true" spellcheck="false">Dezvoltator Roblox Master</div>
+                    <div class="diploma-label" contenteditable="true" spellcheck="false">Dezvoltator Python Avansat</div>
                     <h1 class="main-title" contenteditable="true" spellcheck="false">DIPLOMĂ DE<br>EXCELENȚĂ</h1>
 
                     <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă creatorului digital</p>
 
-                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Nume Elev</h2>
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">David Matei</h2>
 
                     <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru finalizarea cu succes a cursului</p>
-                    <div class="course-title" contenteditable="true" spellcheck="false">Modulul 4 - Sisteme Complexe și Optimizare (Roblox)</div>
+                    <div class="course-title" contenteditable="true" spellcheck="false">Modulul 4 - Proiecte Complexe și Interactivitate (Python)</div>
                 </div>
 
                 <div class="footer-p1">
                     <div class="signature-block">
-                        <div class="sig-value" contenteditable="true" spellcheck="false">Nume Profesor</div>
+                        <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Profesor Coordonator</div>
                     </div>
@@ -304,7 +331,7 @@ GameManager.__index = GameManager<br><br>
                     </div>
 
                     <div class="signature-block">
-                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">15.12.2026</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Data Finalizării</div>
                     </div>
@@ -313,25 +340,75 @@ GameManager.__index = GameManager<br><br>
         </div>
 
         <!-- ==========================================
-             PAGINA 2: STELUȚE (Shield Badge Form)
+             PAGINA 2: FEEDBACK (Master Cards)
              ========================================== -->
         <div class="page" id="page-2">
-            <div class="metaverse-grid" style="opacity: 0.3;"></div>
+            <div class="data-grid" style="opacity: 0.4;"></div>
+
+            <div class="header-p2">
+                <p class="p2-name">Elev: <span id="name-p2">David Matei</span></p>
+                <h2 class="p2-title" contenteditable="true" spellcheck="false">Evaluare Proiecte Finale</h2>
+            </div>
+
+            <div class="feedback-grid">
+                <!-- Card Liste (Gold) -->
+                <div class="fb-card card-data" style="border-left-color: var(--py-gold);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-gold); border-color: rgba(245,158,11,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Managementul Datelor<span>[ data_structures ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A aprofundat lucrul cu structurile de date. Folosește eficient listele pentru a organiza și stoca informații complexe în proiectele sale, demonstrând o înțelegere clară a managementului resurselor în cod.</p>
+                </div>
+
+                <!-- Card Loops (Blue) -->
+                <div class="fb-card card-loop" style="border-left-color: var(--py-blue);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-blue); border-color: rgba(14,165,233,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Optimizarea prin Iterații<span>[ for item in list: ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Automatizează procesele cu succes folosind bucla `for`. Reușește să parcurgă listele și să aplice acțiuni simultane asupra tuturor elementelor, scriind astfel un cod mult mai scurt, mai rapid și mai curat.</p>
+                </div>
+
+                <!-- Card Interactivitate (Purple) -->
+                <div class="fb-card card-click" style="border-left-color: var(--py-purple);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-purple); border-color: rgba(168,85,247,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Interactivitate Dinamică<span>[ on_click(item) ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Transformă proiectele statice în aplicații complet interactive. Știe cum să atașeze evenimente specifice de `click` pe fiecare element manipulat din listă, oferind utilizatorului o experiență captivantă.</p>
+                </div>
+
+                <!-- Card Viziune (Green) -->
+                <div class="fb-card card-vision" style="border-left-color: var(--py-green);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-green); border-color: rgba(16,185,129,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Viziune de Dezvoltator<span>[ debug_and_deploy ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Gândește ca un adevărat dezvoltator Python. Construiește algoritmi logici complecși, repară bug-urile cu răbdare (`print` debugging) și este perfect pregătit pentru următoarele provocări din lumea programării.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 3: STELUȚE (Master Badge Form)
+             ========================================== -->
+        <div class="page" id="page-3">
+            <div class="data-grid" style="opacity: 0.3;"></div>
 
             <div class="stars-container">
                 <div class="stars-header">
-                    <div class="sh-top" contenteditable="true" spellcheck="false">DEVELOPMENT COMPLETE</div>
-                    <h2 class="sh-main" contenteditable="true" spellcheck="false">SCUTUL CREATORULUI</h2>
+                    <div class="sh-top" contenteditable="true" spellcheck="false">PROGRAMARE FINALIZATĂ</div>
+                    <h2 class="sh-main" contenteditable="true" spellcheck="false">NUCLEU DE EXECUTARE</h2>
                 </div>
 
-                <!-- Grila de stele stil Scut de Maestru (4, 4, 4, 3, 1 = 16) -->
-                <div class="shield-grid" id="stars-grid-container">
+                <!-- Grila de stele stil Insigna de Master Python (2-4-4-4-2) -->
+                <div class="badge-grid" id="stars-grid-container">
                     <!-- Generate de JS -->
                 </div>
 
                 <div class="stars-footer">
-                    <span>Developer-ul</span>
-                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Nume Elev</span>
+                    <span>Programatorul</span>
+                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">David</span>
                     <span>a acumulat</span>
                     <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span>
                     <span>din 16 steluțe posibile!</span>
@@ -350,7 +427,7 @@ GameManager.__index = GameManager<br><br>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <div class="modal-text">
-                Sigur ai completat toate datele corect și ai verificat să fie ca în registru și nu ai încurcat nimic?
+                Sigur ai completat toate datele corect și ai verificat să fie ca în registru, feedback corect gramatical și nu ai încurcat nimic?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
@@ -361,14 +438,14 @@ GameManager.__index = GameManager<br><br>
 
     <div class="modal-overlay" id="success-overlay">
         <div class="modal-box">
-            <div class="modal-icon" style="color: var(--rblx-gold); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);">
+            <div class="modal-icon" style="color: var(--py-gold); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
             </div>
             <div class="modal-text">
                 Fișierul PDF a fost descărcat cu succes! 🎉
             </div>
             <div class="copy-box" id="team-message">
-                Salutare echipă, diploma a fost dată. Copilul <span id="msg-child-name" style="color:var(--brand-color); font-weight:bold;">[Nume]</span> a finalizat cu succes modulul 4 - Masterat în Roblox Studio!
+                Salutare echipă, diploma a fost dată. Copilul <span id="msg-child-name" style="color:var(--brand-color); font-weight:bold;">[Nume]</span> a finalizat cu succes modulul 4 - Proiecte Complexe Python!
             </div>
             <div class="modal-text" style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">
                 Acum lasă acest mesaj echipei pe grupul de comunicare.
@@ -384,9 +461,9 @@ GameManager.__index = GameManager<br><br>
     <script>
         function syncNames() {
             const fullName = document.getElementById('name-p1').innerText;
+            document.getElementById('name-p2').innerText = fullName;
             const firstName = fullName.split(' ')[0] || fullName;
-            const p3 = document.getElementById('name-p3');
-            if (p3) p3.innerText = firstName;
+            document.getElementById('name-p3').innerText = firstName;
         }
 
         function updateStarsGrid() {
@@ -399,9 +476,9 @@ GameManager.__index = GameManager<br><br>
 
             const grid = document.getElementById('stars-grid-container');
 
-            // Stea "Creator Master Core" (Auriu + Brand Neon)
+            // Stea "Python Master Core" (Halou Auriu)
             const starFilled = `
-                <svg class="tech-star" viewBox="0 0 24 24" fill="var(--brand-color)" stroke="var(--rblx-gold)" stroke-width="1.5" stroke-linejoin="round" style="filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.7));">
+                <svg class="tech-star" viewBox="0 0 24 24" fill="var(--brand-color)" stroke="var(--py-gold)" stroke-width="1.5" stroke-linejoin="round" style="filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.6));">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                 </svg>
             `;
@@ -413,12 +490,12 @@ GameManager.__index = GameManager<br><br>
 
             grid.innerHTML = '';
 
-            // Format Scut de Creator (Shield): rânduri de 4, 4, 4, 3, 1 = 16
-            const shieldRows = [4, 4, 4, 3, 1];
+            // Format Insignă de Master: rânduri de 2, 4, 4, 4, 2 = 16
+            const badgeRows = [2, 4, 4, 4, 2];
             let currentStarIndex = 0;
 
-            shieldRows.forEach(count => {
-                let rowHtml = '<div class="shield-row">';
+            badgeRows.forEach(count => {
+                let rowHtml = '<div class="badge-row">';
                 for(let i = 0; i < count; i++) {
                     if (currentStarIndex < earned) {
                         rowHtml += starFilled;
@@ -482,7 +559,6 @@ GameManager.__index = GameManager<br><br>
 
             document.body.classList.add('exporting-pdf');
 
-            // Wait curat pentru ca CSS-ul (.exporting-pdf) sa se aplice corect si sa opreasca animatiile
             await new Promise(resolve => setTimeout(resolve, 100));
 
             try {
@@ -492,7 +568,7 @@ GameManager.__index = GameManager<br><br>
                 for (let i = 0; i < pages.length; i++) {
                     const canvas = await html2canvas(pages[i], {
                         scale: 2,
-                        backgroundColor: "#050510", /* Deep Space Dark ptr export sigur */
+                        backgroundColor: "#060913", /* Navy Dark ptr export sigur */
                         useCORS: true,
                         logging: false
                     });
@@ -503,7 +579,7 @@ GameManager.__index = GameManager<br><br>
                 }
 
                 const rawName = document.getElementById('name-p1').innerText.trim();
-                const fileName = `Diploma - ${rawName}.pdf`;
+                const fileName = `Diploma, Feedback și steluțe - ${rawName}.pdf`;
 
                 pdf.save(fileName);
 
@@ -520,33 +596,6 @@ GameManager.__index = GameManager<br><br>
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        function formatTodayRO() {
-            var d = new Date();
-            var dd = String(d.getDate()).padStart(2, '0');
-            var mm = String(d.getMonth() + 1).padStart(2, '0');
-            return dd + '.' + mm + '.' + d.getFullYear();
-        }
-
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl) { nameEl.innerText = studentName || 'Nume Elev'; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Profesor';
-                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

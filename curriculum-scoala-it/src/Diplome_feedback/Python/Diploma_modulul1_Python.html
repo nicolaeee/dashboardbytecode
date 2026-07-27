@@ -161,7 +161,47 @@
         .logo-text span { color: var(--py-blue); }
 
         /* =========================================
-           PAGINA 2: STELUȚE (Matrice 4x4)
+           PAGINA 2: FEEDBACK (Terminal Cards)
+           ========================================= */
+        .header-p2 { position: absolute; top: 50px; left: 80px; z-index: 10; }
+        .p2-name { font-family: 'Fira Code'; font-size: 20px; color: var(--py-yellow); margin: 0 0 10px 0; }
+        .p2-name::before { content: ">>> user.analyze('"; color: #8b949e;}
+        .p2-name::after { content: "')"; color: #8b949e;}
+
+        .p2-title { font-family: 'Russo One'; font-size: 45px; color: var(--text-white); margin: 0; letter-spacing: 1px; text-transform: uppercase; }
+
+        .feedback-grid {
+            position: absolute; top: 160px; left: 80px; width: 1040px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px; z-index: 10;
+        }
+
+        /* Cardurile tip IDE Terminal */
+        .fb-card {
+            background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px; display: flex; flex-direction: column; overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+        }
+
+        .fb-card-top {
+            background: rgba(0,0,0,0.4); padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex; align-items: center; gap: 15px; font-family: 'Fira Code'; font-size: 15px; font-weight: 600;
+        }
+
+        .card-green .fb-card-top { color: #10b981; border-top: 3px solid #10b981; }
+        .card-purple .fb-card-top { color: #a855f7; border-top: 3px solid #a855f7; }
+        .card-blue .fb-card-top { color: #3b82f6; border-top: 3px solid #3b82f6; }
+        .card-orange .fb-card-top { color: #f97316; border-top: 3px solid #f97316; }
+
+        .fb-icon svg { width: 20px; height: 20px; stroke-width: 2.5; }
+
+        .fb-card-body { padding: 25px; flex-grow: 1; }
+
+        .fb-q { font-size: 16px; font-weight: 700; color: var(--text-white); margin: 0 0 10px 0; line-height: 1.4; }
+        .fb-a { font-family: 'Inter'; font-size: 15px; font-weight: 400; color: #a1a1aa; line-height: 1.6; margin: 0; }
+        .fb-a::before { content: "> "; color: var(--py-yellow); font-family: 'Fira Code'; font-weight: bold;}
+
+        /* =========================================
+           PAGINA 3: STELUȚE (Matrice 4x4)
            ========================================= */
         .stars-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -244,7 +284,7 @@ import sys
 def init_modul_1():
     print("Hello, World!")
 
-    student_name = "user"
+    student_name = "David"
     score = 100
 
     if score == 100:
@@ -286,14 +326,14 @@ print(rezultat)
 
                     <p class="subtitle" contenteditable="true" spellcheck="false">Codul a fost rulat cu succes de către</p>
 
-                    <div class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Nume Elev</div>
+                    <div class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">David Matei</div>
 
                     <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru asimilarea conceptelor din</p>
                     <div class="course-title" contenteditable="true" spellcheck="false">Modulul_1_Introducere_în_Python</div>
 
                     <div class="footer-p1">
                         <div class="signature-block">
-                            <div class="sig-value" contenteditable="true" spellcheck="false">Nume Profesor</div>
+                            <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                             <div class="sig-line"></div>
                             <div class="sig-label" contenteditable="true" spellcheck="false">@Profesor_Coordonator</div>
                         </div>
@@ -307,7 +347,7 @@ print(rezultat)
                         </div>
 
                         <div class="signature-block">
-                            <div class="sig-value" style="font-family: 'Fira Code';" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                            <div class="sig-value" style="font-family: 'Fira Code';" contenteditable="true" spellcheck="false">14.02.2026</div>
                             <div class="sig-line"></div>
                             <div class="sig-label" contenteditable="true" spellcheck="false">sys.date.final()</div>
                         </div>
@@ -317,9 +357,80 @@ print(rezultat)
         </div>
 
         <!-- ==========================================
-             PAGINA 2: STELUȚE (Matrice 4x4)
+             PAGINA 2: FEEDBACK (Terminal Cards Specific Modul 1)
              ========================================== -->
         <div class="page" id="page-2">
+            <div class="bg-code-layer" style="opacity: 0.02;">
+# Analiza Baze Python
+class StudentAnalyzer:
+    def __init__(self):
+        self.module = 1
+    def check_variables(self):
+        return "Variables understood"
+    def verify_logic(self):
+        print("Logic is flawless")
+            </div>
+
+            <div class="header-p2">
+                <p class="p2-name" id="name-p2">David Matei</p>
+                <h2 class="p2-title" contenteditable="true" spellcheck="false">Rezultate Compilare</h2>
+            </div>
+
+            <div class="feedback-grid">
+                <!-- Card Verde: Variabile -->
+                <div class="fb-card card-green">
+                    <div class="fb-card-top">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg></div>
+                        <span contenteditable="true" spellcheck="false">def intelegere_variabile():</span>
+                    </div>
+                    <div class="fb-card-body">
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Cum s-a descurcat în înțelegerea conceptului de variabilă?</h3>
+                        <p class="fb-a" contenteditable="true" spellcheck="false">David lucrează cu atenție și analizează majoritatea pașilor codului, reușind să creeze programe curate și organizate. Uneori îi mai scapă mici detalii, dar modul în care corectează aceste aspecte arată o gândire responsabilă.</p>
+                    </div>
+                </div>
+
+                <!-- Card Mov: Combinare Concepte -->
+                <div class="fb-card card-purple">
+                    <div class="fb-card-top">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg></div>
+                        <span contenteditable="true" spellcheck="false">def combinare_concepte():</span>
+                    </div>
+                    <div class="fb-card-body">
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">În ce măsură reușește să combine mai multe concepte?</h3>
+                        <p class="fb-a" contenteditable="true" spellcheck="false">Este foarte punctual și își finalizează temele la timp, arătând disciplină și respect pentru învățare. Această seriozitate îl ajută să își dezvolte progresiv abilitățile, construind o bază solidă pentru proiecte avansate.</p>
+                    </div>
+                </div>
+
+                <!-- Card Albastru: Ghidaj -->
+                <div class="fb-card card-blue">
+                    <div class="fb-card-top">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"></path></svg></div>
+                        <span contenteditable="true" spellcheck="false">def necesar_ghidaj():</span>
+                    </div>
+                    <div class="fb-card-body">
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Care sunt aspectele unde mai are nevoie de ghidaj?</h3>
+                        <p class="fb-a" contenteditable="true" spellcheck="false">David înțelege foarte bine logica din spatele fiecărui cod și poate identifica cum diferitele componente interacționează. Această abilitate îi permite să facă conexiuni clare între teorie și practică, ghidajul fiind minim necesar.</p>
+                    </div>
+                </div>
+
+                <!-- Card Portocaliu: Recomandari -->
+                <div class="fb-card card-orange">
+                    <div class="fb-card-top">
+                        <div class="fb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg></div>
+                        <span contenteditable="true" spellcheck="false">class RecomandariParinti:</span>
+                    </div>
+                    <div class="fb-card-body">
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Ce pot face părinții pentru a-l ajuta?</h3>
+                        <p class="fb-a" contenteditable="true" spellcheck="false">Pentru a-și consolida și mai mult progresul, este încurajat să continue să exerseze regulat, să experimenteze cu idei proprii. Prin menținerea implicării, va reuși să obțină rezultate foarte bune în continuare în Python.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 3: STELUȚE (Matrice 4x4)
+             ========================================== -->
+        <div class="page" id="page-3">
             <div class="bg-code-layer" style="opacity: 0.05; text-align: center; line-height: 2;">
 01010100 01100101 01101100 01101001<br>01100011 01101001 01110100 01100001
             </div>
@@ -341,7 +452,7 @@ print(rezultat)
 
                 <div class="stars-footer">
                     <span>Programatorul</span>
-                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Elev</span>
+                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">David</span>
                     <span>a acumulat</span>
                     <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span>
                     <span>/ 16 steluțe!</span>
@@ -360,7 +471,7 @@ print(rezultat)
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <div class="modal-text">
-                Sigur ai completat toate datele corect și ai verificat să fie ca în registru și nu ai încurcat nimic?
+                Sigur ai completat toate datele corect și ai verificat să fie ca în registru, feedback corect gramatical și nu ai încurcat nimic?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
@@ -394,9 +505,9 @@ print(rezultat)
     <script>
         function syncNames() {
             const fullName = document.getElementById('name-p1').innerText;
+            document.getElementById('name-p2').innerText = fullName;
             const firstName = fullName.split(' ')[0] || fullName;
-            const p3 = document.getElementById('name-p3');
-            if (p3) p3.innerText = firstName;
+            document.getElementById('name-p3').innerText = firstName;
         }
 
         function updateStarsGrid() {
@@ -452,7 +563,7 @@ print(rezultat)
         function copyMessage() {
             const msgText = document.getElementById('team-message').innerText;
             navigator.clipboard.writeText(msgText).then(() => {
-                showCopiedNotice();
+                showCopiedFeedback();
             }).catch(err => {
                 const textArea = document.createElement("textarea");
                 textArea.value = msgText;
@@ -460,11 +571,11 @@ print(rezultat)
                 textArea.select();
                 document.execCommand("Copy");
                 textArea.remove();
-                showCopiedNotice();
+                showCopiedFeedback();
             });
         }
 
-        function showCopiedNotice() {
+        function showCopiedFeedback() {
             const btn = document.querySelector('#success-overlay .action-btn');
             btn.innerHTML = "✅ Copiat!";
             setTimeout(() => { btn.innerHTML = "📋 Copiază mesajul"; }, 2000);
@@ -504,7 +615,7 @@ print(rezultat)
                 }
 
                 const rawName = document.getElementById('name-p1').innerText.trim();
-                const fileName = `Diploma - ${rawName}.pdf`;
+                const fileName = `Diploma, Feedback și steluțe - ${rawName}.pdf`;
 
                 pdf.save(fileName);
 
@@ -521,33 +632,6 @@ print(rezultat)
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        function formatTodayRO() {
-            var d = new Date();
-            var dd = String(d.getDate()).padStart(2, '0');
-            var mm = String(d.getMonth() + 1).padStart(2, '0');
-            return dd + '.' + mm + '.' + d.getFullYear();
-        }
-
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl) { nameEl.innerText = studentName || 'Nume Elev'; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Profesor';
-                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

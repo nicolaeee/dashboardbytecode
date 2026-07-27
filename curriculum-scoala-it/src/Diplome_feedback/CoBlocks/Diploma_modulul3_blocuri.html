@@ -174,7 +174,44 @@
         .logo-text span { color: #fff; }
 
         /* =========================================
-           PAGINA 2: STELUȚE (Data Clusters)
+           PAGINA 2: FEEDBACK (Architecture Cards)
+           ========================================= */
+        .header-p2 { position: absolute; top: 50px; left: 80px; z-index: 10; }
+        .p2-name { font-family: 'Fira Code'; font-size: 20px; color: var(--cat-func); margin: 0 0 5px 0; letter-spacing: 1px;}
+        .p2-name::before { content: "execute_analysis( '"; color: var(--text-muted);}
+        .p2-name::after { content: "' )"; color: var(--text-muted);}
+        .p2-title { font-family: 'Chakra Petch'; font-size: 45px; font-weight: 700; color: #fff; margin: 0; letter-spacing: 1px; text-transform: uppercase;}
+
+        .feedback-grid {
+            position: absolute; top: 160px; left: 80px; width: 1040px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px; z-index: 10;
+        }
+
+        .fb-card {
+            background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px; padding: 30px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+            backdrop-filter: blur(15px); box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+        }
+
+        /* Bară superioară tip "Block Notch" */
+        .fb-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        }
+        .card-list::before { background: var(--cat-list); box-shadow: 0 0 10px var(--cat-list); }
+        .card-loop::before { background: var(--cat-loop); box-shadow: 0 0 10px var(--cat-loop); }
+        .card-func::before { background: var(--cat-func); box-shadow: 0 0 10px var(--cat-func); }
+        .card-arch::before { background: var(--cat-arch); box-shadow: 0 0 10px var(--cat-arch); }
+
+        .fb-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .fb-icon { width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);}
+        .fb-icon svg { width: 22px; height: 22px; stroke-width: 2; }
+
+        .fb-q { font-family: 'Inter'; font-size: 18px; font-weight: 700; color: #fff; margin: 0; line-height: 1.3; }
+        .fb-q span { font-family: 'Fira Code'; font-size: 13px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 6px;}
+        .fb-a { font-size: 15px; font-weight: 400; color: #cbd5e1; line-height: 1.6; margin: 0; }
+
+        /* =========================================
+           PAGINA 3: STELUȚE (Data Clusters)
            ========================================= */
         .stars-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -294,7 +331,7 @@
 
                     <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă creatorului digital</p>
 
-                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Nume Elev</h2>
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Radu Ștefan</h2>
 
                     <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru finalizarea cu succes a cursului</p>
                     <div class="course-title" contenteditable="true" spellcheck="false">Modulul 3 - Structuri de Date și Funcții</div>
@@ -302,7 +339,7 @@
 
                 <div class="footer-p1">
                     <div class="signature-block">
-                        <div class="sig-value" contenteditable="true" spellcheck="false">Nume Profesor</div>
+                        <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Profesor Coordonator</div>
                     </div>
@@ -312,7 +349,7 @@
                     </div>
 
                     <div class="signature-block">
-                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">25.08.2026</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Data Finalizării</div>
                     </div>
@@ -321,9 +358,59 @@
         </div>
 
         <!-- ==========================================
-             PAGINA 3: STELUȚE (Data Clusters 4x4 Grupate)
+             PAGINA 2: FEEDBACK (Architecture Cards)
              ========================================== -->
         <div class="page" id="page-2">
+            <div class="blueprint-grid" style="opacity: 0.5;"></div>
+
+            <div class="header-p2">
+                <p class="p2-name">Elev: <span id="name-p2">Radu Ștefan</span></p>
+                <h2 class="p2-title" contenteditable="true" spellcheck="false">Analiză Cod & Arhitectură</h2>
+            </div>
+
+            <div class="feedback-grid">
+                <!-- Card Liste (Cyan) -->
+                <div class="fb-card card-list">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--cat-list); border-color: rgba(6,182,212,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Liste și Structuri de Date<span>Cum stochează informații multiple?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A înțeles excelent cum să folosească Listele (Arrays) prin blocuri de cod. Reușește să stocheze grupuri de elemente, cum ar fi un inventar de joc sau scoruri multiple, și să acceseze ori să șteargă datele în mod eficient.</p>
+                </div>
+
+                <!-- Card Bucle (Portocaliu) -->
+                <div class="fb-card card-loop">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--cat-loop); border-color: rgba(249,115,22,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Iterații (For Each Loops)<span>Cum automatizează sarcinile?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Folosește inteligent buclele avansate de tip "Pentru Fiecare" (For Each) pentru a aplica instant o acțiune asupra tuturor elementelor dintr-o listă. Astfel automatizează procesele complexe fără să repete zeci de blocuri inutil.</p>
+                </div>
+
+                <!-- Card Functii (Mov) -->
+                <div class="fb-card card-func">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--cat-func); border-color: rgba(168,85,247,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Funcții Personalizate<span>Cum își organizează scripturile masive?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A făcut saltul decisiv de la un cod dezordonat la un sistem structurat prin crearea propriilor Funcții. Acum poate să „împacheteze” 50 de blocuri într-unul singur, menținând un proiect extrem de curat și ușor de depanat.</p>
+                </div>
+
+                <!-- Card Arhitectura (Verde) -->
+                <div class="fb-card card-arch">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--cat-arch); border-color: rgba(16,185,129,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Arhitectura Proiectelor<span>Cât de complexe au devenit jocurile?</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Combinând funcțiile custom cu listele și buclele, reușește să gândească și să execute aplicații cu logică vastă (spawne de inamici dinamici, level design generat, sisteme de magazin). Este pregătit pentru provocări tehnice majore.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 3: STELUȚE (Data Clusters 4x4 Grupate)
+             ========================================== -->
+        <div class="page" id="page-3">
             <div class="blueprint-grid" style="opacity: 0.3;"></div>
 
             <div class="stars-container">
@@ -339,7 +426,7 @@
 
                 <div class="stars-footer">
                     <span>Creatorul</span>
-                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Elev</span>
+                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Radu</span>
                     <span>a acumulat</span>
                     <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span>
                     <span>din 16 steluțe posibile!</span>
@@ -358,7 +445,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <div class="modal-text">
-                Sigur ai completat toate datele corect și ai verificat să fie ca în registru și nu ai încurcat nimic?
+                Sigur ai completat toate datele corect și ai verificat să fie ca în registru, feedback corect gramatical și nu ai încurcat nimic?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
@@ -392,9 +479,9 @@
     <script>
         function syncNames() {
             const fullName = document.getElementById('name-p1').innerText;
+            document.getElementById('name-p2').innerText = fullName;
             const firstName = fullName.split(' ')[0] || fullName;
-            const p3 = document.getElementById('name-p3');
-            if (p3) p3.innerText = firstName;
+            document.getElementById('name-p3').innerText = firstName;
         }
 
         function updateStarsGrid() {
@@ -457,7 +544,7 @@
         function copyMessage() {
             const msgText = document.getElementById('team-message').innerText;
             navigator.clipboard.writeText(msgText).then(() => {
-                showCopySuccess();
+                showCopiedFeedback();
             }).catch(err => {
                 const textArea = document.createElement("textarea");
                 textArea.value = msgText;
@@ -465,11 +552,11 @@
                 textArea.select();
                 document.execCommand("Copy");
                 textArea.remove();
-                showCopySuccess();
+                showCopiedFeedback();
             });
         }
 
-        function showCopySuccess() {
+        function showCopiedFeedback() {
             const btn = document.querySelector('#success-overlay .action-btn');
             btn.innerHTML = "✅ Copiat!";
             setTimeout(() => { btn.innerHTML = "📋 Copiază mesajul"; }, 2000);
@@ -509,7 +596,7 @@
                 }
 
                 const rawName = document.getElementById('name-p1').innerText.trim();
-                const fileName = `Diploma - ${rawName}.pdf`;
+                const fileName = `Diploma, Feedback și steluțe - ${rawName}.pdf`;
 
                 pdf.save(fileName);
 
@@ -526,33 +613,6 @@
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        function formatTodayRO() {
-            var d = new Date();
-            var dd = String(d.getDate()).padStart(2, '0');
-            var mm = String(d.getMonth() + 1).padStart(2, '0');
-            return dd + '.' + mm + '.' + d.getFullYear();
-        }
-
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl) { nameEl.innerText = studentName || 'Nume Elev'; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Profesor';
-                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

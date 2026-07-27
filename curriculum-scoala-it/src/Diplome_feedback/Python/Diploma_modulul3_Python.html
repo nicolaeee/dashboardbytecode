@@ -174,7 +174,41 @@
         .logo-text span { color: #fff; }
 
         /* =========================================
-           PAGINA 2: STELUȚE (Python Lists Format)
+           PAGINA 2: FEEDBACK (Python Cards)
+           ========================================= */
+        .header-p2 { position: absolute; top: 50px; left: 80px; z-index: 10; }
+        .p2-name { font-family: 'Fira Code'; font-size: 20px; color: var(--py-blue); margin: 0 0 5px 0; letter-spacing: 1px;}
+        .p2-name::before { content: "analyze_student( '";}
+        .p2-name::after { content: "' )";}
+        .p2-title { font-family: 'Chakra Petch'; font-size: 45px; font-weight: 700; color: #fff; margin: 0; letter-spacing: 1px; text-transform: uppercase;}
+
+        .feedback-grid {
+            position: absolute; top: 160px; left: 80px; width: 1040px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px; z-index: 10;
+        }
+
+        .fb-card {
+            background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px; padding: 30px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+            backdrop-filter: blur(15px); box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+        }
+
+        .fb-card::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px; }
+        .card-list::before { background: var(--py-green); box-shadow: 0 0 15px var(--py-green); }
+        .card-loop::before { background: var(--py-purple); box-shadow: 0 0 15px var(--py-purple); }
+        .card-cond::before { background: var(--brand-color); box-shadow: 0 0 15px var(--brand-color); }
+        .card-click::before { background: var(--py-orange); box-shadow: 0 0 15px var(--py-orange); }
+
+        .fb-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .fb-icon { width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);}
+        .fb-icon svg { width: 22px; height: 22px; stroke-width: 2; }
+
+        .fb-q { font-family: 'Inter'; font-size: 18px; font-weight: 700; color: #fff; margin: 0; line-height: 1.3; }
+        .fb-q span { font-family: 'Fira Code'; font-size: 13px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 6px;}
+        .fb-a { font-size: 15px; font-weight: 400; color: #cbd5e1; line-height: 1.6; margin: 0; }
+
+        /* =========================================
+           PAGINA 3: STELUȚE (Python Arrays Form)
            ========================================= */
         .stars-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -283,7 +317,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
 
                     <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă creatorului digital</p>
 
-                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Nume Elev</h2>
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">David Matei</h2>
 
                     <p class="subtitle" style="margin-top: 0;" contenteditable="true" spellcheck="false">pentru finalizarea cu succes a cursului</p>
                     <div class="course-title" contenteditable="true" spellcheck="false">Modulul 3 - Interactivitate, Bucle și Structuri de Date (Python)</div>
@@ -291,7 +325,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
 
                 <div class="footer-p1">
                     <div class="signature-block">
-                        <div class="sig-value" contenteditable="true" spellcheck="false">Nume Profesor</div>
+                        <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Profesor Coordonator</div>
                     </div>
@@ -301,7 +335,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
                     </div>
 
                     <div class="signature-block">
-                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">ZZ.LL.AAAA</div>
+                        <div class="sig-value" style="font-family: 'Inter', sans-serif;" contenteditable="true" spellcheck="false">15.12.2026</div>
                         <div class="sig-line"></div>
                         <div class="sig-label" contenteditable="true" spellcheck="false">Data Finalizării</div>
                     </div>
@@ -310,9 +344,59 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
         </div>
 
         <!-- ==========================================
-             PAGINA 2: STELUȚE (Python Lists Format)
+             PAGINA 2: FEEDBACK (Interactive/Code Cards)
              ========================================== -->
         <div class="page" id="page-2">
+            <div class="data-grid" style="opacity: 0.5;"></div>
+
+            <div class="header-p2">
+                <p class="p2-name">Elev: <span id="name-p2">David Matei</span></p>
+                <h2 class="p2-title" contenteditable="true" spellcheck="false">Raport Compilare M3</h2>
+            </div>
+
+            <div class="feedback-grid">
+                <!-- Card Liste (Verde) -->
+                <div class="fb-card card-list" style="border-left-color: var(--py-green);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-green); border-color: rgba(52,211,153,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Liste și Colecții de Date<span>[ array, management ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">A asimilat excelent folosirea listelor în Python. Reușește să stocheze elemente multiple într-o singură variabilă (cum ar fi inventare sau scoruri) și știe exact cum să adauge, modifice sau să șteargă elemente pe baza indexului.</p>
+                </div>
+
+                <!-- Card Loops (Mov) -->
+                <div class="fb-card card-loop" style="border-left-color: var(--py-purple);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-purple); border-color: rgba(192,132,252,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Iterații (Bucla FOR)<span>[ for item in list: ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Repetă acțiuni cu multă ușurință folosind buclele. Înțelege perfect cum să parcurgă o listă element cu element folosind "for", reușind astfel să scrie cod eficient și să automatizeze procese lungi cu doar câteva rânduri.</p>
+                </div>
+
+                <!-- Card Conditii (Verde Neon Brand) -->
+                <div class="fb-card card-cond" style="border-left-color: var(--brand-color);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--brand-color); border-color: rgba(200,240,35,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Logică Decizională<span>[ if / elif / else: ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Gândește algoritmic și ramificat. Folosește logica condițională pentru a lua decizii în cod: controlează cum reacționează programul dacă o condiție este adevărată sau falsă, tratând corect diferite scenarii de joc.</p>
+                </div>
+
+                <!-- Card Interactivitate (Portocaliu) -->
+                <div class="fb-card card-click" style="border-left-color: var(--py-orange);">
+                    <div class="fb-card-header">
+                        <div class="fb-icon" style="color: var(--py-orange); border-color: rgba(251,146,60,0.4);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></div>
+                        <h3 class="fb-q" contenteditable="true" spellcheck="false">Interactivitate & Evenimente<span>[ def on_click(): ]</span></h3>
+                    </div>
+                    <p class="fb-a" contenteditable="true" spellcheck="false">Nu mai scrie doar cod static, ci aplicații complet interactive! Răspunde la acțiunile utilizatorului legând funcții de evenimentele mouse-ului (ex. on_click), transformând un script simplu într-un joc grafic atractiv.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             PAGINA 3: STELUȚE (Python Lists Format)
+             ========================================== -->
+        <div class="page" id="page-3">
             <div class="data-grid" style="opacity: 0.3;"></div>
 
             <div class="stars-container">
@@ -328,7 +412,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
 
                 <div class="stars-footer">
                     <span>Dezvoltatorul</span>
-                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">Elev</span>
+                    <span id="name-p3" class="highlight" contenteditable="true" spellcheck="false">David</span>
                     <span>a acumulat</span>
                     <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span>
                     <span>din 16 steluțe posibile!</span>
@@ -347,7 +431,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <div class="modal-text">
-                Sigur ai completat toate datele corect și ai verificat să fie ca în registru și nu ai încurcat nimic?
+                Sigur ai completat toate datele corect și ai verificat să fie ca în registru, feedback corect gramatical și nu ai încurcat nimic?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă fișierul</button>
@@ -381,9 +465,9 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
     <script>
         function syncNames() {
             const fullName = document.getElementById('name-p1').innerText;
+            document.getElementById('name-p2').innerText = fullName;
             const firstName = fullName.split(' ')[0] || fullName;
-            const p3 = document.getElementById('name-p3');
-            if (p3) p3.innerText = firstName;
+            document.getElementById('name-p3').innerText = firstName;
         }
 
         function updateStarsGrid() {
@@ -457,7 +541,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
         function copyMessage() {
             const msgText = document.getElementById('team-message').innerText;
             navigator.clipboard.writeText(msgText).then(() => {
-                showCopiedNotice();
+                showCopiedFeedback();
             }).catch(err => {
                 const textArea = document.createElement("textarea");
                 textArea.value = msgText;
@@ -465,11 +549,11 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
                 textArea.select();
                 document.execCommand("Copy");
                 textArea.remove();
-                showCopiedNotice();
+                showCopiedFeedback();
             });
         }
 
-        function showCopiedNotice() {
+        function showCopiedFeedback() {
             const btn = document.querySelector('#success-overlay .action-btn');
             btn.innerHTML = "✅ Copiat!";
             setTimeout(() => { btn.innerHTML = "📋 Copiază mesajul"; }, 2000);
@@ -509,7 +593,7 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
                 }
 
                 const rawName = document.getElementById('name-p1').innerText.trim();
-                const fileName = `Diploma - ${rawName}.pdf`;
+                const fileName = `Diploma, Feedback și steluțe - ${rawName}.pdf`;
 
                 pdf.save(fileName);
 
@@ -526,33 +610,6 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        function formatTodayRO() {
-            var d = new Date();
-            var dd = String(d.getDate()).padStart(2, '0');
-            var mm = String(d.getMonth() + 1).padStart(2, '0');
-            return dd + '.' + mm + '.' + d.getFullYear();
-        }
-
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl) { nameEl.innerText = studentName || 'Nume Elev'; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0]) sigValues[0].innerText = teacherName || 'Nume Profesor';
-                if (sigValues[1]) sigValues[1].innerText = dateStr || formatTodayRO();
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>
