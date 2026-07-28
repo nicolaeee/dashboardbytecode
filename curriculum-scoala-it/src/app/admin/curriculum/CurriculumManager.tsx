@@ -1,5 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import NextLink from 'next/link';
 import {
   ChevronDown, ChevronRight, Pencil, Plus, Trash2, ArrowUp, ArrowDown, PlayCircle,
@@ -39,6 +40,7 @@ const TITLES: Record<EntityKind, string> = {
 };
 
 export default function CurriculumManager({ tree }: { tree: Tree }) {
+  const router = useRouter();
   const [open, setOpen] = useState<Set<string>>(new Set(tree.slice(0, 1).map((p) => p.id)));
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,10 +125,16 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
       {tree.map((platform, pi) => (
         <Card key={platform.id} className="overflow-hidden">
           {/* Spina colorată = identitatea platformei, purtată apoi prin tot arborele */}
-          <div className="flex items-start gap-3 border-l-4 px-4 py-4" style={{ borderColor: platform.accent }}>
-            <button onClick={() => toggle(platform.id)} className="mt-0.5 text-lock hover:text-ink" aria-label="Extinde">
+          <div
+            onClick={() => toggle(platform.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(platform.id); } }}
+            role="button" tabIndex={0} aria-expanded={open.has(platform.id)}
+            className="flex cursor-pointer items-start gap-3 border-l-4 px-4 py-4 transition hover:bg-slate-25"
+            style={{ borderColor: platform.accent }}
+          >
+            <span className="mt-0.5 text-lock">
               {open.has(platform.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-            </button>
+            </span>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -136,17 +144,19 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
               {platform.description && <p className="mt-0.5 text-sm text-ink/55">{platform.description}</p>}
             </div>
 
-            <RowActions
-              onAdd={() => startCreate('course', platform.id)}
-              addLabel="Curs"
-              onEdit={() => startEdit('platform', platform.id, null, {
-                name: platform.name, description: platform.description ?? '', accent: platform.accent,
-              })}
-              onUp={pi > 0 ? () => move('platform', platform.id, 'up', null) : undefined}
-              onDown={pi < tree.length - 1 ? () => move('platform', platform.id, 'down', null) : undefined}
-              onDelete={() => remove('platform', platform.id, platform.name)}
-              disabled={pending}
-            />
+            <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+              <RowActions
+                onAdd={() => startCreate('course', platform.id)}
+                addLabel="Curs"
+                onEdit={() => startEdit('platform', platform.id, null, {
+                  name: platform.name, description: platform.description ?? '', accent: platform.accent,
+                })}
+                onUp={pi > 0 ? () => move('platform', platform.id, 'up', null) : undefined}
+                onDown={pi < tree.length - 1 ? () => move('platform', platform.id, 'down', null) : undefined}
+                onDelete={() => remove('platform', platform.id, platform.name)}
+                disabled={pending}
+              />
+            </div>
           </div>
 
           {open.has(platform.id) && (
@@ -159,25 +169,32 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
               {platform.courses.map((course, ci) => (
                 <div key={course.id} className="rail">
                   <span className="rail-dot" style={{ background: platform.accent }} />
-                  <div className="flex items-start gap-2">
-                    <button onClick={() => toggle(course.id)} className="mt-0.5 text-lock hover:text-ink" aria-label="Extinde">
+                  <div
+                    onClick={() => toggle(course.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(course.id); } }}
+                    role="button" tabIndex={0} aria-expanded={open.has(course.id)}
+                    className="-mx-2 flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1 transition hover:bg-brand-50"
+                  >
+                    <span className="mt-0.5 text-lock">
                       {open.has(course.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{course.title}</p>
                       {course.description && <p className="text-[13px] text-ink/50">{course.description}</p>}
                     </div>
-                    <RowActions
-                      onAdd={() => startCreate('module', course.id)}
-                      addLabel="Modul"
-                      onEdit={() => startEdit('course', course.id, platform.id, {
-                        title: course.title, description: course.description ?? '',
-                      })}
-                      onUp={ci > 0 ? () => move('course', course.id, 'up', platform.id) : undefined}
-                      onDown={ci < platform.courses.length - 1 ? () => move('course', course.id, 'down', platform.id) : undefined}
-                      onDelete={() => remove('course', course.id, course.title)}
-                      disabled={pending}
-                    />
+                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                      <RowActions
+                        onAdd={() => startCreate('module', course.id)}
+                        addLabel="Modul"
+                        onEdit={() => startEdit('course', course.id, platform.id, {
+                          title: course.title, description: course.description ?? '',
+                        })}
+                        onUp={ci > 0 ? () => move('course', course.id, 'up', platform.id) : undefined}
+                        onDown={ci < platform.courses.length - 1 ? () => move('course', course.id, 'down', platform.id) : undefined}
+                        onDelete={() => remove('course', course.id, course.title)}
+                        disabled={pending}
+                      />
+                    </div>
                   </div>
 
                   {open.has(course.id) && (
@@ -189,27 +206,34 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
 
                       {course.modules.map((mod, mi) => (
                         <div key={mod.id} className="glass rounded-xl border border-line px-3 py-2.5">
-                          <div className="flex items-start gap-2">
-                            <button onClick={() => toggle(mod.id)} className="mt-0.5 text-lock hover:text-ink" aria-label="Extinde">
+                          <div
+                            onClick={() => toggle(mod.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(mod.id); } }}
+                            role="button" tabIndex={0} aria-expanded={open.has(mod.id)}
+                            className="-mx-3 -my-2.5 flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2.5 transition hover:bg-brand-50"
+                          >
+                            <span className="mt-0.5 text-lock">
                               {open.has(mod.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            </button>
+                            </span>
                             <div className="min-w-0 flex-1">
                               <p className="flex items-center gap-2 text-[15px] font-medium">
                                 <span className="tag">M{mi + 1}</span> {mod.title}
                               </p>
                               {mod.description && <p className="text-[13px] text-ink/50">{mod.description}</p>}
                             </div>
-                            <RowActions
-                              onAdd={() => startCreate('lesson', mod.id)}
-                              addLabel="Lecție"
-                              onEdit={() => startEdit('module', mod.id, course.id, {
-                                title: mod.title, description: mod.description ?? '',
-                              })}
-                              onUp={mi > 0 ? () => move('module', mod.id, 'up', course.id) : undefined}
-                              onDown={mi < course.modules.length - 1 ? () => move('module', mod.id, 'down', course.id) : undefined}
-                              onDelete={() => remove('module', mod.id, mod.title)}
-                              disabled={pending}
-                            />
+                            <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                              <RowActions
+                                onAdd={() => startCreate('lesson', mod.id)}
+                                addLabel="Lecție"
+                                onEdit={() => startEdit('module', mod.id, course.id, {
+                                  title: mod.title, description: mod.description ?? '',
+                                })}
+                                onUp={mi > 0 ? () => move('module', mod.id, 'up', course.id) : undefined}
+                                onDown={mi < course.modules.length - 1 ? () => move('module', mod.id, 'down', course.id) : undefined}
+                                onDelete={() => remove('module', mod.id, mod.title)}
+                                disabled={pending}
+                              />
+                            </div>
                           </div>
 
                           {open.has(mod.id) && (
@@ -218,18 +242,26 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                                 <li className="px-1 py-2 text-[13px] text-lock">Modulul nu are lecții.</li>
                               )}
                               {mod.lessons.map((lesson, li) => (
-                                <li key={lesson.id} className="flex items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-slate-25">
+                                <li
+                                  key={lesson.id}
+                                  onClick={() => router.push(`/lectie/${lesson.id}`)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/lectie/${lesson.id}`); } }}
+                                  role="button" tabIndex={0}
+                                  className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-1.5 transition hover:bg-slate-25"
+                                >
                                   <PlayCircle size={15} className="shrink-0 text-lock" />
                                   <span className="tag w-8 shrink-0">L{li + 1}</span>
                                   <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
-                                  <RowActions
-                                    viewHref={`/lectie/${lesson.id}`}
-                                    onEdit={() => startEdit('lesson', lesson.id, mod.id)}
-                                    onUp={li > 0 ? () => move('lesson', lesson.id, 'up', mod.id) : undefined}
-                                    onDown={li < mod.lessons.length - 1 ? () => move('lesson', lesson.id, 'down', mod.id) : undefined}
-                                    onDelete={() => remove('lesson', lesson.id, lesson.title)}
-                                    disabled={pending}
-                                  />
+                                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                    <RowActions
+                                      viewHref={`/lectie/${lesson.id}`}
+                                      onEdit={() => startEdit('lesson', lesson.id, mod.id)}
+                                      onUp={li > 0 ? () => move('lesson', lesson.id, 'up', mod.id) : undefined}
+                                      onDown={li < mod.lessons.length - 1 ? () => move('lesson', lesson.id, 'down', mod.id) : undefined}
+                                      onDelete={() => remove('lesson', lesson.id, lesson.title)}
+                                      disabled={pending}
+                                    />
+                                  </div>
                                 </li>
                               ))}
                             </ul>
