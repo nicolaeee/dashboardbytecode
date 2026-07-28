@@ -24,10 +24,16 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
     <div className="space-y-4">
       {tree.map((platform) => (
         <Card key={platform.id} className="overflow-hidden">
-          <div className="flex items-start gap-3 border-l-4 px-5 py-4" style={{ borderColor: platform.accent }}>
-            <button onClick={() => toggle(platform.id)} className="mt-0.5 text-lock hover:text-ink" aria-label="Extinde">
+          <div
+            onClick={() => toggle(platform.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(platform.id); } }}
+            role="button" tabIndex={0} aria-expanded={open.has(platform.id)}
+            className="flex cursor-pointer items-start gap-3 border-l-4 px-5 py-4 transition hover:bg-slate-25"
+            style={{ borderColor: platform.accent }}
+          >
+            <span className="mt-0.5 text-lock">
               {open.has(platform.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-            </button>
+            </span>
             <div className="min-w-0 flex-1">
               <h2 className="font-display text-xl font-semibold">{platform.name}</h2>
               {platform.description && <p className="mt-0.5 text-sm text-ink/55">{platform.description}</p>}
@@ -41,10 +47,15 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
               {platform.courses.map((course) => (
                 <section key={course.id} className="rail">
                   <span className="rail-dot" style={{ background: platform.accent }} />
-                  <div className="flex items-start gap-2">
-                    <button onClick={() => toggle(course.id)} className="mt-0.5 text-lock hover:text-ink" aria-label="Extinde">
+                  <div
+                    onClick={() => toggle(course.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(course.id); } }}
+                    role="button" tabIndex={0} aria-expanded={open.has(course.id)}
+                    className="-mx-2 flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1 transition hover:bg-brand-50"
+                  >
+                    <span className="mt-0.5 text-lock">
                       {open.has(course.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
+                    </span>
                     <div className="min-w-0 flex-1">
                       <h3 className="font-medium">{course.title}</h3>
                       {course.description && <p className="text-[13px] text-ink/50">{course.description}</p>}
@@ -58,10 +69,15 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
                       {course.modules.map((mod, mi) => (
                         <li key={mod.id}
                           className={`glass rounded-xl border px-4 py-3 ${mod.unlocked ? 'border-line' : 'border-dashed border-line opacity-70'}`}>
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => toggle(mod.id)} className="text-lock hover:text-ink" aria-label="Extinde">
+                          <div
+                            onClick={() => toggle(mod.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(mod.id); } }}
+                            role="button" tabIndex={0} aria-expanded={open.has(mod.id)}
+                            className="-mx-4 -my-3 flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition hover:bg-brand-50"
+                          >
+                            <span className="text-lock">
                               {open.has(mod.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                            </button>
+                            </span>
                             <span className="tag w-7 shrink-0">M{mi + 1}</span>
                             <span className={`min-w-0 flex-1 truncate text-[15px] ${mod.unlocked ? '' : 'text-lock'}`}>
                               {mod.title}

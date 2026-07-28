@@ -504,29 +504,6 @@
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        // Preia datele reale (elev, profesor, data, stelute) din query string, injectate de
-        // Progress Tracker la momentul generarii diplomei. Fara parametri (deschidere manuala),
-        // raman valorile implicite din sablon, editabile direct pe pagina.
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl && studentName) { nameEl.innerText = studentName; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0] && teacherName) sigValues[0].innerText = teacherName;
-                if (sigValues[1] && dateStr) sigValues[1].innerText = dateStr;
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

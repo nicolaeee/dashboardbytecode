@@ -136,6 +136,27 @@ function nextLocalId() { uid += 1; return `local-${Date.now()}-${uid}`; }
 function nowDate() { return new Date().toISOString().slice(0, 10); }
 function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 
+const DAY_TO_JS_INDEX: Record<string, number> = { duminica: 0, luni: 1, marti: 2, miercuri: 3, joi: 4, vineri: 5, sambata: 6 };
+
+// Numele clasei se genereaza automat din Modul + Ziua + Ora, nu se mai scrie manual.
+function buildAutoClassName(moduleNum: number, dayId: string | null, time: string) {
+  const parts = [`M${moduleNum}`];
+  const dayLabel = DAYS.find((d) => d.id === dayId)?.label;
+  if (dayLabel) parts.push(time ? `${dayLabel} la ${time}` : dayLabel);
+  else if (time) parts.push(`la ${time}`);
+  return parts.join(' ');
+}
+
+// Urmatoarea data (azi sau in viitor) care cade pe ziua saptamanii configurata pentru clasa -
+// se recalculeaza mereu din setarea curenta a clasei, deci ramane sincronizata daca ziua se schimba.
+function nextDateForDay(dayId: string | null) {
+  if (!dayId || !(dayId in DAY_TO_JS_INDEX)) return nowDate();
+  const target = DAY_TO_JS_INDEX[dayId];
+  const d = new Date();
+  d.setDate(d.getDate() + ((target - d.getDay() + 7) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
 type ToastItem = { id: string; message: string; type: 'success' | 'error' };
 type CelebrationItem = { id: string; kind: 'text' | 'emoji'; content: string };
 type ConfettiItem = { id: string; left: number; duration: number; delay: number; emoji: string };
@@ -155,13 +176,18 @@ type ModalState =
   | { type: 'studentHistory'; studentId: string };
 
 export default function ProgressTracker({
-  teacherId, initialGroups, initialStudents, initialLessons, initialAttendance,
+  teacherId, isAdmin, teacherOptions, initialGroups, initialStudents, initialLessons, initialAttendance,
 }: {
-  teacherId: string; initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
+  teacherId: string; isAdmin: boolean; teacherOptions: { id: string; label: string }[];
+  initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
 }) {
   const supabase = useMemo(() => createClient(), []);
 
+  // Profesorul ale carui date sunt afisate acum - implicit propriul cont; adminul il
+  // poate schimba din dropdown-ul de mai jos, ceea ce reincarca totul pentru acel profesor.
+  const [viewedTeacherId, setViewedTeacherId] = useState(teacherId);
+  const [teacherSwitchLoading, setTeacherSwitchLoading] = useState(false);
   const [groups, setGroups] = useState<TrackerGroup[]>(initialGroups);
   const [students, setStudents] = useState<TrackerStudent[]>(initialStudents);
   const [lessons, setLessons] = useState<TrackerLesson[]>(initialLessons);
@@ -176,9 +202,10 @@ export default function ProgressTracker({
   const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [createForm, setCreateForm] = useState<{ name: string; count: number; reward: string; names: string[]; day: string | null; time: string; course: CourseId | null }>(
-    { name: '', count: 1, reward: 'stars', names: [''], day: null, time: '', course: null }
+  const [createForm, setCreateForm] = useState<{ module: number; count: number; reward: string; names: string[]; day: string | null; time: string; course: CourseId | null }>(
+    { module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null }
   );
+  const autoClassName = buildAutoClassName(createForm.module, createForm.day, createForm.time);
   const [editClassName, setEditClassName] = useState('');
   const [editClassDay, setEditClassDay] = useState<string | null>(null);
   const [editClassTime, setEditClassTime] = useState('');
@@ -189,6 +216,36 @@ export default function ProgressTracker({
   const [searchQuery, setSearchQuery] = useState('');
   const [newLessonForm, setNewLessonForm] = useState({ date: nowDate(), time: nowTime() });
   const [recoveryForm, setRecoveryForm] = useState({ date: nowDate(), time: nowTime() });
+
+  // Cand adminul schimba profesorul din dropdown, reincarca datele acelui profesor
+  // (acelasi tipar ca in /registru) si reseteaza navigarea, ca sa nu ramana o
+  // referinta agatata la o clasa care nu exista in noul set de date.
+  useEffect(() => {
+    if (viewedTeacherId === teacherId) {
+      setGroups(initialGroups); setStudents(initialStudents);
+      setLessons(initialLessons); setAttendance(initialAttendance);
+      setView('home'); setCurrentGroupId(null); setModal({ type: null });
+      return;
+    }
+    let cancelled = false;
+    setTeacherSwitchLoading(true);
+    (async () => {
+      const [{ data: g }, { data: s }, { data: l }, { data: a }] = await Promise.all([
+        supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
+        supabase.from('tracker_students').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
+        supabase.from('tracker_lessons').select('*').eq('teacher_id', viewedTeacherId).order('session_number'),
+        supabase.from('tracker_attendance').select('*').eq('teacher_id', viewedTeacherId),
+      ]);
+      if (cancelled) return;
+      setGroups((g ?? []) as TrackerGroup[]);
+      setStudents((s ?? []) as TrackerStudent[]);
+      setLessons((l ?? []) as TrackerLesson[]);
+      setAttendance((a ?? []) as TrackerAttendance[]);
+      setView('home'); setCurrentGroupId(null); setModal({ type: null });
+      setTeacherSwitchLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [viewedTeacherId, teacherId, initialGroups, initialStudents, initialLessons, initialAttendance, supabase]);
 
   // ---- selectori ----
   const activeGroups = groups.filter((g) => !g.deleted_at);
@@ -277,7 +334,7 @@ export default function ProgressTracker({
 
   async function handleCreateClass(e: React.FormEvent) {
     e.preventDefault();
-    const name = createForm.name.trim();
+    const name = autoClassName;
     const names = createForm.names.map((n) => n.trim()).filter(Boolean);
     if (!name) return showToast('Introdu numele clasei', 'error');
     if (names.length === 0) return showToast('Adauga cel putin un elev', 'error');
@@ -286,14 +343,14 @@ export default function ProgressTracker({
     setBusy(true);
     const { data: group, error } = await supabase.from('tracker_groups')
       .insert({
-        teacher_id: teacherId, group_name: name, module_count: 1, reward_type: createForm.reward,
+        teacher_id: viewedTeacherId, group_name: name, module_count: createForm.module, reward_type: createForm.reward,
         day_of_week: createForm.day, time_of_day: createForm.time || null, course: createForm.course,
       })
       .select().single();
     if (error || !group) { setBusy(false); return showToast('Eroare la creare clasa', 'error'); }
 
     const { data: newStudents, error: sErr } = await supabase.from('tracker_students')
-      .insert(names.map((n) => ({ teacher_id: teacherId, group_id: group.id, name: n, progress: 0 })))
+      .insert(names.map((n) => ({ teacher_id: viewedTeacherId, group_id: group.id, name: n, progress: 0 })))
       .select();
     setBusy(false);
 
@@ -302,7 +359,7 @@ export default function ProgressTracker({
     if (sErr) showToast('Eroare la creare elevi', 'error');
 
     setModal({ type: null });
-    setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '', course: null });
+    setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null });
     showToast('Clasa creata cu succes!');
   }
 
@@ -360,7 +417,7 @@ export default function ProgressTracker({
     if (totalDataCount >= 999) return showToast('Limita de date atinsa (999)', 'error');
 
     const { data, error } = await supabase.from('tracker_students')
-      .insert({ teacher_id: teacherId, group_id: currentGroupId, name, progress: 0 }).select().single();
+      .insert({ teacher_id: viewedTeacherId, group_id: currentGroupId, name, progress: 0 }).select().single();
     if (error || !data) return showToast('Eroare', 'error');
     setStudents((ss) => [...ss, data as TrackerStudent]);
     setModal({ type: null });
@@ -521,7 +578,8 @@ export default function ProgressTracker({
   }
 
   function openNewLessonModal(groupId: string) {
-    setNewLessonForm({ date: nowDate(), time: nowTime() });
+    const group = groups.find((g) => g.id === groupId);
+    setNewLessonForm({ date: nextDateForDay(group?.day_of_week ?? null), time: group?.time_of_day || nowTime() });
     setModal({ type: 'newLesson', groupId });
   }
 
@@ -600,22 +658,38 @@ export default function ProgressTracker({
   return (
     <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white flex flex-col overflow-x-hidden">
       <header className="glass sticky top-0 z-40 px-4 py-4 border-b border-white/10">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <h1 className="text-xl md:text-2xl font-bold">🚀 Progress Tracker</h1>
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            className="w-10 h-10 bg-[#C8F023] rounded-xl flex flex-col items-center justify-center gap-1.5 z-50"
-            aria-label="Meniu"
-          >
-            <span className={`burger-line w-5 h-0.5 bg-black rounded transition-all ${menuOpen ? 'translate-y-2 rotate-45' : ''}`} />
-            <span className={`burger-line w-5 h-0.5 bg-black rounded transition-all ${menuOpen ? 'opacity-0' : ''}`} />
-            <span className={`burger-line w-5 h-0.5 bg-black rounded transition-all ${menuOpen ? '-translate-y-2 -rotate-45' : ''}`} />
-          </button>
+        <div className="flex items-center justify-between max-w-6xl mx-auto gap-3">
+          <h1 className="text-xl md:text-2xl font-bold shrink-0">🚀 Progress Tracker</h1>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <select
+                value={viewedTeacherId}
+                onChange={(e) => setViewedTeacherId(e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white max-w-[45vw] md:max-w-none"
+              >
+                <option value={teacherId} className="bg-gray-900 text-white">Eu (propriile clase)</option>
+                {teacherOptions.filter((t) => t.id !== teacherId).map((t) => (
+                  <option key={t.id} value={t.id} className="bg-gray-900 text-white">{t.label}</option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="w-10 h-10 bg-[#C8F023] rounded-xl flex flex-col items-center justify-center gap-1.5 z-50 shrink-0"
+              aria-label="Meniu"
+            >
+              <span className={`burger-line w-5 h-0.5 bg-black rounded transition-all ${menuOpen ? 'translate-y-2 rotate-45' : ''}`} />
+              <span className={`burger-line w-5 h-0.5 bg-black rounded transition-all ${menuOpen ? 'opacity-0' : ''}`} />
+              <span className={`burger-line w-5 h-0.5 bg-black rounded transition-all ${menuOpen ? '-translate-y-2 -rotate-45' : ''}`} />
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="flex-1 p-4 max-w-6xl mx-auto w-full">
-        {view === 'home' ? (
+        {teacherSwitchLoading ? (
+          <div className="flex justify-center py-20"><div className="tracker-spinner" /></div>
+        ) : view === 'home' ? (
           <div>
             <div className="flex justify-between items-center mb-4 gap-3">
               <h2 className="text-lg md:text-xl font-semibold">📚 Clasele Tale</h2>
@@ -716,7 +790,7 @@ export default function ProgressTracker({
               recentGroups={[...activeGroups].slice(-5).reverse()}
               deletedCount={deletedGroups.length}
               onOpenClass={openClass}
-              onCreate={() => { setCreateForm({ name: '', count: 1, reward: 'stars', names: [''], day: null, time: '', course: null }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
+              onCreate={() => { setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
               onTrash={() => { setModal({ type: 'trashGroups' }); setMenuOpen(false); }}
             />
           ) : currentGroup ? (
@@ -766,21 +840,28 @@ export default function ProgressTracker({
           <h3 className="text-xl font-bold mb-4 text-[#C8F023]">➕ Creaza Clasa Noua</h3>
           <form onSubmit={handleCreateClass}>
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Numele Lectiei</label>
+              <label className="block text-sm font-semibold mb-2">Numele Clasei <span className="text-gray-500 font-normal">(generat automat)</span></label>
               <input
-                type="text" value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="ex: M1 - Luni - 19:00" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+                type="text" value={autoClassName} readOnly
+                className="w-full bg-gray-800/60 border border-gray-700 rounded-2xl px-4 py-3 text-gray-300 cursor-not-allowed"
               />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">Modul</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((m) => (
+                  <button
+                    key={m} type="button" onClick={() => setCreateForm((f) => ({ ...f, module: m }))}
+                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.module === m ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+                  >
+                    Modul {m}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="mb-4">
               <label className="block text-sm font-semibold mb-2">Ziua saptamanii</label>
               <div className="grid grid-cols-4 gap-2">
-                <button
-                  type="button" onClick={() => setCreateForm((f) => ({ ...f, day: null }))}
-                  className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.day === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
-                >
-                  Nespecificat
-                </button>
                 {DAYS.map((d) => (
                   <button
                     key={d.id} type="button" onClick={() => setCreateForm((f) => ({ ...f, day: d.id }))}
@@ -792,7 +873,7 @@ export default function ProgressTracker({
               </div>
             </div>
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Ora (optional)</label>
+              <label className="block text-sm font-semibold mb-2">Ora</label>
               <input
                 type="time" value={createForm.time} onChange={(e) => setCreateForm((f) => ({ ...f, time: e.target.value }))}
                 className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
@@ -812,7 +893,7 @@ export default function ProgressTracker({
               </div>
             </div>
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Curs (pentru diplome)</label>
+              <label className="block text-sm font-semibold mb-2">Aplicatia / Materia (pentru diplome)</label>
               <div className="grid grid-cols-4 gap-2">
                 <button
                   type="button" onClick={() => setCreateForm((f) => ({ ...f, course: null }))}
@@ -820,7 +901,7 @@ export default function ProgressTracker({
                 >
                   Nespecificat
                 </button>
-                {COURSES.map((c) => (
+                {COURSES.filter((c) => c.id !== 'delighted').map((c) => (
                   <button
                     key={c.id} type="button" onClick={() => setCreateForm((f) => ({ ...f, course: c.id }))}
                     className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.course === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
@@ -1289,12 +1370,21 @@ function StudentHistoryModal({
   onClose: () => void;
 }) {
   const rewardEmoji = group ? getRewardEmoji(group.reward_type) : '⭐';
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const statusOf = (r: TrackerAttendance | null): AttendanceStatus => r?.status ?? 'absent';
-  const presentCount = history.filter((h) => statusOf(h.record) === 'present').length;
-  const absentCount = history.filter((h) => statusOf(h.record) === 'absent').length;
-  const madeUpCount = history.filter((h) => statusOf(h.record) === 'made_up').length;
-  const starsCount = history.filter((h) => h.record?.has_star).length;
-  const sortedDesc = [...history].sort((a, b) => b.lesson.session_number - a.lesson.session_number);
+  const filteredHistory = history.filter(({ lesson }) => {
+    if (startDate && lesson.lesson_date < startDate) return false;
+    if (endDate && lesson.lesson_date > endDate) return false;
+    return true;
+  });
+  const totalCount = filteredHistory.length;
+  const presentCount = filteredHistory.filter((h) => statusOf(h.record) === 'present').length;
+  const notRecoveredCount = filteredHistory.filter((h) => statusOf(h.record) === 'absent').length;
+  const madeUpCount = filteredHistory.filter((h) => statusOf(h.record) === 'made_up').length;
+  const absentCount = notRecoveredCount + madeUpCount;
+  const starsCount = filteredHistory.filter((h) => h.record?.has_star).length;
+  const sortedDesc = [...filteredHistory].sort((a, b) => b.lesson.session_number - a.lesson.session_number);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -1316,28 +1406,53 @@ function StudentHistoryModal({
           </button>
         </div>
 
+        <div className="grid grid-cols-2 gap-2 px-4 pt-4 shrink-0">
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-400 mb-1">Data Început</label>
+            <input
+              type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-400 mb-1">Data Sfârșit</label>
+            <input
+              type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-4 gap-2 p-4 shrink-0">
+          <div className="rounded-2xl bg-white/5 border border-white/10 py-3 text-center">
+            <div className="text-lg font-bold text-white">{totalCount}</div>
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total</div>
+          </div>
           <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 py-3 text-center">
             <div className="text-lg font-bold text-emerald-400">{presentCount}</div>
-            <div className="text-[10px] font-semibold text-emerald-400/80 uppercase tracking-wide">Prezent</div>
-          </div>
-          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 py-3 text-center">
-            <div className="text-lg font-bold text-red-400">{absentCount}</div>
-            <div className="text-[10px] font-semibold text-red-400/80 uppercase tracking-wide">Absent</div>
+            <div className="text-[10px] font-semibold text-emerald-400/80 uppercase tracking-wide">✅ Prezențe</div>
           </div>
           <div className="rounded-2xl bg-blue-500/10 border border-blue-500/20 py-3 text-center">
             <div className="text-lg font-bold text-blue-400">{madeUpCount}</div>
-            <div className="text-[10px] font-semibold text-blue-400/80 uppercase tracking-wide">Recuperat</div>
+            <div className="text-[10px] font-semibold text-blue-400/80 uppercase tracking-wide">🔄 Recuperări</div>
           </div>
           <div className="rounded-2xl bg-[#C8F023]/10 border border-[#C8F023]/30 py-3 text-center">
             <div className="text-lg font-bold text-[#C8F023]">{starsCount}</div>
             <div className="text-[10px] font-semibold text-[#C8F023]/80 uppercase tracking-wide">{rewardEmoji} Teme</div>
           </div>
         </div>
+        <div className="px-4 pb-4 shrink-0">
+          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 py-3 px-4 text-center text-sm">
+            <span className="font-bold text-red-400">❌ Absențe: {absentCount}</span>
+            <span className="text-red-400/70"> (din care {madeUpCount} recuperate, {notRecoveredCount} nerecuperate)</span>
+          </div>
+        </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
           {sortedDesc.length === 0 ? (
-            <p className="text-gray-400 text-center py-10 text-sm">Nicio lecție inregistrata inca pentru aceasta clasa.</p>
+            <p className="text-gray-400 text-center py-10 text-sm">
+              {history.length === 0 ? 'Nicio lecție inregistrata inca pentru aceasta clasa.' : 'Nicio lecție în intervalul selectat.'}
+            </p>
           ) : (
             sortedDesc.map(({ lesson, record }) => {
               const status = statusOf(record);
@@ -1352,6 +1467,7 @@ function StudentHistoryModal({
                       Lecția {lesson.session_number}
                       <span className="text-gray-400 font-normal ml-2">
                         {new Date(lesson.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        {lesson.lesson_time ? ` - ${lesson.lesson_time}` : ''}
                       </span>
                     </div>
                     {status === 'made_up' && record?.recovery_date && (

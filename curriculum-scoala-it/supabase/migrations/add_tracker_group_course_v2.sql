@@ -8,4 +8,5 @@
 
 alter table public.tracker_groups drop constraint if exists tracker_groups_course_check;
 alter table public.tracker_groups add constraint tracker_groups_course_check
-  check (course in ('coblocks', 'python', 'roblox', 'alfabetizare', 'unity', 'delighted'));
+  check (course in ('coblocks', 'python', 'roblox', 'alfabetizare', 'unity'));
+

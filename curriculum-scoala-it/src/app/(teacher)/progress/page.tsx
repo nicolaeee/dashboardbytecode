@@ -8,26 +8,23 @@ export default async function ProgressTrackerPage() {
   const supabase = await createClient();
   const isAdmin = profile.role === 'admin';
 
-  // Adminul vede toate grupele tuturor profesorilor (RLS permite acest lucru doar lui);
-  // profesorul ramane restrictionat la propriile date, ca pana acum.
-  let groupsQuery = supabase.from('tracker_groups').select('*').order('created_at');
-  let studentsQuery = supabase.from('tracker_students').select('*').order('created_at');
-  let lessonsQuery = supabase.from('tracker_lessons').select('*').order('session_number');
-  let attendanceQuery = supabase.from('tracker_attendance').select('*');
-  if (!isAdmin) {
-    groupsQuery = groupsQuery.eq('teacher_id', profile.id);
-    studentsQuery = studentsQuery.eq('teacher_id', profile.id);
-    lessonsQuery = lessonsQuery.eq('teacher_id', profile.id);
-    attendanceQuery = attendanceQuery.eq('teacher_id', profile.id);
-  }
-
-  const [{ data: groups }, { data: students }, { data: lessons }, { data: attendance }] = await Promise.all([
-    groupsQuery, studentsQuery, lessonsQuery, attendanceQuery,
+  // Fiecare cont vede implicit doar propriile date; adminul poate alege alt profesor
+  // din dropdown-ul din Progress Tracker (reincarcare client-side, ca in /registru).
+  const [{ data: groups }, { data: students }, { data: lessons }, { data: attendance }, teachersRes] = await Promise.all([
+    supabase.from('tracker_groups').select('*').eq('teacher_id', profile.id).order('created_at'),
+    supabase.from('tracker_students').select('*').eq('teacher_id', profile.id).order('created_at'),
+    supabase.from('tracker_lessons').select('*').eq('teacher_id', profile.id).order('session_number'),
+    supabase.from('tracker_attendance').select('*').eq('teacher_id', profile.id),
+    isAdmin
+      ? supabase.from('profiles').select('id, full_name, email').order('full_name')
+      : Promise.resolve({ data: null as { id: string; full_name: string; email: string }[] | null }),
   ]);
 
   return (
     <ProgressTracker
       teacherId={profile.id}
+      isAdmin={isAdmin}
+      teacherOptions={(teachersRes.data ?? []).map((t) => ({ id: t.id, label: t.full_name || t.email }))}
       initialGroups={(groups ?? []) as TrackerGroup[]}
       initialStudents={(students ?? []) as TrackerStudent[]}
       initialLessons={(lessons ?? []) as TrackerLesson[]}

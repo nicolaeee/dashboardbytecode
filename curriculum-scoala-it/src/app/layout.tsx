@@ -7,7 +7,7 @@ const body = Inter({ subsets: ['latin', 'latin-ext'], variable: '--font-body', d
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'ByteCode Portal',
+  title: 'ByteCode Dashboard',
   description: 'Platformă internă de curriculum pentru administratori și profesori.',
   // Emblema ByteCode (src/app/favicon.ico) - explicit, ca sa suprascrie mereu iconita
   // implicita a browserului, pe toate rutele Next.js ale aplicatiei.

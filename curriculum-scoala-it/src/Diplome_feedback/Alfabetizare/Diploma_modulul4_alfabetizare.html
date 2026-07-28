@@ -499,24 +499,6 @@
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        // Preia datele reale (elev, profesor, data) din query string, injectate de Progress
-        // Tracker la momentul generarii diplomei. Fara parametri (deschidere manuala), raman
-        // valorile implicite din sablon, editabile direct pe pagina. Modulul 4 nu are steluțe.
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl && studentName) { nameEl.innerText = studentName; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0] && teacherName) sigValues[0].innerText = teacherName;
-                if (sigValues[1] && dateStr) sigValues[1].innerText = dateStr;
-            });
-        })();
     </script>
 </body>
 </html>

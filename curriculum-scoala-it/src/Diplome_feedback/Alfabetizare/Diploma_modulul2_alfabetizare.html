@@ -4,12 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-            <link rel="shortcut icon" href="../res/favicon.ico" type="image/x-icon">
+        <link rel="shortcut icon" href="../res/favicon.ico" type="image/x-icon">
 
+    <title>Portofoliu Modul 2 - Alfabetizare 3D</title>
 
-    <title>Portofoliu Modul 3 - Alfabetizare (Jocuri 3D)</title>
-
-    <!-- Fonturi: Inter, Nunito (Suport diacritice, aspect bubbly), Fira Code -->
+    <!-- Fonturi: Inter, Nunito (Suport diacritice), Fira Code -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fira+Code:wght@400;600&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -17,37 +16,37 @@
 
     <style>
         :root {
-            /* Culori Brand & Arcade Theme (M3) */
+            /* Culori Brand & Kids Space Theme */
             --brand-color: #C8F023;    /* Verdele Neon ByteCode */
-            --bg-dark: #1e102f;        /* Deep Arcade Purple */
+            --bg-dark: #0f172a;        /* Deep Space Blue */
             --text-main: #f8fafc;
 
-            /* Accente Specifice Modulului 3 (Jocuri/Evenimente) */
-            --arcade-pink: #f43f5e;
-            --arcade-orange: #fb923c;
-            --arcade-cyan: #22d3ee;
+            /* Accente Specifice Modulului 2 (Space/Motion) */
+            --space-cyan: #22d3ee;
+            --space-lime: #a3e635;
+            --space-purple: #c084fc;
         }
 
         body {
-            background-color: #0b0514; color: var(--text-main); font-family: 'Inter', sans-serif;
+            background-color: #020617; color: var(--text-main); font-family: 'Inter', sans-serif;
             margin: 0; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh;
         }
 
         /* === TOOLBAR === */
         .toolbar {
-            background: rgba(30, 16, 47, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px); padding: 15px 30px; border-radius: 16px; margin-bottom: 40px;
             display: flex; gap: 20px; align-items: center; z-index: 100; position: sticky; top: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.8); border-bottom: 3px solid var(--arcade-pink);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8); border-bottom: 3px solid var(--space-cyan);
         }
 
         button.download-btn, button.action-btn {
-            background: linear-gradient(90deg, var(--arcade-pink), var(--arcade-orange)); color: #fff; border: none; padding: 12px 28px;
+            background: linear-gradient(90deg, var(--space-cyan), var(--space-purple)); color: #fff; border: none; padding: 12px 28px;
             font-size: 15px; font-family: 'Nunito', sans-serif; font-weight: 800; border-radius: 12px;
-            cursor: pointer; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(244, 63, 94, 0.4);
+            cursor: pointer; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
             text-transform: uppercase; letter-spacing: 0.5px;
         }
-        button.download-btn:hover, button.action-btn:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(244, 63, 94, 0.6); }
+        button.download-btn:hover, button.action-btn:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(34, 211, 238, 0.6); }
 
         button.cancel-btn {
             background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2);
@@ -65,125 +64,135 @@
             width: 1200px; height: 800px; position: relative; overflow: hidden; flex-shrink: 0;
             background-color: var(--bg-dark); border-radius: 30px;
             box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 30px 60px rgba(0,0,0,0.8);
-            /* Grid Arcade Floor */
-            background-image:
-                linear-gradient(rgba(244, 63, 94, 0.05) 2px, transparent 2px),
-                linear-gradient(90deg, rgba(244, 63, 94, 0.05) 2px, transparent 2px);
-            background-size: 50px 50px;
+            /* Grid subtil stil matrice */
+            background-image: radial-gradient(rgba(255, 255, 255, 0.05) 2px, transparent 2px);
+            background-size: 40px 40px;
         }
 
-        /* Ambient Arcade Glow */
-        .glow-1 {
-            position: absolute; top: -200px; right: -200px; width: 800px; height: 800px;
-            background: radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, transparent 60%);
+        /* Ambient Space Glow */
+        .space-glow-1 {
+            position: absolute; top: -200px; left: -200px; width: 800px; height: 800px;
+            background: radial-gradient(circle, rgba(34, 211, 238, 0.15) 0%, transparent 60%);
             border-radius: 50%; pointer-events: none; z-index: 1;
         }
-        .glow-2 {
-            position: absolute; bottom: -200px; left: -200px; width: 800px; height: 800px;
-            background: radial-gradient(circle, rgba(34, 211, 238, 0.1) 0%, transparent 60%);
+        .space-glow-2 {
+            position: absolute; bottom: -200px; right: -200px; width: 800px; height: 800px;
+            background: radial-gradient(circle, rgba(163, 230, 53, 0.1) 0%, transparent 60%);
             border-radius: 50%; pointer-events: none; z-index: 1;
         }
 
-        /* === ELEMENTE FLOTANTE "GAME CREATOR" === */
-        .floating-element { position: absolute; z-index: 2; pointer-events: none; animation: float-arcade 8s ease-in-out infinite; }
-        @keyframes float-arcade {
+        /* === ELEMENTE FLOTANTE "3D CREATOR" === */
+        .floating-element { position: absolute; z-index: 2; pointer-events: none; animation: float-space 10s ease-in-out infinite; }
+        @keyframes float-space {
             0% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(-5deg); }
+            50% { transform: translateY(-25px) rotate(5deg); }
             100% { transform: translateY(0px) rotate(0deg); }
         }
         .exporting-pdf .floating-element { animation: none !important; transform: none !important; }
 
-        /* Controller / Gamepad */
-        .icon-gamepad { top: 10%; left: 8%; width: 160px; filter: drop-shadow(0 15px 25px rgba(244, 63, 94, 0.4)); animation-delay: 0s; transform: rotate(-10deg); }
+        /* Racheta Jucausa / Navigatie 3D */
+        .icon-rocket { top: 8%; left: 8%; width: 140px; filter: drop-shadow(0 15px 25px rgba(34, 211, 238, 0.4)); animation-delay: 0s; transform: rotate(15deg); }
 
-        /* Moneda / Scor / Puncte */
-        .icon-coin { bottom: 15%; right: 10%; width: 120px; filter: drop-shadow(0 15px 25px rgba(251, 146, 60, 0.4)); animation-delay: -3s; transform: rotate(15deg); }
+        /* Planeta / Sfera rotativa */
+        .icon-planet { bottom: 12%; right: 10%; width: 160px; filter: drop-shadow(0 15px 25px rgba(192, 132, 252, 0.4)); animation-delay: -3s; }
 
-        /* Buton de actiune (Eveniment) */
-        .icon-action { top: 20%; right: 15%; width: 110px; filter: drop-shadow(0 15px 20px rgba(34, 211, 238, 0.4)); animation-delay: -5s; transform: rotate(10deg); }
+        /* Cub constructie */
+        .icon-build { top: 15%; right: 15%; width: 100px; filter: drop-shadow(0 15px 20px rgba(163, 230, 53, 0.4)); animation-delay: -5s; transform: rotate(-15deg); }
 
         /* === EDITABLE ELEMENTS === */
         [contenteditable="true"] { outline: none; cursor: text; transition: all 0.2s; border-bottom: 2px dashed transparent; }
-        [contenteditable="true"]:hover { border-bottom: 2px dashed rgba(244, 63, 94, 0.5); }
+        [contenteditable="true"]:hover { border-bottom: 2px dashed rgba(34, 211, 238, 0.5); }
         [contenteditable="true"]:focus { background: rgba(255, 255, 255, 0.1); border-radius: 8px; }
 
         /* =========================================
-           PAGINA 1: DIPLOMA GAME CREATOR
+           PAGINA 1: DIPLOMA
            ========================================= */
+        /* Orbita uriasa din spatele textului diplomei */
+        .diploma-orbit {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 900px; height: 900px; border-radius: 50%;
+            border: 2px dashed rgba(34, 211, 238, 0.2);
+            z-index: 1; pointer-events: none;
+        }
+        .diploma-orbit::after {
+            content: ''; position: absolute; top: 15%; left: 15%; right: 15%; bottom: 15%;
+            border-radius: 50%; border: 4px solid rgba(163, 230, 53, 0.1);
+        }
+
         .diploma-content {
-            position: absolute; top: 60px; left: 60px; right: 60px; bottom: 60px;
+            position: absolute; top: 50px; left: 50px; right: 50px; bottom: 50px;
             z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: rgba(30, 16, 47, 0.6); backdrop-filter: blur(10px);
-            border-radius: 40px; border: 2px solid rgba(244, 63, 94, 0.2);
-            box-shadow: inset 0 0 50px rgba(244, 63, 94, 0.05);
         }
 
         .content-top { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 
         .diploma-label {
-            color: var(--brand-color); font-family: 'Nunito', sans-serif; font-size: 22px;
+            color: var(--space-lime); font-family: 'Nunito', sans-serif; font-size: 22px;
             letter-spacing: 3px; text-transform: uppercase; margin-bottom: 15px; font-weight: 900;
-            background: rgba(200, 240, 35, 0.1); padding: 10px 30px; border-radius: 50px; border: 2px solid rgba(200, 240, 35, 0.3);
+            background: rgba(163, 230, 53, 0.1); padding: 10px 30px; border-radius: 50px; border: 2px solid rgba(163, 230, 53, 0.4);
+            box-shadow: 0 0 20px rgba(163, 230, 53, 0.2);
         }
 
         .main-title {
-            font-family: 'Nunito', sans-serif; font-size: 75px; font-weight: 900; color: #fff; margin: 0; letter-spacing: 1px; line-height: 1.1;
-            text-shadow: 0 5px 20px rgba(244, 63, 94, 0.5); text-transform: uppercase;
+            font-family: 'Nunito', sans-serif; font-size: 80px; font-weight: 900; color: #fff; margin: 0; letter-spacing: 1px; line-height: 1.1;
+            text-shadow: 0 5px 20px rgba(34, 211, 238, 0.5); text-transform: uppercase;
         }
 
         .subtitle { font-family: 'Inter'; font-size: 22px; color: #cbd5e1; margin: 25px 0 10px 0; font-weight: 400; }
 
         .student-name {
-            font-family: 'Nunito', sans-serif; font-size: 90px; font-weight: 900; color: var(--arcade-cyan); margin: 0 0 25px 0;
-            text-shadow: 0 0 30px rgba(34, 211, 238, 0.4); letter-spacing: 1px;
+            font-family: 'Nunito', sans-serif; font-size: 90px; font-weight: 900; color: var(--space-cyan); margin: 0 0 25px 0;
+            text-shadow: 0 0 30px rgba(34, 211, 238, 0.4); letter-spacing: 2px;
         }
 
         .course-title {
             font-family: 'Nunito', sans-serif; font-size: 30px; font-weight: 800; color: #fff; margin: 0;
-            padding: 18px 45px; background: linear-gradient(90deg, rgba(244, 63, 94, 0.8), rgba(251, 146, 60, 0.8));
-            border-radius: 100px; box-shadow: 0 15px 30px rgba(0,0,0,0.4); border: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 18px 45px; background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px);
+            border-radius: 20px; box-shadow: 0 15px 30px rgba(0,0,0,0.5); border: 2px solid rgba(192, 132, 252, 0.4);
         }
 
         .footer-p1 {
             display: flex; justify-content: space-between; align-items: flex-end; width: 100%;
-            padding: 0 60px 20px 60px;
+            padding: 0 40px;
         }
 
         .signature-block { display: flex; flex-direction: column; align-items: center; width: 240px; }
         .sig-value { font-family: 'Nunito', sans-serif; font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 12px; }
-        .sig-line { width: 100%; height: 3px; background: rgba(244, 63, 94, 0.5); margin-bottom: 10px; border-radius: 2px; }
-        .sig-label { font-family: 'Inter'; font-size: 14px; color: var(--arcade-pink); text-transform: uppercase; letter-spacing: 1px; font-weight: 800;}
+        .sig-line { width: 100%; height: 3px; background: rgba(34, 211, 238, 0.4); margin-bottom: 10px; border-radius: 2px; box-shadow: 0 0 10px rgba(34, 211, 238, 0.4);}
+        .sig-label { font-family: 'Inter'; font-size: 14px; color: var(--space-cyan); text-transform: uppercase; letter-spacing: 1px; font-weight: 800;}
 
         .logo-center { display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,0.4); padding: 15px 30px; border-radius: 20px; border: 1px solid rgba(200, 240, 35, 0.2); backdrop-filter: blur(5px);}
         .logo-text { font-family: 'Fira Code', monospace; font-size: 24px; font-weight: 800; color: var(--brand-color); letter-spacing: -1px; margin-bottom: 5px;}
         .logo-text span { color: #fff; }
 
         /* =========================================
-           PAGINA 2: STELUȚE (Level Select) - FĂRĂ FEEDBACK
+           PAGINA 2: STELUȚE (Orbita Spatiala) - FĂRĂ FEEDBACK
            ========================================= */
         #page-2 { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
-        .stars-header { text-align: center; margin-bottom: 50px; z-index: 10; }
-        .sh-top { font-family: 'Nunito', sans-serif; color: var(--arcade-orange); font-size: 24px; letter-spacing: 3px; margin-bottom: 10px; font-weight: 900; text-transform: uppercase;}
-        .sh-main { font-family: 'Nunito', sans-serif; font-size: 75px; font-weight: 900; color: #fff; margin: 0; text-shadow: 0 5px 20px rgba(251, 146, 60, 0.4); text-transform: uppercase;}
+        .stars-header { text-align: center; margin-bottom: 40px; z-index: 10; }
+        .sh-top { font-family: 'Nunito', sans-serif; color: var(--space-lime); font-size: 22px; letter-spacing: 2px; margin-bottom: 10px; font-weight: 900; text-transform: uppercase;}
+        .sh-main { font-family: 'Nunito', sans-serif; font-size: 70px; font-weight: 900; color: #fff; margin: 0; text-shadow: 0 5px 20px rgba(34, 211, 238, 0.4); text-transform: uppercase;}
 
-        /* Format Arcade Level Select */
-        .arcade-grid-box {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 30px; margin-bottom: 40px; z-index: 10;
-            background: rgba(0,0,0,0.3); padding: 40px; border-radius: 40px; border: 3px dashed rgba(244, 63, 94, 0.3);
+        /* Zona Orbitei (Cercul urias cu stelele in el) */
+        .orbit-zone {
+            position: relative; width: 600px; height: 400px; display: flex; justify-content: center; align-items: center; margin-bottom: 40px; z-index: 10;
         }
 
-        /* SVG-ul curat, design Arcade Coin-Star */
-        .arcade-star { width: 75px; height: 75px; transition: transform 0.2s;}
+        /* Sistemul Solar de Stele - Flex wrap */
+        .stars-orbit-box {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 500px;
+        }
+
+        .space-star { width: 75px; height: 75px; transition: transform 0.2s;}
 
         .stars-footer {
-            background: rgba(30, 16, 47, 0.9); border: 2px solid rgba(244, 63, 94, 0.5);
-            padding: 15px 50px; border-radius: 100px; font-family: 'Inter'; font-size: 26px; color: var(--text-main); font-weight: 400; backdrop-filter: blur(10px);
+            background: rgba(30, 41, 59, 0.8); border: 2px solid rgba(34, 211, 238, 0.3);
+            padding: 20px 60px; border-radius: 100px; font-family: 'Inter'; font-size: 24px; color: var(--text-main); font-weight: 400; backdrop-filter: blur(10px);
             box-shadow: 0 15px 40px rgba(0,0,0,0.6); z-index: 10;
-            margin-bottom: 20px; /* Adaugat ca sa nu se lipeasca de jos */
         }
         .stars-footer span { color: #fff; font-weight: 600; }
-        .stars-footer .highlight { color: var(--brand-color); font-size: 40px; font-weight: 900; font-family: 'Nunito', sans-serif;}
+        .stars-footer .highlight { color: var(--space-cyan); font-size: 38px; font-weight: 900; font-family: 'Nunito', sans-serif; text-shadow: 0 0 10px rgba(34, 211, 238, 0.4);}
 
         /* =========================================
            SISTEM DE MODALE (POP-UP-URI)
@@ -195,14 +204,14 @@
         }
 
         .modal-box {
-            background: var(--bg-dark); border: 2px solid var(--arcade-pink);
+            background: rgba(15, 23, 42, 1); border: 2px solid var(--space-cyan);
             padding: 40px; border-radius: 30px; max-width: 500px; text-align: center;
             box-shadow: 0 20px 50px rgba(0,0,0,0.9); transform: translateY(20px); opacity: 0; animation: slideUp 0.3s forwards;
         }
         @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
 
         .modal-icon {
-            width: 70px; height: 70px; background: rgba(244, 63, 94, 0.1); color: var(--arcade-pink);
+            width: 70px; height: 70px; background: rgba(34, 211, 238, 0.1); color: var(--space-cyan);
             border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;
         }
         .modal-icon svg { width: 35px; height: 35px; stroke-width: 2.5;}
@@ -211,7 +220,7 @@
 
         .copy-box {
             background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 15px;
-            border-radius: 15px; font-family: 'Inter', sans-serif; font-size: 15px; color: var(--brand-color);
+            border-radius: 15px; font-family: 'Inter', sans-serif; font-size: 15px; color: var(--space-lime);
             margin-bottom: 25px; text-align: left; word-break: break-word; line-height: 1.5; font-weight: 600;
         }
 
@@ -222,70 +231,69 @@
     <div class="toolbar">
         <button class="download-btn" id="main-download-btn" onclick="openConfirmModal()">📥 Descarcă Portofoliul PDF</button>
         <div class="instructions">
-            ✏️ <b>Modul 3 (Alfabetizare Jocuri/Evenimente):</b> Design Arcade. Fără feedback, doar 2 pagini. Numele se sincronizează.
+            ✏️ <b>Modul 2 (Alfabetizare Digitală):</b> Tematica "Space/3D". Fără feedback. Doar 2 pagini (Diplomă + Colecția Spațială). Font Nunito.
         </div>
     </div>
 
     <div class="pages-wrapper">
 
         <!-- ==========================================
-             PAGINA 1: DIPLOMA ARCADE
+             PAGINA 1: DIPLOMA SPACE 3D
              ========================================== -->
         <div class="page" id="page-1">
-            <div class="glow-1"></div>
-            <div class="glow-2"></div>
+            <div class="space-glow-1"></div>
+            <div class="space-glow-2"></div>
+            <div class="diploma-orbit"></div>
 
-            <!-- Arcade Controller -->
-            <div class="floating-element icon-gamepad">
+            <!-- Racheta (Simbol miscare) -->
+            <div class="floating-element icon-rocket">
                 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="10" y="30" width="80" height="45" rx="20" fill="#334155" stroke="#94a3b8" stroke-width="3"/>
-                    <!-- D-PAD -->
-                    <rect x="25" y="45" width="15" height="5" fill="#f43f5e"/>
-                    <rect x="30" y="40" width="5" height="15" fill="#f43f5e"/>
-                    <!-- Buttons -->
-                    <circle cx="70" cy="55" r="5" fill="#fb923c"/>
-                    <circle cx="80" cy="45" r="5" fill="#22d3ee"/>
-                    <!-- Screen -->
-                    <rect x="40" y="40" width="20" height="15" rx="2" fill="#0f172a"/>
+                    <path d="M 50 10 C 65 25, 70 45, 70 65 L 80 80 L 50 75 L 20 80 L 30 65 C 30 45, 35 25, 50 10 Z" fill="#e2e8f0" stroke="#94a3b8" stroke-width="3" stroke-linejoin="round"/>
+                    <circle cx="50" cy="40" r="12" fill="#0f172a" stroke="#22d3ee" stroke-width="4"/>
+                    <path d="M 50 75 L 60 95 C 55 90, 45 90, 40 95 Z" fill="#fb923c"/>
+                    <path d="M 50 75 L 55 85 C 52 83, 48 83, 45 85 Z" fill="#facc15"/>
+                    <path d="M 15 50 L 30 55 L 25 65 Z" fill="#ef4444"/>
+                    <path d="M 85 50 L 70 55 L 75 65 Z" fill="#ef4444"/>
                 </svg>
             </div>
 
-            <!-- Coin / Point -->
-            <div class="floating-element icon-coin">
-                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="50" cy="50" r="35" fill="#facc15" stroke="#ca8a04" stroke-width="4"/>
-                    <circle cx="50" cy="50" r="25" fill="none" stroke="#fb923c" stroke-width="2" stroke-dasharray="4 4"/>
-                    <rect x="45" y="35" width="10" height="30" fill="#ca8a04" rx="2"/>
+            <!-- Sfera Planetara (Simbol spatiu) -->
+            <div class="floating-element icon-planet">
+                <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="60" cy="60" r="35" fill="#c084fc"/>
+                    <path d="M 15 60 C 15 35, 105 35, 105 60 C 105 70, 75 75, 60 75 C 45 75, 15 70, 15 60 Z" fill="none" stroke="#a3e635" stroke-width="6" stroke-linecap="round"/>
+                    <circle cx="50" cy="50" r="6" fill="#a855f7"/>
+                    <circle cx="75" cy="65" r="4" fill="#a855f7"/>
                 </svg>
             </div>
 
-            <!-- Action Button -->
-            <div class="floating-element icon-action">
+            <!-- Cub 3D (Simbol modelare/forma) -->
+            <div class="floating-element icon-build">
                 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <ellipse cx="50" cy="70" rx="35" ry="15" fill="#1e293b" stroke="#475569" stroke-width="3"/>
-                    <path d="M 20 60 C 20 40, 80 40, 80 60 L 80 70 C 80 85, 20 85, 20 70 Z" fill="#22d3ee" stroke="#0891b2" stroke-width="2"/>
-                    <ellipse cx="50" cy="60" rx="28" ry="8" fill="#67e8f9"/>
+                    <polygon points="50,15 85,35 50,55 15,35" fill="#a3e635"/>
+                    <polygon points="15,35 50,55 50,90 15,70" fill="#65a30d"/>
+                    <polygon points="50,55 85,35 85,70 50,90" fill="#4d7c0f"/>
                 </svg>
             </div>
 
             <div class="diploma-content">
                 <div class="content-top">
-                    <div class="diploma-label" contenteditable="true" spellcheck="false">Certificat de Creator de Jocuri</div>
+                    <div class="diploma-label" contenteditable="true" spellcheck="false">Certificat Spațial</div>
                     <h1 class="main-title" contenteditable="true" spellcheck="false">DIPLOMĂ DE EXCELENȚĂ</h1>
 
-                    <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă micului dezvoltator</p>
+                    <p class="subtitle" contenteditable="true" spellcheck="false">Se acordă astronautului digital</p>
 
-                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">David Andrei</h2>
+                    <h2 class="student-name" id="name-p1" contenteditable="true" spellcheck="false" oninput="syncNames()">Sofia Maria</h2>
 
-                    <p class="subtitle" style="margin-top: 0; margin-bottom: 25px;" contenteditable="true" spellcheck="false">pentru crearea de lumi interactive în</p>
-                    <div class="course-title" contenteditable="true" spellcheck="false">Modulul 3 - Jocuri 3D și Evenimente</div>
+                    <p class="subtitle" style="margin-top: 0; margin-bottom: 25px;" contenteditable="true" spellcheck="false">pentru explorarea sistemului tridimensional în</p>
+                    <div class="course-title" contenteditable="true" spellcheck="false">Modulul 2 - Mișcare și Spațiu 3D</div>
                 </div>
 
                 <div class="footer-p1">
                     <div class="signature-block">
                         <div class="sig-value" contenteditable="true" spellcheck="false">Bogdan Pușcașu</div>
                         <div class="sig-line"></div>
-                        <div class="sig-label" contenteditable="true" spellcheck="false">Game Master</div>
+                        <div class="sig-label" contenteditable="true" spellcheck="false">Comandant Misiune</div>
                     </div>
 
                     <div class="logo-center">
@@ -295,33 +303,35 @@
                     <div class="signature-block">
                         <div class="sig-value" contenteditable="true" spellcheck="false">15.09.2026</div>
                         <div class="sig-line"></div>
-                        <div class="sig-label" contenteditable="true" spellcheck="false">Nivel Finalizat</div>
+                        <div class="sig-label" contenteditable="true" spellcheck="false">Data Misiunii</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- ==========================================
-             PAGINA 2: STELUȚE (Level Select) - FĂRĂ FEEDBACK
+             PAGINA 2: STELUȚE (Orbita) - FĂRĂ FEEDBACK
              ========================================== -->
         <div class="page" id="page-2">
-            <div class="glow-1" style="left: auto; right: -200px; background: radial-gradient(circle, rgba(251, 146, 60, 0.15) 0%, transparent 60%);"></div>
-            <div class="glow-2" style="bottom: auto; top: -200px; left: -100px;"></div>
+            <div class="space-glow-1" style="left: auto; right: -200px; background: radial-gradient(circle, rgba(192, 132, 252, 0.15) 0%, transparent 60%);"></div>
 
             <div class="stars-header">
-                <div class="sh-top" contenteditable="true" spellcheck="false">SCOR MAXIM ATINS</div>
-                <h2 class="sh-main" contenteditable="true" spellcheck="false">NIVELUL DE STELUȚE</h2>
+                <div class="sh-top" contenteditable="true" spellcheck="false">CĂLĂTORIE COMPLETĂ</div>
+                <h2 class="sh-main" contenteditable="true" spellcheck="false">SISTEMUL DE STELUȚE</h2>
             </div>
 
-            <!-- Arcade Grid Box -->
-            <div class="arcade-grid-box" id="stars-grid-container">
-                <!-- Generate de JS -->
+            <div class="orbit-zone">
+                <div class="diploma-orbit" style="width: 500px; height: 500px; border-color: rgba(34, 211, 238, 0.4); z-index: 0;"></div>
+
+                <div class="stars-orbit-box" id="stars-grid-container">
+                    <!-- Generate de JS -->
+                </div>
             </div>
 
             <div class="stars-footer">
-                <span>Creatorul</span>
-                <span id="name-p2" class="highlight" contenteditable="true" spellcheck="false">David</span>
-                <span>a deblocat</span>
+                <span>Astronautul</span>
+                <span id="name-p2" class="highlight" contenteditable="true" spellcheck="false">Sofia</span>
+                <span>a explorat</span>
                 <span id="earned-stars" class="highlight" contenteditable="true" spellcheck="false" oninput="updateStarsGrid()">16</span>
                 <span>din 16 steluțe!</span>
             </div>
@@ -338,7 +348,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
             </div>
             <div class="modal-text">
-                Acest document conține 2 pagini (Diplomă și Nivel de Steluțe). Gata pentru salvare?
+                Acest document conține 2 pagini magice (Diplomă și Orbita de Stele). Gata pentru lansare?
             </div>
             <div class="modal-buttons">
                 <button class="action-btn" onclick="startGeneration()">Da, descarcă PDF</button>
@@ -353,10 +363,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
             </div>
             <div class="modal-text">
-                Joc salvat! PDF-ul (2 pagini) a fost descărcat cu succes! 🎮
+                Misiune îndeplinită! PDF-ul (2 pagini) a fost descărcat cu succes! 🚀
             </div>
             <div class="copy-box" id="team-message">
-                Salutare echipă! Copilul <span id="msg-child-name" style="color:var(--brand-color); font-weight:bold;">[Nume]</span> a finalizat cu succes Modulul 3 - Jocuri 3D și Evenimente (Alfabetizare Digitală)!
+                Salutare echipă! Copilul <span id="msg-child-name" style="color:var(--space-lime); font-weight:bold;">[Nume]</span> a finalizat cu succes Modulul 2 - Mișcare și Spațiu 3D (Alfabetizare Digitală)!
             </div>
             <div class="modal-text" style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">
                 Copiază mesajul și trimite-l echipei.
@@ -385,30 +395,22 @@
 
             const grid = document.getElementById('stars-grid-container');
 
-            // Stea "Arcade Coin" - Design nou, masiv, tip moneda de aur din jocuri
+            // Stea "Cosmic/Cute" - Eliminam drop-shadow care cauza box-ul ciudat
             const starFilled = `
-                <svg class="arcade-star" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Conturul exterior tip moneda -->
-                    <circle cx="50" cy="50" r="45" fill="#ca8a04" />
-                    <!-- Fata monedei -->
-                    <circle cx="50" cy="50" r="38" fill="#facc15" />
-                    <!-- Steaua gravata in interior -->
-                    <polygon points="50,22 59,40 78,43 64,57 67,77 50,68 33,77 36,57 22,43 41,40" fill="#fef08a" stroke="#ca8a04" stroke-width="2"/>
+                <svg class="space-star" viewBox="0 0 24 24" fill="#facc15" stroke="#ca8a04" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" style="z-index: 5;">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
                 </svg>
             `;
-            // Stea goala (slotul monedei)
+            // Stea goala cu contur cyan stins
             const starEmpty = `
-                <svg class="arcade-star" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Conturul slotului -->
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(244, 63, 94, 0.4)" stroke-width="4" stroke-dasharray="8 8"/>
-                    <!-- Umbra stelei in interior -->
-                    <polygon points="50,22 59,40 78,43 64,57 67,77 50,68 33,77 36,57 22,43 41,40" fill="rgba(244, 63, 94, 0.1)" />
+                <svg class="space-star" viewBox="0 0 24 24" fill="transparent" stroke="rgba(34, 211, 238, 0.3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="2 2" style="z-index: 5;">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
                 </svg>
             `;
 
             grid.innerHTML = '';
 
-            // Generam grila 4x4
+            // Flex wrap simplu, ele se aranjeaza singure
             for(let i = 0; i < 16; i++) {
                 if (i < earned) {
                     grid.innerHTML += starFilled;
@@ -477,7 +479,7 @@
                 for (let i = 0; i < pages.length; i++) {
                     const canvas = await html2canvas(pages[i], {
                         scale: 2,
-                        backgroundColor: "#1e102f", /* Dark Arcade Purple */
+                        backgroundColor: "#020617", /* Dark Space */
                         useCORS: true,
                         logging: false
                     });
@@ -505,29 +507,6 @@
                 editables.forEach(el => el.style.borderBottom = "");
             }
         }
-
-        // Preia datele reale (elev, profesor, data, stelute) din query string, injectate de
-        // Progress Tracker la momentul generarii diplomei. Fara parametri (deschidere manuala),
-        // raman valorile implicite din sablon, editabile direct pe pagina.
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var studentName = params.get('elev');
-            var teacherName = params.get('profesor');
-            var dateStr = params.get('data');
-            var earnedStars = params.get('stelute');
-
-            document.addEventListener('DOMContentLoaded', function () {
-                var nameEl = document.getElementById('name-p1');
-                if (nameEl && studentName) { nameEl.innerText = studentName; if (typeof syncNames === 'function') syncNames(); }
-                var sigValues = document.querySelectorAll('.sig-value');
-                if (sigValues[0] && teacherName) sigValues[0].innerText = teacherName;
-                if (sigValues[1] && dateStr) sigValues[1].innerText = dateStr;
-                if (earnedStars !== null) {
-                    var starsEl = document.getElementById('earned-stars');
-                    if (starsEl) { starsEl.innerText = earnedStars; if (typeof updateStarsGrid === 'function') updateStarsGrid(); }
-                }
-            });
-        })();
     </script>
 </body>
 </html>

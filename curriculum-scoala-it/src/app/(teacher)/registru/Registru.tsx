@@ -5,8 +5,24 @@ import { createClient } from '@/lib/supabase/client';
 import type { TrackerLesson, TrackerAttendance } from '@/lib/types';
 
 const MONTHS = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
+const DAY_LABELS = ['Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă', 'Duminică'];
+const ENTRY_CONFIG = {
+  grup: { label: 'Lecție grup', icon: '👥' },
+  individual: { label: 'Lecție individuală', icon: '🧑' },
+  recuperare: { label: 'Recuperare', icon: '🔄' },
+} as const;
 
 type TeacherOption = { id: string; label: string };
+type RegistryEntry = { date: string; time: string | null; kind: keyof typeof ENTRY_CONFIG; sessionNumber?: number };
+
+// Index Luni=0 .. Duminica=6 (spre deosebire de Date.getDay(), unde Duminica=0).
+function mondayIndexedDay(d: Date) { return (d.getDay() + 6) % 7; }
+
+function weekOfMonth(d: Date) {
+  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+  const offset = mondayIndexedDay(firstDay);
+  return Math.floor((d.getDate() - 1 + offset) / 7);
+}
 
 export default function Registru({
   viewerId, isAdmin, teacherOptions, initialLessons, initialAttendance,
@@ -20,10 +36,12 @@ export default function Registru({
   const [attendance, setAttendance] = useState<TrackerAttendance[]>(initialAttendance);
   const [loading, setLoading] = useState(false);
   const [year, setYear] = useState(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
   // Raportul e generat STRICT din tracker_lessons + tracker_attendance ale Progress
   // Tracker-ului - nicio inregistrare manuala aici. Adminul poate schimba profesorul vizat.
   useEffect(() => {
+    setSelectedMonth(null);
     if (selectedTeacherId === viewerId) { setLessons(initialLessons); setAttendance(initialAttendance); return; }
     let cancelled = false;
     setLoading(true);
@@ -63,6 +81,42 @@ export default function Registru({
     return t;
   }, [table]);
   const grandTotal = totals.grup + totals.individual + totals.recuperare;
+
+  const monthEntries = useMemo(() => {
+    if (selectedMonth === null) return [];
+    const entries: RegistryEntry[] = [];
+    for (const l of lessons) {
+      const d = new Date(l.lesson_date);
+      if (d.getFullYear() === year && d.getMonth() === selectedMonth) {
+        entries.push({ date: l.lesson_date, time: l.lesson_time, kind: l.format, sessionNumber: l.session_number });
+      }
+    }
+    for (const a of attendance) {
+      if (a.status !== 'made_up' || !a.recovery_date) continue;
+      const d = new Date(a.recovery_date);
+      if (d.getFullYear() === year && d.getMonth() === selectedMonth) {
+        entries.push({ date: a.recovery_date, time: a.recovery_time, kind: 'recuperare' });
+      }
+    }
+    entries.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''));
+    return entries;
+  }, [lessons, attendance, year, selectedMonth]);
+
+  const monthWeeks = useMemo(() => {
+    const map = new Map<number, RegistryEntry[]>();
+    for (const e of monthEntries) {
+      const wk = weekOfMonth(new Date(e.date));
+      if (!map.has(wk)) map.set(wk, []);
+      map.get(wk)!.push(e);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([wk, entries]) => {
+        const byDay: RegistryEntry[][] = Array.from({ length: 7 }, () => []);
+        for (const e of entries) byDay[mondayIndexedDay(new Date(e.date))].push(e);
+        return { week: wk, byDay };
+      });
+  }, [monthEntries]);
 
   return (
     <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white">
@@ -117,9 +171,14 @@ export default function Registru({
                   {MONTHS.map((m, i) => {
                     const row = table[i];
                     const rowTotal = row.grup + row.individual + row.recuperare;
+                    const clickable = rowTotal > 0;
                     return (
-                      <tr key={m} className={`border-t border-gray-800 ${rowTotal > 0 ? '' : 'text-gray-600'}`}>
-                        <td className="py-1.5 pr-2 font-medium">{m}</td>
+                      <tr
+                        key={m}
+                        onClick={clickable ? () => setSelectedMonth(i) : undefined}
+                        className={`border-t border-gray-800 transition-colors ${rowTotal > 0 ? '' : 'text-gray-600'} ${clickable ? 'cursor-pointer hover:bg-white/5' : ''}`}
+                      >
+                        <td className={`py-1.5 pr-2 font-medium ${clickable ? 'hover:text-[#C8F023] hover:underline' : ''}`}>{m}</td>
                         <td className="text-center py-1.5 px-2">{row.grup || '–'}</td>
                         <td className="text-center py-1.5 px-2">{row.individual || '–'}</td>
                         <td className="text-center py-1.5 px-2">{row.recuperare || '–'}</td>
@@ -142,6 +201,70 @@ export default function Registru({
           </div>
         )}
       </main>
+
+      {selectedMonth !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setSelectedMonth(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="glass-strong tracker-card-shadow border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+          >
+            <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-white/10 shrink-0">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#C8F023] mb-1">📒 Detaliu Lunar</p>
+                <h3 className="text-xl font-bold">{MONTHS[selectedMonth]} {year}</h3>
+                <p className="text-sm text-gray-400 mt-0.5">{monthEntries.length} lecții/recuperări</p>
+              </div>
+              <button
+                onClick={() => setSelectedMonth(null)} aria-label="Inchide"
+                className="w-9 h-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {monthWeeks.length === 0 ? (
+                <p className="text-gray-400 text-center py-10 text-sm">Nicio lecție în această lună.</p>
+              ) : (
+                monthWeeks.map(({ week, byDay }) => (
+                  <div key={week}>
+                    <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Săptămâna {week + 1}</p>
+                    <div className="space-y-2">
+                      {DAY_LABELS.map((dayLabel, dayIdx) => {
+                        const dayEntries = byDay[dayIdx];
+                        if (dayEntries.length === 0) return null;
+                        return (
+                          <div key={dayLabel} className="bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5">
+                            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{dayLabel}</p>
+                            <div className="space-y-1.5">
+                              {dayEntries.map((entry, ei) => {
+                                const cfg = ENTRY_CONFIG[entry.kind];
+                                return (
+                                  <div key={ei} className="flex items-center gap-2 text-sm">
+                                    <span>{cfg.icon}</span>
+                                    <span className="flex-1">{cfg.label}{entry.sessionNumber ? ` #${entry.sessionNumber}` : ''}</span>
+                                    <span className="text-gray-400 font-mono text-xs">
+                                      {new Date(entry.date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                      {entry.time ? ` - ${entry.time}` : ''}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
