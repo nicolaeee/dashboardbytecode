@@ -247,13 +247,16 @@ create table public.tracker_groups (
 );
 
 create table public.tracker_students (
-  id          uuid primary key default gen_random_uuid(),
-  teacher_id  uuid not null references public.profiles(id) on delete cascade,
-  group_id    uuid not null references public.tracker_groups(id) on delete cascade,
-  name        text not null,
-  progress    int  not null default 0,
-  deleted_at  timestamptz,
-  created_at  timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  teacher_id    uuid not null references public.profiles(id) on delete cascade,
+  group_id      uuid not null references public.tracker_groups(id) on delete cascade,
+  name          text not null,
+  progress      int  not null default 0,
+  -- Decalaj manual de lectii (vezi src/lib/lessonNumbering.ts) - punct de pornire pentru
+  -- elevii cu istoric dinainte de Tracker, folosit la calculul "M{x} / L{y}".
+  lesson_offset int  not null default 0,
+  deleted_at    timestamptz,
+  created_at    timestamptz not null default now()
 );
 
 -- O lectie/sedinta tinuta pentru o grupa (numerotata secvential in cadrul grupei).

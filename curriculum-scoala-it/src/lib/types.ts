@@ -73,6 +73,14 @@ export type TrackerStudent = {
   group_id: string;
   name: string;
   progress: number;
+  /**
+   * Decalaj manual de lectii (vezi src/lib/lessonNumbering.ts) - se aduna la numarul de
+   * prezente+recuperari inregistrate in aplicatie ca sa dea numarul TOTAL de lectii efectuate,
+   * folosit pentru afisarea compacta "M{modul} / L{lectie}". Setat de admin/profesor cand
+   * elevul are istoric dinainte de a fi adaugat in Tracker (copii mai vechi) - ramane punctul
+   * de pornire pentru toate calculele viitoare, care continua automat de acolo.
+   */
+  lesson_offset: number;
   deleted_at: string | null;
   created_at: string;
 };

@@ -60,6 +60,12 @@
             font-weight: 700;
             color: var(--brand-color);
         }
+        /* Varianta pentru Administrator - auriu, distinct de verde-ul folosit pentru nivelurile de profesor */
+        .my-level-banner.is-admin {
+            background: rgba(250, 204, 21, 0.12);
+            border-color: #facc15;
+            color: #facc15;
+        }
         .my-level-banner .sub {
             display: block;
             margin-top: 6px;
@@ -603,8 +609,11 @@
     </script>
 
     <script>
-        // Preia nivelul profesorului logat (din /api/my-profile, autentificat prin cookie-ul
-        // de sesiune) si afiseaza un mesaj personalizat + evidentiaza cardul nivelului sau.
+        // Preia rolul + nivelul contului logat (din /api/my-profile, autentificat prin cookie-ul
+        // de sesiune) si afiseaza un mesaj personalizat. Rolul e verificat INTAI: un Administrator
+        // nu e pe grila Junior/Middle/Senior (coloana "level" din baza de date are 'Junior' ca
+        // valoare implicita pentru orice cont, inclusiv admin) - fara aceasta verificare, bannerul
+        // ar afisa gresit "Junior" si pentru conturile de admin.
         (function () {
             var LEVEL_META = {
                 Junior: { slug: 'junior', message: 'Continuă să acumulezi experiență - fiecare lecție te apropie de nivelul Middle! 🌱' },
@@ -615,14 +624,23 @@
             fetch('/api/my-profile')
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
-                    if (!data || !data.level) return;
-                    var meta = LEVEL_META[data.level] || LEVEL_META.Junior;
+                    if (!data) return;
                     var banner = document.getElementById('my-level-banner');
-                    if (banner) {
-                        banner.innerHTML = 'Nivelul tău curent: <strong>' + data.level + '</strong>' +
-                            '<span class="sub">' + meta.message + '</span>';
+                    if (!banner) return;
+
+                    if (data.role === 'admin') {
+                        banner.classList.add('is-admin');
+                        banner.innerHTML = 'Ești conectat ca <strong>Administrator</strong>' +
+                            '<span class="sub">Ai acces complet la platformă - gestionezi profesorii, curriculumul și nivelurile de promovare.</span>';
                         banner.style.display = 'block';
+                        return;
                     }
+
+                    if (!data.level) return;
+                    var meta = LEVEL_META[data.level] || LEVEL_META.Junior;
+                    banner.innerHTML = 'Nivelul tău curent: <strong>' + data.level + '</strong>' +
+                        '<span class="sub">' + meta.message + '</span>';
+                    banner.style.display = 'block';
                     var card = document.getElementById('card-' + meta.slug);
                     if (card) card.classList.add('current-level-card');
                 })

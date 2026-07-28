@@ -5,6 +5,13 @@ import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule
 import type { CourseId, Profile } from '@/lib/types';
 import { Modal, Button, Field } from './ui';
 
+/** Modulul tocmai incheiat de grupa (lessonCount lectii tinute = M{n} / L16), clampat la
+ * modulele cu sablon de diploma disponibile (1-4). */
+function completedModuleFor(lessonCount: number) {
+  const n = Math.floor(lessonCount / 16);
+  return Math.min(Math.max(n, DIPLOMA_MODULES[0]), DIPLOMA_MODULES[DIPLOMA_MODULES.length - 1]);
+}
+
 type DiplomaStudent = { id: string; name: string; progress: number };
 type DiplomaGroup = { id: string; group_name: string; lessonCount: number; course: CourseId | null; students: DiplomaStudent[] };
 
@@ -82,7 +89,7 @@ export default function DiplomaAlerts({ profile }: { profile: Profile }) {
   function openGenerateModal(group: DiplomaGroup) {
     setFallbackCourse(null);
     setSelectedStudentId(group.students[0]?.id ?? '');
-    setSelectedModule(1);
+    setSelectedModule(completedModuleFor(group.lessonCount));
     setGeneratingFor(group);
   }
 
@@ -140,7 +147,8 @@ export default function DiplomaAlerts({ profile }: { profile: Profile }) {
             {pending.map((g) => (
               <div key={g.id} className="glass-strong rounded-2xl border border-line border-l-4 border-l-red-500 px-4 py-3 shadow-glow-sm">
                 <p className="text-[13px] leading-snug text-white">
-                  Trebuie să trimiți diploma pentru grupa <span className="font-semibold text-brand-500">{g.group_name}</span>
+                  Grupa <span className="font-semibold text-brand-500">{g.group_name}</span> a ajuns la{' '}
+                  <span className="font-semibold text-brand-500">M{completedModuleFor(g.lessonCount)} / L16</span> - trebuie să trimiți diploma
                 </p>
                 <div className="mt-2 flex gap-2">
                   <button

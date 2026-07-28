@@ -3,10 +3,17 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { LogOut, Menu, X } from 'lucide-react';
 import { signOut } from '@/app/auth-actions';
-import type { Profile } from '@/lib/types';
+import type { Profile, TeacherLevel } from '@/lib/types';
+import { Badge } from './ui';
 import RealtimeRefresher from './RealtimeRefresher';
 import DiplomaAlerts from './DiplomaAlerts';
 import NavLinks, { type NavItem } from './NavLinks';
+
+// Aceeasi paleta ca in admin/teachers/TeachersClient.tsx (lista de profesori) - pastrata
+// consistenta ca profesorul sa isi recunoasca gradul cu aceeasi culoare oriunde apare.
+const LEVEL_TONES: Record<TeacherLevel, 'blue' | 'purple' | 'brand'> = {
+  Junior: 'blue', Middle: 'purple', Senior: 'brand',
+};
 
 export default function Shell({
   profile, nav, children,
@@ -62,7 +69,11 @@ export default function Shell({
 
         <div className="mt-6 border-t border-white/10 pt-4 lg:absolute lg:bottom-6 lg:left-5 lg:right-5 lg:mt-0">
           <p className="truncate text-sm font-medium">{profile.full_name || profile.email}</p>
-          <p className="tag !text-white/40">{profile.role === 'admin' ? 'Administrator' : 'Profesor'}</p>
+          <div className="mt-1.5">
+            <Badge tone={profile.role === 'admin' ? 'brand' : LEVEL_TONES[profile.level]}>
+              {profile.role === 'admin' ? 'Administrator' : profile.level}
+            </Badge>
+          </div>
           <form action={signOut} className="mt-3">
             <button className="flex items-center gap-2 text-[13px] text-white/60 hover:text-white">
               <LogOut size={14} /> Ieși din cont

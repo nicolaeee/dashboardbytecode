@@ -4,6 +4,7 @@ import { Check, X as XIcon, RotateCcw, ChevronLeft, ChevronRight, Plus, Video, P
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
+import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -212,6 +213,13 @@ export default function ProgressTracker({
   const [editClassCourse, setEditClassCourse] = useState<CourseId | null>(null);
   const [addStudentName, setAddStudentName] = useState('');
   const [editStudentName, setEditStudentName] = useState('');
+  // Suprascriere manuala a pozitiei elevului (Modul/Lectie) - pentru elevi cu istoric
+  // dinainte de Tracker. Devine noul punct de pornire (lesson_offset) la salvare.
+  const [editStudentModule, setEditStudentModule] = useState(1);
+  const [editStudentLesson, setEditStudentLesson] = useState(0);
+  // Steluțe istorice (legacy) - suprascrie direct student.progress, campul deja folosit
+  // de Cardul Elevului, bara de progres si parametrul trimis la generarea diplomei.
+  const [editStudentStars, setEditStudentStars] = useState(0);
   const [newModuleReward, setNewModuleReward] = useState('stars');
   const [searchQuery, setSearchQuery] = useState('');
   const [newLessonForm, setNewLessonForm] = useState({ date: nowDate(), time: nowTime() });
@@ -443,11 +451,23 @@ export default function ProgressTracker({
     showToast('Elev adaugat!');
   }
 
+  // Numarul de lectii efectuate (prezente + recuperari) al unui elev, indiferent de grupa -
+  // baza pentru afisarea compacta "M{x} / L{y}" (vezi src/lib/lessonNumbering.ts).
+  function studentLessonCount(studentId: string) {
+    return attendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
+  }
+
   async function handleEditStudent(e: React.FormEvent, studentId: string) {
     e.preventDefault();
     const name = editStudentName.trim();
     if (!name) return showToast('Introdu numele elevului', 'error');
-    const ok = await patchStudent(studentId, { name });
+    // Suprascrierea manuala de Modul/Lectie devine noul punct de pornire: decalajul se
+    // recalculeaza ca diferenta fata de lectiile deja inregistrate automat in aplicatie,
+    // ca de acum incolo calculele viitoare sa continue exact de la M/L introdus manual.
+    const desiredTotal = totalLessonsFor(editStudentModule, editStudentLesson);
+    const lessonOffset = desiredTotal - studentLessonCount(studentId);
+    const stars = Math.max(0, Math.round(editStudentStars));
+    const ok = await patchStudent(studentId, { name, lesson_offset: lessonOffset, progress: stars });
     if (ok) { setModal({ type: null }); showToast('Elev actualizat!'); }
   }
 
@@ -789,7 +809,14 @@ export default function ProgressTracker({
             lessons={lessons}
             attendance={attendance}
             onBack={goHome}
-            onEditStudent={(s) => { setEditStudentName(s.name); setModal({ type: 'editStudent', studentId: s.id }); }}
+            onEditStudent={(s) => {
+              setEditStudentName(s.name);
+              const { module, lesson } = computeModuleLesson(s.lesson_offset + studentLessonCount(s.id));
+              setEditStudentModule(module);
+              setEditStudentLesson(lesson);
+              setEditStudentStars(s.progress);
+              setModal({ type: 'editStudent', studentId: s.id });
+            }}
             onRequestNewLesson={openNewLessonModal}
             onRequestRecovery={openRecoveryModal}
             onSetAttendanceStatus={setAttendanceStatus}
@@ -1101,6 +1128,46 @@ export default function ProgressTracker({
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
                 />
               </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">
+                  Poziție manuală (Modul / Lecție) <span className="text-gray-500 font-normal">— pentru elevi cu istoric dinainte de Tracker</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <span className="block text-[11px] text-gray-500 mb-1">Modul</span>
+                    <input
+                      type="number" min={1} value={editStudentModule}
+                      onChange={(e) => setEditStudentModule(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                    />
+                  </div>
+                  <span className="mt-5 text-gray-500 font-bold">/</span>
+                  <div className="flex-1">
+                    <span className="block text-[11px] text-gray-500 mb-1">Lecție</span>
+                    <input
+                      type="number" min={1} max={16} value={editStudentLesson}
+                      onChange={(e) => setEditStudentLesson(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                    />
+                  </div>
+                </div>
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  Devine „M{editStudentModule} / L{editStudentLesson}” chiar acum - calculele viitoare (noi prezențe/recuperări) continuă automat de aici.
+                </p>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">
+                  Steluțe colectate <span className="text-gray-500 font-normal">— total istoric (ex: pentru elevi cu istoric dinainte de Tracker)</span>
+                </label>
+                <input
+                  type="number" min={0} value={editStudentStars}
+                  onChange={(e) => setEditStudentStars(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                />
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  Suprascrie imediat totalul de steluțe afișat pe Cardul Elevului, pe bara de progres și în textul trimis către diplomă.
+                </p>
+              </div>
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -1409,6 +1476,17 @@ function StudentHistoryModal({
   const starsCount = filteredHistory.reduce((sum, h) => sum + (h.record?.star_count ?? 0), 0);
   const sortedDesc = [...filteredHistory].sort((a, b) => b.lesson.session_number - a.lesson.session_number);
 
+  // Pozitia "M{x} / L{y}" la FIECARE lectie - nu numarul brut de sedinta al grupei. Se
+  // calculeaza cronologic (indiferent de filtrul de date de mai sus), pornind de la decalajul
+  // manual (lesson_offset) si avansand cu 1 la fiecare prezenta/recuperare intalnita.
+  const moduleLessonByLessonId = new Map<string, string>();
+  let runningTotal = student.lesson_offset;
+  for (const { lesson, record } of [...history].sort((a, b) => a.lesson.session_number - b.lesson.session_number)) {
+    const status = statusOf(record);
+    if (status === 'present' || status === 'made_up') runningTotal += 1;
+    moduleLessonByLessonId.set(lesson.id, formatModuleLesson(runningTotal));
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -1487,7 +1565,7 @@ function StudentHistoryModal({
                   <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold truncate">
-                      Lecția {lesson.session_number}
+                      {moduleLessonByLessonId.get(lesson.id)}
                       <span className="text-gray-400 font-normal ml-2">
                         {new Date(lesson.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                         {lesson.lesson_time ? ` - ${lesson.lesson_time}` : ''}
@@ -1738,6 +1816,9 @@ function ClassView({
   const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
   const attendanceCountFor = (studentId: string) =>
     groupAttendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
+  // Numerotare compacta "M{x} / L{y}" - vezi src/lib/lessonNumbering.ts. Se aduna decalajul
+  // manual (lesson_offset, setat din "Editeaza elev") la prezentele+recuperarile inregistrate.
+  const moduleLessonFor = (student: TrackerStudent) => formatModuleLesson(student.lesson_offset + attendanceCountFor(student.id));
 
   return (
     <div>
@@ -1767,7 +1848,7 @@ function ClassView({
                       title="Vezi fisa elevului"
                     >
                       <div className="font-bold underline decoration-transparent group-hover/name:decoration-black/40 underline-offset-2 transition-colors">{s.name}</div>
-                      <div className="text-[11px] font-medium text-black/60">🗓️ {attendanceCountFor(s.id)} prezențe</div>
+                      <div className="text-[11px] font-medium text-black/60" title={`${attendanceCountFor(s.id)} prezențe`}>🗓️ {moduleLessonFor(s)}</div>
                       {s.rank === 1 && firstPlaceCount > 1 && (
                         <div className="text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 inline-block px-2 py-0.5 rounded-full text-white">
                           ⚡ Prieteni Fulgeri
@@ -1800,7 +1881,8 @@ function ClassView({
           students.map((s, i) => (
             <StudentCard
               key={s.id} student={s} index={i} totalStudents={students.length} moduleCount={group.module_count || 1}
-              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} onEdit={() => onEditStudent(s)}
+              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} moduleLesson={moduleLessonFor(s)}
+              onEdit={() => onEditStudent(s)}
               onOpenHistory={() => onOpenHistory(s.id)}
             />
           ))
@@ -1950,10 +2032,10 @@ function AttendanceBoard({
 }
 
 function StudentCard({
-  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit, onOpenHistory,
+  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, moduleLesson, onEdit, onOpenHistory,
 }: {
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
-  rewardEmoji: string; attendanceCount: number; onEdit: () => void; onOpenHistory: () => void;
+  rewardEmoji: string; attendanceCount: number; moduleLesson: string; onEdit: () => void; onOpenHistory: () => void;
 }) {
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
@@ -1981,8 +2063,11 @@ function StudentCard({
             <div className="tracker-level-badge inline-block px-3 py-1 rounded-full text-white text-sm font-semibold">
               Nivel {levelInfo.level} - {levelInfo.name}
             </div>
-            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
-              🗓️ {attendanceCount} prezențe
+            <div
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold"
+              title={`${attendanceCount} prezențe`}
+            >
+              🗓️ {moduleLesson}
             </div>
           </div>
         </div>
