@@ -22,7 +22,7 @@ export async function signIn(_prev: unknown, formData: FormData) {
   }
 
   revalidatePath('/', 'layout');
-  redirect(profile?.role === 'admin' ? '/admin' : '/curriculum');
+  redirect(profile?.role === 'admin' ? '/admin/curriculum' : '/curriculum');
 }
 
 export async function signOut() {

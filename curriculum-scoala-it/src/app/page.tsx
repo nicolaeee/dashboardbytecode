@@ -3,5 +3,5 @@ import { requireUser } from '@/lib/auth';
 
 export default async function Home() {
   const profile = await requireUser();
-  redirect(profile.role === 'admin' ? '/admin' : '/curriculum');
+  redirect(profile.role === 'admin' ? '/admin/curriculum' : '/curriculum');
 }

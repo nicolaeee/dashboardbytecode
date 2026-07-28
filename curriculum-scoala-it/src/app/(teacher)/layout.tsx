@@ -9,9 +9,9 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     { href: '/progress', label: 'Progress Tracker', icon: <Rocket size={16} /> },
     { href: '/registru', label: 'Registru', icon: <ClipboardList size={16} /> },
     { href: '/diplome', label: 'Diplome', icon: <GraduationCap size={16} /> },
-    { href: '/roadmap.html', label: 'Roadmap', icon: <Map size={16} /> },
+    { href: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },
     ...(profile.role === 'admin'
-      ? [{ href: '/admin', label: 'Administrare', icon: <Library size={16} /> }]
+      ? [{ href: '/admin/curriculum', label: 'Administrare', icon: <Library size={16} /> }]
       : []),
   ];
   return <Shell profile={profile} nav={nav}>{children}</Shell>;

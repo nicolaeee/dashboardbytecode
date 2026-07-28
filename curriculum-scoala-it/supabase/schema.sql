@@ -267,13 +267,15 @@ create table public.tracker_lessons (
   lesson_date    date not null default current_date,
   lesson_time    text,   -- 'HH:MM', optional
   format         text not null default 'grup' check (format in ('grup', 'individual')),
+  homework_note  text,   -- notita libera de tema pentru aceasta lectie, editabila din Tracker
   created_at     timestamptz not null default now(),
   unique (group_id, session_number)
 );
 
 -- Prezenta + steluta per elev, per lectie. Complet separate:
--- prezenta (status) se inregistreaza mereu; steluta (has_star) se acorda strict daca elevul
--- si-a facut tema - profesorul o poate adauga oricand retroactiv pe o lectie anterioara.
+-- prezenta (status) se inregistreaza mereu; steluta (star_count, 0-3) se acorda strict daca
+-- elevul si-a facut tema - profesorul o poate adauga/corecta oricand retroactiv pe o lectie
+-- anterioara (multiplicator, nu doar bifa facuta/nefacuta).
 -- recovery_date/recovery_time = data/ora reala a sedintei 1-la-1 de recuperare (diferita de
 -- data lectiei ratate initial) - alimenteaza automat coloana "Recuperari" din Payslip.
 create table public.tracker_attendance (
@@ -282,7 +284,7 @@ create table public.tracker_attendance (
   lesson_id      uuid not null references public.tracker_lessons(id) on delete cascade,
   student_id     uuid not null references public.tracker_students(id) on delete cascade,
   status         text not null default 'absent' check (status in ('present', 'absent', 'made_up')),
-  has_star       boolean not null default false,
+  star_count     int  not null default 0,
   recovery_date  date,
   recovery_time  text,   -- 'HH:MM', optional
   updated_at     timestamptz not null default now(),

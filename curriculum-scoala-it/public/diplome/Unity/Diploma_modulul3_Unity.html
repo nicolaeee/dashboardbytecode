@@ -605,5 +605,19 @@
             });
         })();
     </script>
+
+    <!-- totalStelute-note-v1: Total de steluțe acumulate (text), afisat cand Progress Tracker trimite parametrul totalStelute -->
+    <script>
+    (function () {
+        var totalStars = new URLSearchParams(window.location.search).get('totalStelute');
+        if (totalStars === null) return;
+        document.addEventListener('DOMContentLoaded', function () {
+            var note = document.createElement('div');
+            note.textContent = 'A acumulat ' + totalStars + ' steluțe în total';
+            note.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:9999;background:rgba(0,0,0,0.75);color:#C8F023;font:600 12px/1.4 -apple-system,system-ui,sans-serif;padding:7px 14px;border-radius:999px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.35);';
+            document.body.appendChild(note);
+        });
+    })();
+    </script>
 </body>
 </html>

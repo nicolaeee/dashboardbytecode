@@ -89,6 +89,8 @@ export type TrackerLesson = {
   lesson_date: string;
   lesson_time: string | null;
   format: LessonKind;
+  /** Notita libera de tema pentru aceasta lectie (nu per elev), editabila din Tracker. */
+  homework_note: string | null;
   created_at: string;
 };
 
@@ -98,8 +100,10 @@ export type AttendanceStatus = 'present' | 'absent' | 'made_up';
 /**
  * Prezenta si steluta unui elev la o lectie - complet separate:
  * prezenta se bifeaza mereu, steluta doar daca a facut tema (se poate adauga retroactiv).
- * recovery_date/recovery_time = data/ora reala a sedintei 1-la-1 de recuperare (cand
- * status = 'made_up'), diferita de data lectiei ratate initial - alimenteaza Payslip-ul.
+ * star_count e un multiplicator 0-3 (nu doar bifa facuta/nefacuta) - profesorul cicleaza
+ * valoarea din click pe iconita. recovery_date/recovery_time = data/ora reala a sedintei
+ * 1-la-1 de recuperare (cand status = 'made_up'), diferita de data lectiei ratate initial -
+ * alimenteaza Payslip-ul.
  */
 export type TrackerAttendance = {
   id: string;
@@ -107,7 +111,7 @@ export type TrackerAttendance = {
   lesson_id: string;
   student_id: string;
   status: AttendanceStatus;
-  has_star: boolean;
+  star_count: number;
   recovery_date: string | null;
   recovery_time: string | null;
   updated_at: string;

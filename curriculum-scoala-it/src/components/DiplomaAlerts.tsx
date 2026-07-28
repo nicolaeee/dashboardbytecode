@@ -102,6 +102,7 @@ export default function DiplomaAlerts({ profile }: { profile: Profile }) {
       curs: `Modulul ${selectedModule} - ${course?.label ?? ''}`,
       data: todayFormatted(),
       stelute: String(starsForModule(student.progress)),
+      totalStelute: String(student.progress),
     });
     window.open(`${url}?${params.toString()}`, '_blank');
 

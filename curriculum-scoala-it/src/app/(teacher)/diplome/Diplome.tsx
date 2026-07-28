@@ -71,16 +71,19 @@ export default function Diplome({
     if (!generatingCourse) return;
     let studentName: string;
     let stars: number;
+    let totalStars: number;
 
     if (mode === 'group') {
       const student = selectedGroup?.students.find((s) => s.id === selectedStudentId);
       if (!student) return;
       studentName = student.name;
       stars = starsForModule(student.progress);
+      totalStars = student.progress;
     } else {
       studentName = manualName.trim();
       if (!studentName) return;
       stars = Math.max(0, Math.min(16, Math.round(manualStars)));
+      totalStars = stars;
     }
 
     const url = diplomaTemplateUrl(generatingCourse, selectedModule);
@@ -91,6 +94,7 @@ export default function Diplome({
       curs: `Modulul ${selectedModule} - ${course?.label ?? ''}`,
       data: todayFormatted(),
       stelute: String(stars),
+      totalStelute: String(totalStars),
     });
     window.open(`${url}?${params.toString()}`, '_blank');
     setGeneratingCourse(null);

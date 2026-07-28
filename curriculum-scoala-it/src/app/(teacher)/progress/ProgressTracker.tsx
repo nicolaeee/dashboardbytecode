@@ -332,6 +332,24 @@ export default function ProgressTracker({
     return data as TrackerStudent;
   }
 
+  async function patchLesson(id: string, patch: Partial<TrackerLesson>) {
+    const previous = lessons.find((l) => l.id === id) ?? null;
+    setLessons((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    const { data, error } = await supabase.from('tracker_lessons').update(patch).eq('id', id).select().single();
+    if (error || !data) {
+      if (previous) setLessons((ls) => ls.map((l) => (l.id === id ? previous : l)));
+      showToast('Eroare', 'error');
+      return null;
+    }
+    setLessons((ls) => ls.map((l) => (l.id === id ? (data as TrackerLesson) : l)));
+    return data as TrackerLesson;
+  }
+
+  // Notita de tema a lectiei (nu per elev) - salvata la ies din camp (onBlur), nu la fiecare tasta.
+  async function saveLessonHomework(lessonId: string, note: string) {
+    await patchLesson(lessonId, { homework_note: note.trim() || null });
+  }
+
   async function handleCreateClass(e: React.FormEvent) {
     e.preventDefault();
     const name = autoClassName;
@@ -528,10 +546,11 @@ export default function ProgressTracker({
   }
 
   // Prezenta (status) e complet separata de steluta: schimbarea statusului nu acorda
-  // niciodata steluta automat. Daca elevul devine "absent", steluta acordata anterior
-  // se retrage (progresul scade), pentru ca ramane consistent cu regula de business.
-  // recoveryDate/recoveryTime se completeaza doar cand status = 'made_up' (sesiune 1-la-1) -
-  // aceasta data alimenteaza automat coloana "Recuperari" din Payslip-ul din /registru.
+  // niciodata steluta automat. Daca elevul devine "absent", steluta(le) acordate anterior
+  // se retrag (progresul scade cu tot multiplicatorul), pentru ca ramane consistent cu
+  // regula de business. recoveryDate/recoveryTime se completeaza doar cand status =
+  // 'made_up' (sesiune 1-la-1) - aceasta data alimenteaza automat coloana "Recuperari"
+  // din Payslip-ul din /registru.
   async function setAttendanceStatus(
     studentId: string, lessonId: string, status: AttendanceStatus, recoveryDate?: string, recoveryTime?: string
   ) {
@@ -540,20 +559,20 @@ export default function ProgressTracker({
     const group = getGroupById(student.group_id);
     if (!group) return;
     const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
-    const prevStar = current?.has_star ?? false;
-    const nextStar = status === 'absent' ? false : prevStar;
+    const prevStarCount = current?.star_count ?? 0;
+    const nextStarCount = status === 'absent' ? 0 : prevStarCount;
     const nextRecoveryDate = status === 'made_up' ? (recoveryDate ?? current?.recovery_date ?? nowDate()) : null;
     const nextRecoveryTime = status === 'made_up' ? (recoveryTime ?? current?.recovery_time ?? null) : null;
 
     const previousAttendance = attendance;
     if (current) {
       setAttendance((as) => as.map((a) => (a.id === current.id
-        ? { ...a, status, has_star: nextStar, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime } : a)));
+        ? { ...a, status, star_count: nextStarCount, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime } : a)));
     } else {
       const tempId = nextLocalId();
       setAttendance((as) => [...as, {
         id: tempId, teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId,
-        status, has_star: nextStar, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
+        status, star_count: nextStarCount, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
         updated_at: new Date().toISOString(),
       }]);
     }
@@ -561,7 +580,7 @@ export default function ProgressTracker({
     const { data, error } = await supabase.from('tracker_attendance')
       .upsert(
         {
-          teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId, status, has_star: nextStar,
+          teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId, status, star_count: nextStarCount,
           recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
         },
         { onConflict: 'lesson_id,student_id' }
@@ -574,7 +593,7 @@ export default function ProgressTracker({
     }
     setAttendance((as) => [...as.filter((a) => !(a.lesson_id === lessonId && a.student_id === studentId)), data as TrackerAttendance]);
 
-    if (prevStar && !nextStar) await applyStarDelta(studentId, -1, group);
+    if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group);
   }
 
   function openNewLessonModal(groupId: string) {
@@ -610,8 +629,9 @@ export default function ProgressTracker({
   }
 
   // Steluta se acorda strict daca elevul a fost prezent sau a recuperat lectia - niciodata
-  // pentru o lectie marcata "absent". Profesorul o poate bifa/debifa oricand, retroactiv.
-  async function toggleStar(studentId: string, lessonId: string) {
+  // pentru o lectie marcata "absent". Profesorul cicleaza valoarea (0 -> 1 -> 2 -> 3 -> 0)
+  // din click pe iconita - e un multiplicator, nu doar o bifa facuta/nefacuta.
+  async function cycleStar(studentId: string, lessonId: string) {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
     const group = getGroupById(student.group_id);
@@ -620,20 +640,22 @@ export default function ProgressTracker({
     if (!current || current.status === 'absent') {
       return showToast('Elevul trebuie sa fie prezent sau sa fi recuperat lectia', 'error');
     }
-    const nextStar = !current.has_star;
+    const prevCount = current.star_count ?? 0;
+    const nextCount = (prevCount + 1) % 4;
+    const delta = nextCount - prevCount;
     const maxSteps = (group.module_count || 1) * 16;
-    if (nextStar && student.progress >= maxSteps) return showToast('Adauga un modul nou pentru a continua!', 'error');
+    if (delta > 0 && student.progress >= maxSteps) return showToast('Adauga un modul nou pentru a continua!', 'error');
 
     const previousAttendance = attendance;
-    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, has_star: nextStar } : a)));
+    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, star_count: nextCount } : a)));
     const { data, error } = await supabase.from('tracker_attendance')
-      .update({ has_star: nextStar }).eq('id', current.id).select().single();
+      .update({ star_count: nextCount }).eq('id', current.id).select().single();
     if (error || !data) {
       setAttendance(previousAttendance);
       return showToast('Eroare', 'error');
     }
     setAttendance((as) => as.map((a) => (a.id === current.id ? (data as TrackerAttendance) : a)));
-    await applyStarDelta(studentId, nextStar ? 1 : -1, group);
+    await applyStarDelta(studentId, delta, group);
   }
 
   function openClass(groupId: string) {
@@ -771,9 +793,10 @@ export default function ProgressTracker({
             onRequestNewLesson={openNewLessonModal}
             onRequestRecovery={openRecoveryModal}
             onSetAttendanceStatus={setAttendanceStatus}
-            onToggleStar={toggleStar}
+            onCycleStar={cycleStar}
             onOpenHistory={openStudentHistory}
             onSaveMeetLink={(meetLink) => saveMeetLink(currentGroup.id, meetLink)}
+            onSaveLessonHomework={saveLessonHomework}
           />
         ) : null}
       </main>
@@ -1383,7 +1406,7 @@ function StudentHistoryModal({
   const notRecoveredCount = filteredHistory.filter((h) => statusOf(h.record) === 'absent').length;
   const madeUpCount = filteredHistory.filter((h) => statusOf(h.record) === 'made_up').length;
   const absentCount = notRecoveredCount + madeUpCount;
-  const starsCount = filteredHistory.filter((h) => h.record?.has_star).length;
+  const starsCount = filteredHistory.reduce((sum, h) => sum + (h.record?.star_count ?? 0), 0);
   const sortedDesc = [...filteredHistory].sort((a, b) => b.lesson.session_number - a.lesson.session_number);
 
   return (
@@ -1457,7 +1480,7 @@ function StudentHistoryModal({
             sortedDesc.map(({ lesson, record }) => {
               const status = statusOf(record);
               const cfg = HISTORY_STATUS_CONFIG[status];
-              const hasStar = record?.has_star ?? false;
+              const starCount = record?.star_count ?? 0;
               const starEligible = status !== 'absent';
               return (
                 <div key={lesson.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5">
@@ -1480,10 +1503,10 @@ function StudentHistoryModal({
                     {cfg.icon} {cfg.label}
                   </span>
                   <span
-                    title={starEligible ? (hasStar ? 'Tema facuta' : 'Fara tema') : 'Nu a fost prezent'}
-                    className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm ${hasStar ? 'bg-[#C8F023] text-black' : 'bg-white/5 text-white/20'}`}
+                    title={starEligible ? (starCount > 0 ? `Tema facuta x${starCount}` : 'Fara tema') : 'Nu a fost prezent'}
+                    className={`h-7 shrink-0 rounded-full flex items-center justify-center gap-0.5 px-2 text-sm ${starCount > 0 ? 'bg-[#C8F023] text-black' : 'w-7 bg-white/5 text-white/20'}`}
                   >
-                    {rewardEmoji}
+                    {rewardEmoji}{starCount > 1 && <span className="text-[11px] font-bold">×{starCount}</span>}
                   </span>
                 </div>
               );
@@ -1695,16 +1718,17 @@ function MeetLinkControl({
 }
 
 function ClassView({
-  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onToggleStar, onOpenHistory, onSaveMeetLink,
+  group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onCycleStar, onOpenHistory, onSaveMeetLink, onSaveLessonHomework,
 }: {
   group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
   onBack: () => void; onEditStudent: (s: TrackerStudent) => void;
   onRequestNewLesson: (groupId: string) => void;
   onRequestRecovery: (studentId: string, lessonId: string) => void;
   onSetAttendanceStatus: (studentId: string, lessonId: string, status: AttendanceStatus) => void;
-  onToggleStar: (studentId: string, lessonId: string) => void;
+  onCycleStar: (studentId: string, lessonId: string) => void;
   onOpenHistory: (studentId: string) => void;
   onSaveMeetLink: (meetLink: string | null) => void | Promise<void>;
+  onSaveLessonHomework: (lessonId: string, note: string) => void | Promise<void>;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const topRanked = students.filter((s) => s.rank <= 3);
@@ -1765,7 +1789,8 @@ function ClassView({
       <AttendanceBoard
         group={group} students={students} lessons={groupLessons} attendance={groupAttendance}
         onRequestNewLesson={onRequestNewLesson} onRequestRecovery={onRequestRecovery}
-        onSetStatus={onSetAttendanceStatus} onToggleStar={onToggleStar}
+        onSetStatus={onSetAttendanceStatus} onCycleStar={onCycleStar}
+        onSaveLessonHomework={onSaveLessonHomework}
       />
 
       <div className="space-y-4">
@@ -1786,13 +1811,14 @@ function ClassView({
 }
 
 function AttendanceBoard({
-  group, students, lessons, attendance, onRequestNewLesson, onRequestRecovery, onSetStatus, onToggleStar,
+  group, students, lessons, attendance, onRequestNewLesson, onRequestRecovery, onSetStatus, onCycleStar, onSaveLessonHomework,
 }: {
   group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
   onRequestNewLesson: (groupId: string) => void;
   onRequestRecovery: (studentId: string, lessonId: string) => void;
   onSetStatus: (studentId: string, lessonId: string, status: AttendanceStatus) => void;
-  onToggleStar: (studentId: string, lessonId: string) => void;
+  onCycleStar: (studentId: string, lessonId: string) => void;
+  onSaveLessonHomework: (lessonId: string, note: string) => void | Promise<void>;
 }) {
   const sortedLessons = [...lessons].sort((a, b) => a.session_number - b.session_number);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(sortedLessons.length > 0 ? sortedLessons[sortedLessons.length - 1].id : null);
@@ -1812,6 +1838,11 @@ function AttendanceBoard({
 
   const selectedIndex = sortedLessons.findIndex((l) => l.id === selectedLessonId);
   const selectedLesson = selectedIndex >= 0 ? sortedLessons[selectedIndex] : null;
+
+  // Notita de tema a lectiei selectate - stare locala (salvata la blur), resincronizata
+  // ori de cate ori profesorul schimba lectia selectata din navigare.
+  const [homeworkDraft, setHomeworkDraft] = useState(selectedLesson?.homework_note ?? '');
+  useEffect(() => { setHomeworkDraft(selectedLesson?.homework_note ?? ''); }, [selectedLesson?.id, selectedLesson?.homework_note]);
 
   function goPrev() { if (selectedIndex > 0) setSelectedLessonId(sortedLessons[selectedIndex - 1].id); }
   function goNext() { if (selectedIndex >= 0 && selectedIndex < sortedLessons.length - 1) setSelectedLessonId(sortedLessons[selectedIndex + 1].id); }
@@ -1835,37 +1866,47 @@ function AttendanceBoard({
         <p className="text-gray-400 text-center py-6 text-sm">Nicio lectie inca. Apasa + pentru a adauga prima lectie.</p>
       ) : selectedLesson && (
         <>
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <button
-              onClick={goPrev} disabled={selectedIndex <= 0} title="Lectia anterioara"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <select
-              value={selectedLesson.id}
-              onChange={(e) => setSelectedLessonId(e.target.value)}
-              className="bg-transparent text-center font-bold text-base md:text-lg cursor-pointer focus:outline-none max-w-[220px] truncate"
-            >
-              {sortedLessons.map((l) => (
-                <option key={l.id} value={l.id} className="bg-gray-900 text-white">
-                  Lectia {l.session_number} · {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' })}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={goNext} disabled={selectedIndex >= sortedLessons.length - 1} title="Lectia urmatoare"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-            >
-              <ChevronRight size={18} />
-            </button>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={goPrev} disabled={selectedIndex <= 0} title="Lectia anterioara"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <select
+                value={selectedLesson.id}
+                onChange={(e) => setSelectedLessonId(e.target.value)}
+                className="bg-transparent text-left font-bold text-base md:text-lg cursor-pointer focus:outline-none max-w-[180px] truncate"
+              >
+                {sortedLessons.map((l) => (
+                  <option key={l.id} value={l.id} className="bg-gray-900 text-white">
+                    Lectia {l.session_number} · {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' })}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={goNext} disabled={selectedIndex >= sortedLessons.length - 1} title="Lectia urmatoare"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={homeworkDraft}
+              onChange={(e) => setHomeworkDraft(e.target.value)}
+              onBlur={() => { if (homeworkDraft !== (selectedLesson.homework_note ?? '')) onSaveLessonHomework(selectedLesson.id, homeworkDraft); }}
+              placeholder="Notează tema pentru data viitoare..."
+              className="min-w-[160px] flex-1 bg-gray-800/60 border border-gray-700 rounded-xl px-3 py-1.5 text-sm placeholder:text-gray-500 focus:outline-none focus:border-[#C8F023]/50"
+            />
           </div>
 
           <div className="space-y-2">
             {students.map((s) => {
               const record = attendance.find((a) => a.lesson_id === selectedLesson.id && a.student_id === s.id);
               const status: AttendanceStatus = record?.status ?? 'absent';
-              const hasStar = record?.has_star ?? false;
+              const starCount = record?.star_count ?? 0;
               const starDisabled = status === 'absent';
               return (
                 <div key={s.id} className="flex items-center gap-2 bg-gray-800/70 rounded-2xl px-3 py-2">
@@ -1891,12 +1932,12 @@ function AttendanceBoard({
                     </button>
                   </div>
                   <button
-                    onClick={() => !starDisabled && onToggleStar(s.id, selectedLesson.id)}
+                    onClick={() => !starDisabled && onCycleStar(s.id, selectedLesson.id)}
                     disabled={starDisabled}
-                    title={starDisabled ? 'Elevul trebuie sa fie prezent sau sa fi recuperat lectia' : 'Tema facuta'}
-                    className={`ml-1 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${starDisabled ? 'bg-gray-800 text-gray-700 opacity-40 cursor-not-allowed' : hasStar ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    title={starDisabled ? 'Elevul trebuie sa fie prezent sau sa fi recuperat lectia' : `Tema facuta x${starCount} - click pentru a schimba`}
+                    className={`ml-1 h-8 min-w-8 px-1.5 rounded-full flex items-center justify-center gap-0.5 text-sm font-bold transition-colors ${starDisabled ? 'bg-gray-800 text-gray-700 opacity-40 cursor-not-allowed' : starCount > 0 ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
                   >
-                    {rewardEmoji}
+                    {rewardEmoji}{starCount > 1 && <span className="text-[11px] font-bold">×{starCount}</span>}
                   </button>
                 </div>
               );
