@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X as XIcon, RotateCcw, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink } from 'lucide-react';
+import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId } from '@/lib/types';
+import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 
@@ -57,6 +57,8 @@ const PROGRESS_COLORS = [
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const MEDAL_CLASSES = ['tracker-medal-gold', 'tracker-medal-silver', 'tracker-medal-bronze'];
+
+const LESSON_FORMAT_LABEL: Record<LessonKind, string> = { grup: 'Grup', individual: 'Indiv.' };
 
 const DAYS = [
   { id: 'luni', label: 'Luni' },
@@ -1566,9 +1568,10 @@ function StudentHistoryModal({
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold truncate">
                       {moduleLessonByLessonId.get(lesson.id)}
-                      <span className="text-gray-400 font-normal ml-2">
+                      {' - '}
+                      <span className="text-gray-400 font-normal">
                         {new Date(lesson.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                        {lesson.lesson_time ? ` - ${lesson.lesson_time}` : ''}
+                        {lesson.lesson_time ? ` · ${lesson.lesson_time}` : ''}
                       </span>
                     </div>
                     {status === 'made_up' && record?.recovery_date && (
@@ -1816,9 +1819,6 @@ function ClassView({
   const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
   const attendanceCountFor = (studentId: string) =>
     groupAttendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
-  // Numerotare compacta "M{x} / L{y}" - vezi src/lib/lessonNumbering.ts. Se aduna decalajul
-  // manual (lesson_offset, setat din "Editeaza elev") la prezentele+recuperarile inregistrate.
-  const moduleLessonFor = (student: TrackerStudent) => formatModuleLesson(student.lesson_offset + attendanceCountFor(student.id));
 
   return (
     <div>
@@ -1848,7 +1848,7 @@ function ClassView({
                       title="Vezi fisa elevului"
                     >
                       <div className="font-bold underline decoration-transparent group-hover/name:decoration-black/40 underline-offset-2 transition-colors">{s.name}</div>
-                      <div className="text-[11px] font-medium text-black/60" title={`${attendanceCountFor(s.id)} prezențe`}>🗓️ {moduleLessonFor(s)}</div>
+                      <div className="text-[11px] font-medium text-black/60">🗓️ {attendanceCountFor(s.id)} prezențe</div>
                       {s.rank === 1 && firstPlaceCount > 1 && (
                         <div className="text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 inline-block px-2 py-0.5 rounded-full text-white">
                           ⚡ Prieteni Fulgeri
@@ -1881,7 +1881,7 @@ function ClassView({
           students.map((s, i) => (
             <StudentCard
               key={s.id} student={s} index={i} totalStudents={students.length} moduleCount={group.module_count || 1}
-              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} moduleLesson={moduleLessonFor(s)}
+              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)}
               onEdit={() => onEditStudent(s)}
               onOpenHistory={() => onOpenHistory(s.id)}
             />
@@ -1904,6 +1904,7 @@ function AttendanceBoard({
 }) {
   const sortedLessons = [...lessons].sort((a, b) => a.session_number - b.session_number);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(sortedLessons.length > 0 ? sortedLessons[sortedLessons.length - 1].id : null);
+  const [lessonMenuOpen, setLessonMenuOpen] = useState(false);
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const prevLenRef = useRef(sortedLessons.length);
 
@@ -1956,17 +1957,41 @@ function AttendanceBoard({
               >
                 <ChevronLeft size={18} />
               </button>
-              <select
-                value={selectedLesson.id}
-                onChange={(e) => setSelectedLessonId(e.target.value)}
-                className="bg-transparent text-left font-bold text-base md:text-lg cursor-pointer focus:outline-none max-w-[180px] truncate"
-              >
-                {sortedLessons.map((l) => (
-                  <option key={l.id} value={l.id} className="bg-gray-900 text-white">
-                    Lectia {l.session_number} · {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' })}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setLessonMenuOpen((v) => !v)}
+                  aria-expanded={lessonMenuOpen}
+                  className="flex items-center gap-1 bg-transparent font-bold text-base md:text-lg cursor-pointer focus:outline-none"
+                >
+                  {formatModuleLesson(selectedLesson.session_number)}
+                  <ChevronDown size={16} className={`text-gray-500 transition-transform ${lessonMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {lessonMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setLessonMenuOpen(false)} />
+                    <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-72 overflow-y-auto rounded-2xl border border-gray-700 bg-gray-900 shadow-xl">
+                      {sortedLessons.map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => { setSelectedLessonId(l.id); setLessonMenuOpen(false); }}
+                          className={`flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm transition-colors ${l.id === selectedLesson.id ? 'bg-gray-800 text-[#C8F023]' : 'text-white hover:bg-gray-800'}`}
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {formatModuleLesson(l.session_number)} - {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {l.lesson_time ? `, ${l.lesson_time}` : ''}
+                          </span>
+                          <span className="shrink-0 rounded-md border border-[#C8F023]/40 bg-black px-1.5 py-0.5 text-[10px] font-semibold text-[#C8F023]">
+                            {LESSON_FORMAT_LABEL[l.format]}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={goNext} disabled={selectedIndex >= sortedLessons.length - 1} title="Lectia urmatoare"
                 className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
@@ -2032,10 +2057,10 @@ function AttendanceBoard({
 }
 
 function StudentCard({
-  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, moduleLesson, onEdit, onOpenHistory,
+  student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit, onOpenHistory,
 }: {
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
-  rewardEmoji: string; attendanceCount: number; moduleLesson: string; onEdit: () => void; onOpenHistory: () => void;
+  rewardEmoji: string; attendanceCount: number; onEdit: () => void; onOpenHistory: () => void;
 }) {
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
@@ -2063,11 +2088,8 @@ function StudentCard({
             <div className="tracker-level-badge inline-block px-3 py-1 rounded-full text-white text-sm font-semibold">
               Nivel {levelInfo.level} - {levelInfo.name}
             </div>
-            <div
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold"
-              title={`${attendanceCount} prezențe`}
-            >
-              🗓️ {moduleLesson}
+            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
+              🗓️ {attendanceCount} prezențe
             </div>
           </div>
         </div>
