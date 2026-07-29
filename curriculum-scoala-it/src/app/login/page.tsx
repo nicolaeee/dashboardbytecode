@@ -46,32 +46,32 @@ export default function LoginPage() {
       <div className="ambient-glow pointer-events-none absolute -bottom-40 right-1/4 h-[28rem] w-[28rem] rounded-full bg-purple-500/15 blur-3xl" style={{ animationDelay: '-4s' }} aria-hidden />
       <FloatingParticles />
 
-      <div className="relative z-10 grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-        {/* Panoul de identitate: chiar ierarhia platformei, desenată ca traseu */}
-        <section className="hidden flex-col justify-between bg-night/60 px-12 py-12 text-white lg:flex">
+      <div className="relative z-10 flex min-h-screen flex-col lg:grid lg:grid-cols-[1.05fr_1fr]">
+        {/* Panoul de identitate: chiar ierarhia platformei, desenată ca traseu — vizibil pe orice ecran */}
+        <section className="flex flex-col justify-between bg-night/60 px-5 py-8 text-white sm:px-8 sm:py-10 lg:px-12 lg:py-12">
           <div className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 font-mono text-sm font-bold text-black">{'</>'}</span>
             <span className="font-display text-[15px] font-semibold">ByteCode Dashboard</span>
           </div>
 
-          <div className="max-w-md">
-            <h1 className="font-display text-[34px] font-semibold leading-[1.15]">
+          <div className="mt-6 max-w-md lg:mt-0">
+            <h1 className="font-display text-[26px] font-semibold leading-[1.15] sm:text-[30px] lg:text-[34px]">
               Panou de control pentru profesor.
             </h1>
-            <p className="mt-3 text-sm leading-relaxed text-white/45">
+            <p className="mt-2.5 text-[13px] leading-relaxed text-white/45 sm:mt-3 sm:text-sm">
               Totul într-un singur loc: platforma de conținut, cursurile, registrul și tracker-ul de progres.
             </p>
-            <div className="mt-9">
+            <div className="mt-5 sm:mt-7 lg:mt-9">
               <LoginStepper />
             </div>
           </div>
 
-          <p className="max-w-sm text-sm leading-relaxed text-white/45">
+          <p className="mt-6 max-w-sm text-xs leading-relaxed text-white/40 sm:mt-8 sm:text-sm sm:text-white/[.45] lg:mt-0">
             Accesul profesorilor la module și lecții este acordat de administrator.
           </p>
         </section>
 
-        <section className="flex items-center justify-center px-5 py-16">
+        <section className="flex items-center justify-center px-5 py-10 sm:py-16">
           <Card className="w-full max-w-sm p-7 shadow-glow-sm">
             <h2 className="font-display text-xl font-semibold">Intră în cont</h2>
             <p className="mt-1 text-sm text-lock">Folosește datele primite de la administrator.</p>
