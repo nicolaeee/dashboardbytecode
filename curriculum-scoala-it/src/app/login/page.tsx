@@ -2,8 +2,7 @@
 import { useActionState, useState } from 'react';
 import { signIn } from '@/app/auth-actions';
 import { Button, Card, Field, Input, Modal } from '@/components/ui';
-
-const HIERARCHY = ['Platformă', 'Curs', 'Modul', 'Lecție'];
+import LoginStepper from './LoginStepper';
 
 // Configurate static (nu random) - randomizarea la render ar produce mismatch de hidratare.
 const PARTICLES = [
@@ -57,21 +56,14 @@ export default function LoginPage() {
 
           <div className="max-w-md">
             <h1 className="font-display text-[34px] font-semibold leading-[1.15]">
-              Tot curriculumul, pe patru niveluri.
+              Panou de control pentru profesor.
             </h1>
-            <ol className="mt-9 space-y-0">
-              {HIERARCHY.map((level, i) => (
-                <li key={level} className="relative flex items-center gap-4 pb-7 last:pb-0">
-                  {i < HIERARCHY.length - 1 && (
-                    <span className="absolute left-[13px] top-7 h-7 w-px bg-white/15" aria-hidden />
-                  )}
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/20 font-mono text-[11px] text-white/70">
-                    {i + 1}
-                  </span>
-                  <span className="font-display text-lg">{level}</span>
-                </li>
-              ))}
-            </ol>
+            <p className="mt-3 text-sm leading-relaxed text-white/45">
+              Totul într-un singur loc: platforma de conținut, cursurile, registrul și tracker-ul de progres.
+            </p>
+            <div className="mt-9">
+              <LoginStepper />
+            </div>
           </div>
 
           <p className="max-w-sm text-sm leading-relaxed text-white/45">

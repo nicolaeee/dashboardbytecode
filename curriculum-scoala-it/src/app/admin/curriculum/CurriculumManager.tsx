@@ -129,22 +129,24 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
             onClick={() => toggle(platform.id)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(platform.id); } }}
             role="button" tabIndex={0} aria-expanded={open.has(platform.id)}
-            className="flex cursor-pointer items-start gap-3 border-l-4 px-4 py-4 transition hover:bg-slate-25"
+            className="flex w-full flex-col gap-3 border-l-4 px-4 py-4 transition hover:bg-slate-25 cursor-pointer md:flex-row md:items-start"
             style={{ borderColor: platform.accent }}
           >
-            <span className="mt-0.5 text-lock">
-              {open.has(platform.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-            </span>
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <span className="mt-0.5 text-lock shrink-0">
+                {open.has(platform.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              </span>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-lg font-semibold">{platform.name}</h2>
-                <Badge>{platform.courses.length} cursuri</Badge>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-display text-lg font-semibold">{platform.name}</h2>
+                  <Badge>{platform.courses.length} cursuri</Badge>
+                </div>
+                {platform.description && <p className="mt-0.5 text-sm text-ink/55">{platform.description}</p>}
               </div>
-              {platform.description && <p className="mt-0.5 text-sm text-ink/55">{platform.description}</p>}
             </div>
 
-            <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+            <div onClick={(e) => e.stopPropagation()} className="w-full shrink-0 md:w-auto">
               <RowActions
                 onAdd={() => startCreate('course', platform.id)}
                 addLabel="Curs"
@@ -173,16 +175,18 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                     onClick={() => toggle(course.id)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(course.id); } }}
                     role="button" tabIndex={0} aria-expanded={open.has(course.id)}
-                    className="-mx-2 flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1 transition hover:bg-brand-50"
+                    className="-mx-2 flex cursor-pointer flex-col gap-2 rounded-lg px-2 py-1 transition hover:bg-brand-50 md:flex-row md:items-start"
                   >
-                    <span className="mt-0.5 text-lock">
-                      {open.has(course.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">{course.title}</p>
-                      {course.description && <p className="text-[13px] text-ink/50">{course.description}</p>}
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                      <span className="mt-0.5 text-lock shrink-0">
+                        {open.has(course.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">{course.title}</p>
+                        {course.description && <p className="text-[13px] text-ink/50">{course.description}</p>}
+                      </div>
                     </div>
-                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <div onClick={(e) => e.stopPropagation()} className="w-full shrink-0 md:w-auto">
                       <RowActions
                         onAdd={() => startCreate('module', course.id)}
                         addLabel="Modul"
@@ -210,18 +214,20 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                             onClick={() => toggle(mod.id)}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(mod.id); } }}
                             role="button" tabIndex={0} aria-expanded={open.has(mod.id)}
-                            className="-mx-3 -my-2.5 flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2.5 transition hover:bg-brand-50"
+                            className="-mx-3 -my-2.5 flex cursor-pointer flex-col gap-2 rounded-xl px-3 py-2.5 transition hover:bg-brand-50 md:flex-row md:items-start"
                           >
-                            <span className="mt-0.5 text-lock">
-                              {open.has(mod.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="flex items-center gap-2 text-[15px] font-medium">
-                                <span className="tag">M{mi + 1}</span> {mod.title}
-                              </p>
-                              {mod.description && <p className="text-[13px] text-ink/50">{mod.description}</p>}
+                            <div className="flex min-w-0 flex-1 items-start gap-2">
+                              <span className="mt-0.5 text-lock shrink-0">
+                                {open.has(mod.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="flex items-center gap-2 text-[15px] font-medium">
+                                  <span className="tag">M{mi + 1}</span> {mod.title}
+                                </p>
+                                {mod.description && <p className="text-[13px] text-ink/50">{mod.description}</p>}
+                              </div>
                             </div>
-                            <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                            <div onClick={(e) => e.stopPropagation()} className="w-full shrink-0 md:w-auto">
                               <RowActions
                                 onAdd={() => startCreate('lesson', mod.id)}
                                 addLabel="Lecție"
@@ -404,7 +410,7 @@ function RowActions({
   onUp?: () => void; onDown?: () => void; onDelete: () => void; disabled?: boolean;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-0.5">
+    <div className="flex w-full flex-wrap items-center gap-1 md:w-auto md:flex-nowrap md:gap-0.5">
       {onAdd && (
         <Button size="sm" variant="outline" onClick={onAdd} disabled={disabled} className="mr-1">
           <Plus size={14} /> {addLabel}

@@ -184,3 +184,75 @@ body {
   50%      { opacity: .50; transform: scale(1.08); }
 }
 .ambient-glow { animation: ambient-glow-pulse 8s ease-in-out infinite; }
+
+/* ============================================================================
+   LOGIN — Progress Stepper animativ (Platformă → Curs → Registru → Tracker)
+   Buclă infinită, pur CSS: fiecare bilă/linie are propriul keyframe, sincronizate
+   pe același ciclu de 10s, ca aprinderea să pornească mereu din același punct.
+   ========================================================================= */
+.login-stepper-dot {
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.5);
+}
+
+.login-stepper-line-fill {
+  top: 0; bottom: 0; left: 0;
+  background: linear-gradient(90deg, #C8F023, #8B5CF6);
+  box-shadow: 0 0 8px rgba(200,240,35,.6);
+}
+
+.login-stepper-line-head {
+  position: absolute;
+  top: 50%;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 10px 3px rgba(200,240,35,.9);
+  transform: translateY(-50%);
+}
+
+.login-stepper-dot-1 { animation: login-step-dot-1 10s ease-in-out infinite; }
+.login-stepper-dot-2 { animation: login-step-dot-2 10s ease-in-out infinite; }
+.login-stepper-dot-3 { animation: login-step-dot-3 10s ease-in-out infinite; }
+.login-stepper-dot-4 { animation: login-step-dot-4 10s ease-in-out infinite; }
+.login-stepper-line-fill-1 { animation: login-step-line-1 10s ease-in-out infinite; }
+.login-stepper-line-fill-2 { animation: login-step-line-2 10s ease-in-out infinite; }
+.login-stepper-line-fill-3 { animation: login-step-line-3 10s ease-in-out infinite; }
+.login-stepper-line-head-1 { animation: login-step-head-1 10s ease-in-out infinite; }
+.login-stepper-line-head-2 { animation: login-step-head-2 10s ease-in-out infinite; }
+.login-stepper-line-head-3 { animation: login-step-head-3 10s ease-in-out infinite; }
+
+@keyframes login-step-dot-1 {
+  0%, 4%   { transform: scale(1.15); background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.16), 0 0 22px rgba(200,240,35,.55); }
+  8%, 89%  { transform: scale(1);    background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.14), 0 0 16px rgba(200,240,35,.4); }
+  96%, 100% { transform: scale(1);   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+}
+@keyframes login-step-dot-2 {
+  0%, 23%  { transform: scale(1);    background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+  27%      { transform: scale(1.15); background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.16), 0 0 22px rgba(200,240,35,.55); }
+  31%, 89% { transform: scale(1);    background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.14), 0 0 16px rgba(200,240,35,.4); }
+  96%, 100% { transform: scale(1);   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+}
+@keyframes login-step-dot-3 {
+  0%, 45%  { transform: scale(1);    background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+  49%      { transform: scale(1.15); background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.16), 0 0 22px rgba(200,240,35,.55); }
+  53%, 89% { transform: scale(1);    background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.14), 0 0 16px rgba(200,240,35,.4); }
+  96%, 100% { transform: scale(1);   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+}
+@keyframes login-step-dot-4 {
+  0%, 67%  { transform: scale(1);    background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+  71%      { transform: scale(1.15); background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.16), 0 0 22px rgba(200,240,35,.55); }
+  75%, 89% { transform: scale(1);    background: #C8F023; border-color: transparent; color: #0b1406; box-shadow: 0 0 0 5px rgba(200,240,35,.14), 0 0 16px rgba(200,240,35,.4); }
+  96%, 100% { transform: scale(1);   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.5); box-shadow: none; }
+}
+
+@keyframes login-step-line-1 { 0%, 4% { width: 0%; } 27% { width: 100%; } 89% { width: 100%; } 96%, 100% { width: 0%; } }
+@keyframes login-step-line-2 { 0%, 27% { width: 0%; } 49% { width: 100%; } 89% { width: 100%; } 96%, 100% { width: 0%; } }
+@keyframes login-step-line-3 { 0%, 49% { width: 0%; } 71% { width: 100%; } 89% { width: 100%; } 96%, 100% { width: 0%; } }
+
+@keyframes login-step-head-1 { 0%, 4% { opacity: 0; } 6%, 25% { opacity: 1; } 27%, 100% { opacity: 0; } }
+@keyframes login-step-head-2 { 0%, 27% { opacity: 0; } 29%, 47% { opacity: 1; } 49%, 100% { opacity: 0; } }
+@keyframes login-step-head-3 { 0%, 49% { opacity: 0; } 51%, 69% { opacity: 1; } 71%, 100% { opacity: 0; } }
