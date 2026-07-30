@@ -10,9 +10,14 @@ export default async function ProgressTrackerPage() {
 
   // Fiecare cont vede implicit doar propriile date; adminul poate alege alt profesor
   // din dropdown-ul din Progress Tracker (reincarcare client-side, ca in /registru).
+  // GDPR: telefoanele/email-urile parintelui sunt coloane admin-only - un profesor nu
+  // primeste deloc aceste valori in payload-ul paginii (nu doar ascunse in UI, ci absente
+  // din raspuns).
   const [{ data: groups }, { data: students }, { data: lessons }, { data: attendance }, teachersRes] = await Promise.all([
     supabase.from('tracker_groups').select('*').eq('teacher_id', profile.id).order('created_at'),
-    supabase.from('tracker_students').select('*').eq('teacher_id', profile.id).order('created_at'),
+    isAdmin
+      ? supabase.from('tracker_students').select('*').eq('teacher_id', profile.id).order('created_at')
+      : supabase.from('tracker_students').select('id,teacher_id,group_id,name,short_name,progress,lesson_offset,deleted_at,created_at').eq('teacher_id', profile.id).order('created_at'),
     supabase.from('tracker_lessons').select('*').eq('teacher_id', profile.id).order('session_number'),
     supabase.from('tracker_attendance').select('*').eq('teacher_id', profile.id),
     isAdmin

@@ -255,6 +255,15 @@ create table public.tracker_students (
   -- Decalaj manual de lectii (vezi src/lib/lessonNumbering.ts) - punct de pornire pentru
   -- elevii cu istoric dinainte de Tracker, folosit la calculul "M{x} / L{y}".
   lesson_offset int  not null default 0,
+  -- Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`,
+  -- numele complet folosit in registru/tracker).
+  short_name    text,
+  -- Pana la 5 telefoane/email-uri de parinte (format Green API pt telefoane, ex:
+  -- "40712345678@c.us" - sufixul se adauga automat la trimiterea notificarii).
+  -- GDPR: coloane excluse explicit din fetch-ul folosit de profesori (vezi
+  -- progress/page.tsx); doar adminul le citeste/scrie, din Fisa Elevului.
+  parent_phones text[] not null default '{}',
+  parent_emails text[] not null default '{}',
   deleted_at    timestamptz,
   created_at    timestamptz not null default now()
 );

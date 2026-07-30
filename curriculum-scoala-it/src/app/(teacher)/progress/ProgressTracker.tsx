@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink } from 'lucide-react';
+import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
@@ -123,6 +123,31 @@ function norm(s: string) {
   return s.normalize('NFD').replace(DIACRITICS_RE, '').toLowerCase();
 }
 
+// Maxim de telefoane/email-uri de parinte per elev (vezi PARTEA 1/2 - camp dinamic).
+const MAX_CONTACTS = 5;
+
+/**
+ * Normalizeaza orice valoare venita din DB/state la un array de string-uri, indiferent
+ * daca e deja array, null/undefined (elevi vechi, dinainte de migratie) sau un string
+ * simplu ramas dintr-o migrare partiala - niciodata nu lasam un .map() sa crape pe el.
+ */
+function asContactList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
+  if (typeof value === 'string') return value ? [value] : [];
+  return [];
+}
+
+/** Curata lista pentru salvare: trim + elimina golurile + plafoneaza la MAX_CONTACTS. */
+function cleanContactList(value: unknown): string[] {
+  return asContactList(value).map((v) => v.trim()).filter(Boolean).slice(0, MAX_CONTACTS);
+}
+
+/** Lista pentru afisare in formular: mereu cel putin 1 input (gol daca elevul nu are inca date). */
+function toEditableList(value: unknown): string[] {
+  const list = asContactList(value);
+  return list.length > 0 ? list : [''];
+}
+
 function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank: number })[] {
   const ranked: (T & { rank: number })[] = [];
   let currentRank = 1;
@@ -161,6 +186,7 @@ function nextDateForDay(dayId: string | null) {
 }
 
 type ToastItem = { id: string; message: string; type: 'success' | 'error' };
+type ButtonState = 'idle' | 'loading' | 'success';
 type CelebrationItem = { id: string; kind: 'text' | 'emoji'; content: string };
 type ConfettiItem = { id: string; left: number; duration: number; delay: number; emoji: string };
 
@@ -214,7 +240,19 @@ export default function ProgressTracker({
   const [editClassTime, setEditClassTime] = useState('');
   const [editClassCourse, setEditClassCourse] = useState<CourseId | null>(null);
   const [addStudentName, setAddStudentName] = useState('');
+  const [addStudentShortName, setAddStudentShortName] = useState('');
+  // Telefoane/email-uri parinte - GDPR: completate/editate doar de admin (vezi isAdmin mai jos).
+  const [addStudentPhones, setAddStudentPhones] = useState<string[]>(['']);
+  const [addStudentEmails, setAddStudentEmails] = useState<string[]>(['']);
   const [editStudentName, setEditStudentName] = useState('');
+  const [editStudentShortName, setEditStudentShortName] = useState('');
+  const [editStudentPhones, setEditStudentPhones] = useState<string[]>(['']);
+  const [editStudentEmails, setEditStudentEmails] = useState<string[]>(['']);
+  // Panoul lateral cu toti copiii profesorului curent (vezi PARTEA 4 - Lista Copiilor).
+  const [studentsDrawerOpen, setStudentsDrawerOpen] = useState(false);
+  // Stare vizuala per elev pentru cele 2 butoane de notificare din randul elevului.
+  const [notifyState, setNotifyState] = useState<Record<string, ButtonState>>({});
+  const [connectedState, setConnectedState] = useState<Record<string, ButtonState>>({});
   // Suprascriere manuala a pozitiei elevului (Modul/Lectie) - pentru elevi cu istoric
   // dinainte de Tracker. Devine noul punct de pornire (lesson_offset) la salvare.
   const [editStudentModule, setEditStudentModule] = useState(1);
@@ -444,12 +482,26 @@ export default function ProgressTracker({
     if (!currentGroupId) return;
     if (totalDataCount >= 999) return showToast('Limita de date atinsa (999)', 'error');
 
+    const patch: Record<string, unknown> = {
+      teacher_id: viewedTeacherId, group_id: currentGroupId, name, progress: 0,
+      short_name: addStudentShortName.trim() || null,
+    };
+    // GDPR: campurile sunt ascunse profesorilor in UI, deci nu trimitem niciodata o valoare
+    // introdusa de ei - doar adminul poate seta telefoanele/email-urile parintelui la creare.
+    if (isAdmin) {
+      patch.parent_phones = cleanContactList(addStudentPhones);
+      patch.parent_emails = cleanContactList(addStudentEmails);
+    }
+
     const { data, error } = await supabase.from('tracker_students')
-      .insert({ teacher_id: viewedTeacherId, group_id: currentGroupId, name, progress: 0 }).select().single();
+      .insert(patch).select().single();
     if (error || !data) return showToast('Eroare', 'error');
     setStudents((ss) => [...ss, data as TrackerStudent]);
     setModal({ type: null });
     setAddStudentName('');
+    setAddStudentShortName('');
+    setAddStudentPhones(['']);
+    setAddStudentEmails(['']);
     showToast('Elev adaugat!');
   }
 
@@ -469,7 +521,14 @@ export default function ProgressTracker({
     const desiredTotal = totalLessonsFor(editStudentModule, editStudentLesson);
     const lessonOffset = desiredTotal - studentLessonCount(studentId);
     const stars = Math.max(0, Math.round(editStudentStars));
-    const ok = await patchStudent(studentId, { name, lesson_offset: lessonOffset, progress: stars });
+    const patch: Partial<TrackerStudent> = { name, lesson_offset: lessonOffset, progress: stars, short_name: editStudentShortName.trim() || null };
+    // GDPR: un profesor nu vede/editeaza niciodata aceste campuri, deci nu le atingem la
+    // salvare decat daca cel logat e admin - altfel am risca sa suprascriem cu starea locala goala.
+    if (isAdmin) {
+      patch.parent_phones = cleanContactList(editStudentPhones);
+      patch.parent_emails = cleanContactList(editStudentEmails);
+    }
+    const ok = await patchStudent(studentId, patch);
     if (ok) { setModal({ type: null }); showToast('Elev actualizat!'); }
   }
 
@@ -488,6 +547,52 @@ export default function ProgressTracker({
     if (error) return showToast('Eroare', 'error');
     setStudents((ss) => ss.filter((s) => s.id !== studentId));
     showToast('Elev sters permanent');
+  }
+
+  const NOTIFY_WEBHOOK_URL = 'https://connect.pabbly.com/webhook-listener/webhook/IjU3NjIwNTY5MDYzMzA0MzM1MjZiNTUzMyI_3D_pc/IjU3NjcwNTY5MDYzZTA0MzI1MjZhNTUzMjUxMzUi_pc';
+
+  // Trimite catre Pabbly (Green API) un WhatsApp cu link-ul de conectare al clasei.
+  // Necesita cel putin un telefon de parinte, editabil doar de admin - vezi PARTEA 1 (GDPR).
+  async function handleSendNotification(student: TrackerStudent) {
+    const phones = cleanContactList(student.parent_phones);
+    if (phones.length === 0) {
+      showToast('Adminul nu a adăugat încă un număr pentru acest elev!', 'error');
+      return;
+    }
+    // Pregatit pentru iteratorul din Pabbly: un singur string, telefoanele separate prin
+    // virgula, fiecare cu sufixul Green API adaugat daca lipseste.
+    const formattedPhones = phones.map((p) => (p.endsWith('@c.us') ? p : `${p}@c.us`)).join(', ');
+
+    setNotifyState((s) => ({ ...s, [student.id]: 'loading' }));
+    try {
+      // "no-cors" face raspunsul opac (nu-i putem citi statusul din JS) - e modul cerut
+      // explicit ca sa evitam erorile de CORS in consola. Din aceasi cauza, nu tratam un
+      // eventual reject al fetch-ului ca esec real: e un simplu "trimite si uita".
+      await fetch(NOTIFY_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nume_copil: student.short_name?.trim() || student.name,
+          telefon: formattedPhones,
+          link_conectare: getGroupById(student.group_id)?.meet_link ?? '',
+        }),
+      });
+    } catch {
+      // ignorat intentionat - vezi comentariul de mai sus
+    }
+    setNotifyState((s) => ({ ...s, [student.id]: 'success' }));
+    setTimeout(() => setNotifyState((s) => ({ ...s, [student.id]: 'idle' })), 3000);
+  }
+
+  // Doar vizual pentru moment (fara request extern) - marcheaza elevul ca fiind deja
+  // conectat la lectie si ascunde starea "Trimis" a butonului de notificare.
+  function handleChildConnected(student: TrackerStudent) {
+    setConnectedState((s) => ({ ...s, [student.id]: 'loading' }));
+    setTimeout(() => {
+      setConnectedState((s) => ({ ...s, [student.id]: 'success' }));
+      setNotifyState((s) => ({ ...s, [student.id]: 'idle' }));
+    }, 500);
   }
 
   async function addModule() {
@@ -634,6 +739,24 @@ export default function ProgressTracker({
     setModal({ type: 'studentHistory', studentId });
   }
 
+  // Pregateste formularul de editare pentru un elev - refolosita atat din Cardul Elevului
+  // (in interiorul unei clase), cat si din panoul "Lista Copiilor" (PARTEA 4), ca ambele
+  // sa deschida FIX acelasi modal, pe aceeasi stare globala.
+  function openEditStudentModal(s: TrackerStudent) {
+    setEditStudentName(s.name);
+    setEditStudentShortName(s.short_name ?? '');
+    const { module, lesson } = computeModuleLesson(s.lesson_offset + studentLessonCount(s.id));
+    setEditStudentModule(module);
+    setEditStudentLesson(lesson);
+    setEditStudentStars(s.progress);
+    // GDPR: pentru un profesor, aceste campuri nici nu exista in payload (vezi
+    // progress/page.tsx) - dar verificam explicit isAdmin ca sa nu se strecoare
+    // vreodata in starea locala a formularului pentru rolul de profesor.
+    setEditStudentPhones(isAdmin ? toEditableList(s.parent_phones) : ['']);
+    setEditStudentEmails(isAdmin ? toEditableList(s.parent_emails) : ['']);
+    setModal({ type: 'editStudent', studentId: s.id });
+  }
+
   async function handleSubmitNewLesson(e: React.FormEvent, groupId: string) {
     e.preventDefault();
     setBusy(true);
@@ -718,7 +841,14 @@ export default function ProgressTracker({
               </select>
             )}
             <button
-              onClick={() => setMenuOpen((v) => !v)}
+              onClick={() => { setStudentsDrawerOpen(true); setMenuOpen(false); }}
+              className="bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5 shrink-0 transition-colors"
+              title="Toti copiii profesorului curent"
+            >
+              👶 <span className="hidden sm:inline">Lista Copiilor</span>
+            </button>
+            <button
+              onClick={() => { setMenuOpen((v) => !v); setStudentsDrawerOpen(false); }}
               className="w-10 h-10 bg-[#C8F023] rounded-xl flex flex-col items-center justify-center gap-1.5 z-50 shrink-0"
               aria-label="Meniu"
             >
@@ -811,14 +941,7 @@ export default function ProgressTracker({
             lessons={lessons}
             attendance={attendance}
             onBack={goHome}
-            onEditStudent={(s) => {
-              setEditStudentName(s.name);
-              const { module, lesson } = computeModuleLesson(s.lesson_offset + studentLessonCount(s.id));
-              setEditStudentModule(module);
-              setEditStudentLesson(lesson);
-              setEditStudentStars(s.progress);
-              setModal({ type: 'editStudent', studentId: s.id });
-            }}
+            onEditStudent={openEditStudentModal}
             onRequestNewLesson={openNewLessonModal}
             onRequestRecovery={openRecoveryModal}
             onSetAttendanceStatus={setAttendanceStatus}
@@ -826,6 +949,10 @@ export default function ProgressTracker({
             onOpenHistory={openStudentHistory}
             onSaveMeetLink={(meetLink) => saveMeetLink(currentGroup.id, meetLink)}
             onSaveLessonHomework={saveLessonHomework}
+            notifyState={notifyState}
+            connectedState={connectedState}
+            onSendNotification={handleSendNotification}
+            onChildConnected={handleChildConnected}
           />
         ) : null}
       </main>
@@ -853,13 +980,27 @@ export default function ProgressTracker({
               onOpenClass={openClass}
               onAddModule={() => { addModule(); setMenuOpen(false); }}
               onRemoveModule={() => { removeModule(); setMenuOpen(false); }}
-              onAddStudent={() => { setAddStudentName(''); setModal({ type: 'addStudent' }); setMenuOpen(false); }}
+              onAddStudent={() => { setAddStudentName(''); setAddStudentShortName(''); setAddStudentPhones(['']); setAddStudentEmails(['']); setModal({ type: 'addStudent' }); setMenuOpen(false); }}
               onTrashStudents={() => { setModal({ type: 'trashStudents' }); setMenuOpen(false); }}
               onDeleteClass={() => { setModal({ type: 'confirmDeleteClass', groupId: currentGroup.id }); setMenuOpen(false); }}
               onGoHome={goHome}
             />
           ) : null}
         </div>
+      </div>
+
+      {/* PARTEA 4: Lista Copiilor - director global, toti elevii profesorului curent */}
+      <div
+        onClick={() => setStudentsDrawerOpen(false)}
+        className={`fixed inset-0 bg-black/70 z-40 transition-opacity ${studentsDrawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      />
+      <div className={`fixed top-0 left-0 h-full w-96 max-w-full bg-gray-900 z-50 overflow-y-auto transform transition-transform ${studentsDrawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <AllStudentsDrawer
+          groups={activeGroups}
+          students={students.filter((s) => !s.deleted_at)}
+          onClose={() => setStudentsDrawerOpen(false)}
+          onSelectStudent={(s) => { setStudentsDrawerOpen(false); openEditStudentModal(s); }}
+        />
       </div>
 
       {/* Celebratii plutitoare */}
@@ -1098,12 +1239,31 @@ export default function ProgressTracker({
           <h3 className="text-xl font-bold mb-4 text-[#C8F023]">➕ Adauga Elev</h3>
           <form onSubmit={handleAddStudent}>
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Numele elevului</label>
+              <label className="block text-sm font-semibold mb-2">Nume Complet <span className="text-gray-500 font-normal">(pentru profesor/registru)</span></label>
               <input
                 type="text" value={addStudentName} onChange={(e) => setAddStudentName(e.target.value)}
                 placeholder="Nume elev" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
               />
             </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">Nume Mic <span className="text-gray-500 font-normal">(pentru notificări părinți)</span></label>
+              <input
+                type="text" value={addStudentShortName} onChange={(e) => setAddStudentShortName(e.target.value)}
+                placeholder="ex: Andrei" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+              />
+            </div>
+            {isAdmin && (
+              <>
+                <DynamicContactList
+                  label="Telefoane parinte" type="tel" values={addStudentPhones} onChange={setAddStudentPhones}
+                  placeholder="ex: 40712345678" addLabel="+ Adauga numar"
+                />
+                <DynamicContactList
+                  label="Email-uri parinte" type="email" values={addStudentEmails} onChange={setAddStudentEmails}
+                  placeholder="ex: parinte@exemplu.com" addLabel="+ Adauga email"
+                />
+              </>
+            )}
             <div className="flex gap-3">
               <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
                 ✖️ Anuleaza
@@ -1124,10 +1284,17 @@ export default function ProgressTracker({
             <h3 className="text-xl font-bold mb-4 text-[#C8F023]">⚙️ Editeaza Elev</h3>
             <form onSubmit={(e) => handleEditStudent(e, student.id)}>
               <div className="mb-4">
-                <label className="block text-sm font-semibold mb-2">Numele Elevului</label>
+                <label className="block text-sm font-semibold mb-2">Nume Complet <span className="text-gray-500 font-normal">(pentru profesor/registru)</span></label>
                 <input
                   type="text" value={editStudentName} onChange={(e) => setEditStudentName(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">Nume Mic <span className="text-gray-500 font-normal">(pentru notificări părinți)</span></label>
+                <input
+                  type="text" value={editStudentShortName} onChange={(e) => setEditStudentShortName(e.target.value)}
+                  placeholder="ex: Andrei" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
               </div>
               <div className="mb-4">
@@ -1170,6 +1337,18 @@ export default function ProgressTracker({
                   Suprascrie imediat totalul de steluțe afișat pe Cardul Elevului, pe bara de progres și în textul trimis către diplomă.
                 </p>
               </div>
+              {isAdmin && (
+                <>
+                  <DynamicContactList
+                    label="Telefoane parinte" type="tel" values={editStudentPhones} onChange={setEditStudentPhones}
+                    placeholder="ex: 40712345678" addLabel="+ Adauga numar"
+                  />
+                  <DynamicContactList
+                    label="Email-uri parinte" type="email" values={editStudentEmails} onChange={setEditStudentEmails}
+                    placeholder="ex: parinte@exemplu.com" addLabel="+ Adauga email"
+                  />
+                </>
+              )}
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -1438,6 +1617,64 @@ export default function ProgressTracker({
 // ----------------------------------------------------------------------------
 // Subcomponente
 // ----------------------------------------------------------------------------
+
+// Camp dinamic pentru telefoane/email-uri de parinte (PARTEA 2) - 1 input implicit,
+// buton "+ Adauga" (dezactivat la MAX_CONTACTS) si o iconita de stergere langa fiecare
+// input suplimentar (primul nu se poate sterge, ramane mereu vizibil).
+function DynamicContactList({
+  label, type, values, onChange, placeholder, addLabel,
+}: {
+  label: string; type: 'tel' | 'email'; values: string[]; onChange: (next: string[]) => void;
+  placeholder: string; addLabel: string;
+}) {
+  // Defensiv: chiar daca tipul declara string[], datele pot veni direct din DB (elevi
+  // vechi cu parent_phones/parent_emails null sau, dintr-o migrare partiala, un string
+  // simplu) - normalizam mereu local, ca un .map() sa nu crape niciodata UI-ul.
+  const safeValues = asContactList(values);
+  const displayValues = safeValues.length > 0 ? safeValues : [''];
+
+  function updateAt(index: number, value: string) {
+    onChange(displayValues.map((v, i) => (i === index ? value : v)));
+  }
+  function removeAt(index: number) {
+    onChange(displayValues.filter((_, i) => i !== index));
+  }
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-semibold mb-2">
+        {label} <span className="text-gray-500 font-normal">— vizibil doar pentru admin</span>
+      </label>
+      <div className="space-y-2">
+        {displayValues.map((v, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              type={type} value={v} onChange={(e) => updateAt(i, e.target.value)}
+              placeholder={placeholder}
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+            />
+            {i > 0 && (
+              <button
+                type="button" onClick={() => removeAt(i)} title="Sterge"
+                className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => displayValues.length < MAX_CONTACTS && onChange([...displayValues, ''])}
+        disabled={displayValues.length >= MAX_CONTACTS}
+        className="mt-2 text-xs font-semibold text-[#C8F023] hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+      >
+        {addLabel} ({displayValues.length}/{MAX_CONTACTS})
+      </button>
+    </div>
+  );
+}
+
 function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
@@ -1596,6 +1833,119 @@ function StudentHistoryModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// PARTEA 4: director global cu toti copiii profesorului curent, din toate clasele -
+// cautare live + grupare pe ziua saptamanii (dedusa din grupa fiecarui elev). Click pe
+// un rand deschide FIX acelasi modal de editare elev (onSelectStudent -> openEditStudentModal
+// din componenta parinte), deci orice salvare se reflecta automat si aici, si in Tracker.
+function AllStudentsDrawer({
+  groups, students, onClose, onSelectStudent,
+}: {
+  groups: TrackerGroup[]; students: TrackerStudent[]; onClose: () => void; onSelectStudent: (s: TrackerStudent) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const groupsById = new Map(groups.map((g) => [g.id, g]));
+  const searchNorm = norm(search.trim());
+  const filtered = !searchNorm ? students : students.filter((s) => {
+    if (norm(s.name).includes(searchNorm)) return true;
+    if (s.short_name && norm(s.short_name).includes(searchNorm)) return true;
+    return false;
+  });
+
+  function timeOf(s: TrackerStudent) {
+    return groupsById.get(s.group_id)?.time_of_day || '99:99';
+  }
+  function sortByTimeThenName(list: TrackerStudent[]) {
+    return [...list].sort((a, b) => {
+      const ta = timeOf(a);
+      const tb = timeOf(b);
+      return ta === tb ? a.name.localeCompare(b.name) : ta.localeCompare(tb);
+    });
+  }
+
+  const byDay = DAYS.map((d) => ({
+    ...d,
+    students: sortByTimeThenName(filtered.filter((s) => groupsById.get(s.group_id)?.day_of_week === d.id)),
+  })).filter((d) => d.students.length > 0);
+
+  const noDay = sortByTimeThenName(
+    filtered.filter((s) => !DAYS.some((d) => d.id === groupsById.get(s.group_id)?.day_of_week))
+  );
+
+  return (
+    <div className="p-6 pt-20">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-[#C8F023]">👶 Lista Copiilor</h3>
+        <button
+          onClick={onClose} aria-label="Inchide"
+          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+        >
+          <XIcon size={16} />
+        </button>
+      </div>
+
+      <div className="relative mb-5">
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+        <input
+          type="text" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus
+          placeholder="Cauta un copil..."
+          className="w-full bg-gray-800 border border-gray-700 rounded-2xl pl-11 pr-4 py-3 text-white placeholder:text-gray-500"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-gray-400 text-center py-10 text-sm">Niciun rezultat</p>
+      ) : (
+        <div className="space-y-6">
+          {byDay.map((d) => (
+            <div key={d.id}>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-[#C8F023] mb-2">{d.label}</h4>
+              <div className="space-y-2">
+                {d.students.map((s) => (
+                  <StudentDirectoryRow key={s.id} student={s} group={groupsById.get(s.group_id) ?? null} onClick={() => onSelectStudent(s)} />
+                ))}
+              </div>
+            </div>
+          ))}
+          {noDay.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Fara zi stabilita</h4>
+              <div className="space-y-2">
+                {noDay.map((s) => (
+                  <StudentDirectoryRow key={s.id} student={s} group={groupsById.get(s.group_id) ?? null} onClick={() => onSelectStudent(s)} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentDirectoryRow({
+  student, group, onClick,
+}: { student: TrackerStudent; group: TrackerGroup | null; onClick: () => void }) {
+  return (
+    <button
+      type="button" onClick={onClick}
+      className="w-full text-left bg-gray-800 hover:bg-gray-700 rounded-2xl px-4 py-3 transition-colors flex items-center justify-between gap-2"
+    >
+      <div className="min-w-0">
+        <div className="font-semibold truncate">
+          {student.name}
+          {student.short_name && <span className="text-gray-400 font-normal"> ({student.short_name})</span>}
+        </div>
+        {group && (
+          <div className="text-[11px] text-gray-500 truncate">
+            📖 {group.group_name}{group.time_of_day ? ` · ${group.time_of_day}` : ''}
+          </div>
+        )}
+      </div>
+      <ChevronRight size={16} className="text-gray-500 shrink-0" />
+    </button>
   );
 }
 
@@ -1800,6 +2150,7 @@ function MeetLinkControl({
 
 function ClassView({
   group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onCycleStar, onOpenHistory, onSaveMeetLink, onSaveLessonHomework,
+  notifyState, connectedState, onSendNotification, onChildConnected,
 }: {
   group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
   onBack: () => void; onEditStudent: (s: TrackerStudent) => void;
@@ -1810,6 +2161,9 @@ function ClassView({
   onOpenHistory: (studentId: string) => void;
   onSaveMeetLink: (meetLink: string | null) => void | Promise<void>;
   onSaveLessonHomework: (lessonId: string, note: string) => void | Promise<void>;
+  notifyState: Record<string, ButtonState>; connectedState: Record<string, ButtonState>;
+  onSendNotification: (student: TrackerStudent) => void;
+  onChildConnected: (student: TrackerStudent) => void;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const topRanked = students.filter((s) => s.rank <= 3);
@@ -1884,6 +2238,10 @@ function ClassView({
               rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)}
               onEdit={() => onEditStudent(s)}
               onOpenHistory={() => onOpenHistory(s.id)}
+              notifyStatus={notifyState[s.id] ?? 'idle'}
+              connectedStatus={connectedState[s.id] ?? 'idle'}
+              onSendNotification={() => onSendNotification(s)}
+              onChildConnected={() => onChildConnected(s)}
             />
           ))
         )}
@@ -2058,9 +2416,12 @@ function AttendanceBoard({
 
 function StudentCard({
   student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit, onOpenHistory,
+  notifyStatus, connectedStatus, onSendNotification, onChildConnected,
 }: {
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
   rewardEmoji: string; attendanceCount: number; onEdit: () => void; onOpenHistory: () => void;
+  notifyStatus: ButtonState; connectedStatus: ButtonState;
+  onSendNotification: () => void; onChildConnected: () => void;
 }) {
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
@@ -2125,6 +2486,43 @@ function StudentCard({
         </button>
         <button onClick={onEdit} className="bg-gray-200 hover:bg-gray-300 flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors">
           ⚙️ Editeaza elev
+        </button>
+      </div>
+
+      <div className="flex gap-2 mt-2">
+        <button
+          type="button"
+          onClick={onSendNotification}
+          disabled={notifyStatus === 'loading'}
+          title="Trimite Notificare"
+          className={`flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed ${
+            notifyStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-amber-400 hover:bg-amber-300 text-black'
+          }`}
+        >
+          {notifyStatus === 'loading' ? (
+            <span className="tracker-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+          ) : notifyStatus === 'success' ? (
+            'Trimis ✔️'
+          ) : (
+            '🔔 Trimite Notificare'
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onChildConnected}
+          disabled={connectedStatus === 'loading'}
+          title="Copil Conectat"
+          className={`flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed ${
+            connectedStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-black'
+          }`}
+        >
+          {connectedStatus === 'loading' ? (
+            <span className="tracker-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+          ) : connectedStatus === 'success' ? (
+            '✅ Conectat'
+          ) : (
+            '✅ Copil Conectat'
+          )}
         </button>
       </div>
     </div>

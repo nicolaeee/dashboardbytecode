@@ -81,6 +81,16 @@ export type TrackerStudent = {
    * de pornire pentru toate calculele viitoare, care continua automat de acolo.
    */
   lesson_offset: number;
+  /** Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`). */
+  short_name: string | null;
+  /**
+   * Pana la 5 telefoane/email-uri de parinte (format Green API pt telefoane, ex:
+   * "40712345678@c.us") - GDPR: vizibile si editabile DOAR pentru admin (vezi isAdmin
+   * in ProgressTracker.tsx si RLS-ul de mai jos). Profesorii nu primesc aceste coloane
+   * in fetch-ul initial (progress/page.tsx).
+   */
+  parent_phones: string[];
+  parent_emails: string[];
   deleted_at: string | null;
   created_at: string;
 };
