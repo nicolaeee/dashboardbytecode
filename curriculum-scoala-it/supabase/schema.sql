@@ -255,6 +255,10 @@ create table public.tracker_students (
   -- Decalaj manual de lectii (vezi src/lib/lessonNumbering.ts) - punct de pornire pentru
   -- elevii cu istoric dinainte de Tracker, folosit la calculul "M{x} / L{y}".
   lesson_offset int  not null default 0,
+  -- Suprascriere manuala a totalului de prezente/absente (acelasi tipar ca `progress`
+  -- pentru stelute) - editabila din formularul "Editeaza Elev".
+  presence_count int not null default 0,
+  absence_count  int not null default 0,
   -- Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`,
   -- numele complet folosit in registru/tracker).
   short_name    text,

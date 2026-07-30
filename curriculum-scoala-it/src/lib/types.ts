@@ -81,6 +81,9 @@ export type TrackerStudent = {
    * de pornire pentru toate calculele viitoare, care continua automat de acolo.
    */
   lesson_offset: number;
+  /** Suprascriere manuala a totalului de prezente/absente - vezi formularul "Editeaza Elev". */
+  presence_count: number;
+  absence_count: number;
   /** Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`). */
   short_name: string | null;
   /**
