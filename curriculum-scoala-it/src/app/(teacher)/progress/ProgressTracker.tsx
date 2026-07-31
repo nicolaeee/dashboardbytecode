@@ -220,9 +220,9 @@ type ModalState =
   | { type: 'studentHistory'; studentId: string };
 
 export default function ProgressTracker({
-  teacherId, isAdmin, teacherOptions, initialGroups, initialStudents, initialLessons, initialAttendance,
+  teacherId, teacherName, isAdmin, teacherOptions, initialGroups, initialStudents, initialLessons, initialAttendance,
 }: {
-  teacherId: string; isAdmin: boolean; teacherOptions: { id: string; label: string }[];
+  teacherId: string; teacherName: string; isAdmin: boolean; teacherOptions: { id: string; label: string }[];
   initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
 }) {
@@ -616,17 +616,40 @@ export default function ProgressTracker({
       // ignorat intentionat - vezi comentariul de mai sus
     }
     setNotifyState((s) => ({ ...s, [student.id]: 'success' }));
+    showToast('Notificare trimisă! Dacă elevul nu se conectează în 5 minute, folosiți butoanele de status de mai jos.');
     setTimeout(() => setNotifyState((s) => ({ ...s, [student.id]: 'idle' })), 3000);
   }
 
-  // Doar vizual pentru moment (fara request extern) - marcheaza elevul ca fiind deja
-  // conectat la lectie si ascunde starea "Trimis" a butonului de notificare.
-  function handleChildConnected(student: TrackerStudent) {
+  // Trimite catre admini (prin ruta noastra /api/admin-alerts, care face proxy server-side
+  // catre Pabbly) statusul de conectare al elevului - declansat din butoanele "S-a conectat"
+  // / "Nu s-a conectat", vizibile atat pentru admin cat si pentru profesor.
+  async function handleChildConnectionStatus(student: TrackerStudent, status: 'conectat' | 'neconectat') {
     setConnectedState((s) => ({ ...s, [student.id]: 'loading' }));
-    setTimeout(() => {
-      setConnectedState((s) => ({ ...s, [student.id]: 'success' }));
-      setNotifyState((s) => ({ ...s, [student.id]: 'idle' }));
-    }, 500);
+    // Telefoanele parintelui, curate (fara sufixul @c.us folosit la Green API) si cu "+" in
+    // fata fiecaruia - ca WhatsApp sa le recunoasca drept numere apelabile la click. Fiecare
+    // numar pe randul lui (\n) in mesajul trimis. "Lipsă număr" daca elevul nu are niciunul.
+    const phones = cleanContactList(student.parent_phones);
+    const parentPhones = phones.length > 0
+      ? phones.map((p) => (p.startsWith('+') ? p : `+${p}`)).join('\n')
+      : 'Lipsă număr';
+    try {
+      await fetch('/api/admin-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: student.short_name?.trim() || student.name,
+          teacherName,
+          className: getGroupById(student.group_id)?.group_name ?? '',
+          status,
+          parentPhones,
+        }),
+      });
+    } catch (error) {
+      console.error('ADMIN ALERT REQUEST ERROR:', error);
+    }
+    setConnectedState((s) => ({ ...s, [student.id]: 'idle' }));
+    setNotifyState((s) => ({ ...s, [student.id]: 'idle' }));
+    showToast('Alertă trimisă către admini!');
   }
 
   async function addModule() {
@@ -1001,7 +1024,7 @@ export default function ProgressTracker({
             notifyState={notifyState}
             connectedState={connectedState}
             onSendNotification={handleSendNotification}
-            onChildConnected={handleChildConnected}
+            onSetConnectionStatus={handleChildConnectionStatus}
           />
         ) : null}
       </main>
@@ -2257,7 +2280,7 @@ function MeetLinkControl({
 
 function ClassView({
   isAdmin, group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onCycleStar, onDeleteLesson, onOpenHistory, onSaveMeetLink, onSaveLessonHomework,
-  notifyState, connectedState, onSendNotification, onChildConnected,
+  notifyState, connectedState, onSendNotification, onSetConnectionStatus,
 }: {
   isAdmin: boolean;
   group: TrackerGroup; students: (TrackerStudent & { rank: number })[]; lessons: TrackerLesson[]; attendance: TrackerAttendance[];
@@ -2272,7 +2295,7 @@ function ClassView({
   onSaveLessonHomework: (lessonId: string, note: string) => void | Promise<void>;
   notifyState: Record<string, ButtonState>; connectedState: Record<string, ButtonState>;
   onSendNotification: (student: TrackerStudent) => void;
-  onChildConnected: (student: TrackerStudent) => void;
+  onSetConnectionStatus: (student: TrackerStudent, status: 'conectat' | 'neconectat') => void;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const groupLessons = lessons.filter((l) => l.group_id === group.id);
@@ -2323,7 +2346,7 @@ function ClassView({
               notifyStatus={notifyState[s.id] ?? 'idle'}
               connectedStatus={connectedState[s.id] ?? 'idle'}
               onSendNotification={() => onSendNotification(s)}
-              onChildConnected={() => onChildConnected(s)}
+              onSetConnectionStatus={(status) => onSetConnectionStatus(s, status)}
             />
           ))
         )}
@@ -2531,13 +2554,13 @@ function AttendanceBoard({
 
 function StudentCard({
   isAdmin, student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, absenceCount, onEdit, onOpenHistory,
-  notifyStatus, connectedStatus, onSendNotification, onChildConnected,
+  notifyStatus, connectedStatus, onSendNotification, onSetConnectionStatus,
 }: {
   isAdmin: boolean;
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
   rewardEmoji: string; attendanceCount: number; absenceCount: number; onEdit: () => void; onOpenHistory: () => void;
   notifyStatus: ButtonState; connectedStatus: ButtonState;
-  onSendNotification: () => void; onChildConnected: () => void;
+  onSendNotification: () => void; onSetConnectionStatus: (status: 'conectat' | 'neconectat') => void;
 }) {
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
@@ -2634,21 +2657,35 @@ function StudentCard({
             '🔔 Trimite Notificare'
           )}
         </button>
+      </div>
+
+      {/* Status conectare, trimis catre admini (vezi handleChildConnectionStatus) - vizibil
+          pentru admin si profesor deopotriva, la fel ca butonul de notificare de mai sus. */}
+      <div className="flex gap-2 w-full mt-2">
         <button
           type="button"
-          onClick={onChildConnected}
+          onClick={() => onSetConnectionStatus('conectat')}
           disabled={connectedStatus === 'loading'}
-          title="Copil Conectat"
-          className={`flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed ${
-            connectedStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-black'
-          }`}
+          title="S-a conectat"
+          className="flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed bg-emerald-100 hover:bg-emerald-200 text-emerald-800"
         >
           {connectedStatus === 'loading' ? (
             <span className="tracker-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
-          ) : connectedStatus === 'success' ? (
-            '✅ Conectat'
           ) : (
-            '✅ Copil Conectat'
+            '✅ S-a conectat'
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSetConnectionStatus('neconectat')}
+          disabled={connectedStatus === 'loading'}
+          title="Nu s-a conectat"
+          className="flex-1 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed bg-rose-100 hover:bg-rose-200 text-rose-800"
+        >
+          {connectedStatus === 'loading' ? (
+            <span className="tracker-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+          ) : (
+            '❌ Nu s-a conectat'
           )}
         </button>
       </div>

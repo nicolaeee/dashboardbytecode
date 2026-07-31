@@ -28,6 +28,7 @@ export default async function ProgressTrackerPage() {
   return (
     <ProgressTracker
       teacherId={profile.id}
+      teacherName={profile.full_name || profile.email}
       isAdmin={isAdmin}
       teacherOptions={(teachersRes.data ?? []).map((t) => ({ id: t.id, label: t.full_name || t.email }))}
       initialGroups={(groups ?? []) as TrackerGroup[]}
