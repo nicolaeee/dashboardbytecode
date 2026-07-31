@@ -744,7 +744,15 @@ export default function ProgressTracker({
     const group = getGroupById(groupId);
     if (!group) return undefined;
     const groupLessons = lessons.filter((l) => l.group_id === groupId);
-    const nextNumber = groupLessons.length === 0 ? 1 : Math.max(...groupLessons.map((l) => l.session_number)) + 1;
+    // Daca e prima lectie fizica a clasei, nu repornim de la L1: continuam de la cel mai mare
+    // istoric manual (lesson_offset) setat pe elevii clasei din Editeaza Elev - altfel o clasa
+    // ai carei elevi au deja 7 lectii in spate ar afisa gresit "L1" la prima sedinta noua.
+    // De la a doua lectie incolo, baseline-ul e deja "copt" in session_number-urile existente
+    // (folosim maximul lor, nu numarul de lectii, ca sa ramana corect si dupa o eventuala
+    // stergere de lectie care lasa goluri in secventa).
+    const nextNumber = groupLessons.length === 0
+      ? Math.max(0, ...getStudentsForGroup(groupId).map((s) => s.lesson_offset)) + 1
+      : Math.max(...groupLessons.map((l) => l.session_number)) + 1;
     const activeCount = getStudentsForGroup(groupId).length;
     const format = activeCount <= 1 ? 'individual' : 'grup';
     const { data, error } = await supabase.from('tracker_lessons')
