@@ -214,6 +214,7 @@ type ModalState =
   | { type: 'trashStudents' }
   | { type: 'confirmDeleteStudent'; studentId: string }
   | { type: 'confirmDeleteClass'; groupId: string }
+  | { type: 'confirmDeleteLesson'; lessonId: string }
   | { type: 'newLesson'; groupId: string }
   | { type: 'recordRecovery'; studentId: string; lessonId: string }
   | { type: 'studentHistory'; studentId: string };
@@ -993,7 +994,7 @@ export default function ProgressTracker({
             onRequestRecovery={openRecoveryModal}
             onSetAttendanceStatus={setAttendanceStatus}
             onCycleStar={cycleStar}
-            onDeleteLesson={deleteLesson}
+            onDeleteLesson={(lessonId) => setModal({ type: 'confirmDeleteLesson', lessonId })}
             onOpenHistory={openStudentHistory}
             onSaveMeetLink={(meetLink) => saveMeetLink(currentGroup.id, meetLink)}
             onSaveLessonHomework={saveLessonHomework}
@@ -1484,6 +1485,27 @@ export default function ProgressTracker({
         );
       })()}
 
+      {modal.type === 'confirmDeleteLesson' && (
+        <ModalShell onClose={() => setModal({ type: null })}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">🗑️</div>
+            <h3 className="text-xl font-bold mb-2">Confirmare Ștergere</h3>
+            <p className="text-gray-400 mb-6">Ești sigur că vrei să ștergi această lecție? Datele asociate vor fi pierdute.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                Anulare
+              </button>
+              <button
+                onClick={() => { deleteLesson(modal.lessonId); setModal({ type: null }); }}
+                className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors"
+              >
+                🗑️ Șterge
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
       {modal.type === 'newLesson' && (() => {
         const group = getGroupById(modal.groupId);
         if (!group) return null;
@@ -1781,9 +1803,15 @@ function StudentHistoryModal({
     if (endDate && lesson.lesson_date > endDate) return false;
     return true;
   });
-  const totalCount = filteredHistory.length;
-  const presentCount = filteredHistory.filter((h) => statusOf(h.record) === 'present').length;
-  const notRecoveredCount = filteredHistory.filter((h) => statusOf(h.record) === 'absent').length;
+  // Baseline istoric (presence_count/absence_count, setat manual din formularul Editeaza Elev)
+  // - nu are o data proprie, deci il adaugam doar cand nu e activ niciun filtru de perioada
+  // (altfel un istoric de "20 prezente" ar umfla artificial un interval de o singura saptamana).
+  const showBaseline = !startDate && !endDate;
+  const baselinePresences = showBaseline ? student.presence_count : 0;
+  const baselineAbsences = showBaseline ? student.absence_count : 0;
+  const totalCount = filteredHistory.length + baselinePresences + baselineAbsences;
+  const presentCount = filteredHistory.filter((h) => statusOf(h.record) === 'present').length + baselinePresences;
+  const notRecoveredCount = filteredHistory.filter((h) => statusOf(h.record) === 'absent').length + baselineAbsences;
   const madeUpCount = filteredHistory.filter((h) => statusOf(h.record) === 'made_up').length;
   const absentCount = notRecoveredCount + madeUpCount;
   const starsCount = filteredHistory.reduce((sum, h) => sum + (h.record?.star_count ?? 0), 0);
@@ -1855,6 +1883,11 @@ function StudentHistoryModal({
             <div className="text-[10px] font-semibold text-[#C8F023]/80 uppercase tracking-wide">{rewardEmoji} Teme</div>
           </div>
         </div>
+        {showBaseline && (baselinePresences > 0 || baselineAbsences > 0) && (
+          <p className="px-4 -mt-2 mb-2 text-[11px] text-gray-500 shrink-0">
+            Include istoricul manual: +{baselinePresences} prezențe / +{baselineAbsences} absențe (setate din formularul Editează Elev).
+          </p>
+        )}
         <div className="px-4 pb-4 shrink-0">
           <div className="rounded-2xl bg-red-500/10 border border-red-500/20 py-3 px-4 text-center text-sm">
             <span className="font-bold text-red-400">❌ Absențe: {absentCount}</span>
@@ -2356,10 +2389,7 @@ function AttendanceBoard({
           </button>
           {selectedLesson && (
             <button
-              onClick={() => {
-                if (!window.confirm('Sigur vrei să ștergi această lecție?')) return;
-                onDeleteLesson(selectedLesson.id);
-              }}
+              onClick={() => onDeleteLesson(selectedLesson.id)}
               title="Sterge lectia curenta"
               className="text-gray-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-md transition-colors shrink-0"
             >
