@@ -375,6 +375,10 @@ export default function ProgressTracker({
     setStudents((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
     const { data, error } = await supabase.from('tracker_students').update(patch).eq('id', id).select().single();
     if (error || !data) {
+      // Logat integral in consola (mesaj, cod, detalii) - fara asta, singurul semnal era
+      // toast-ul generic "Eroare", imposibil de diagnosticat daca o coloana lipseste din DB
+      // (migratie nerulata inca) sau orice alt motiv real de refuz din partea Supabase/RLS.
+      console.error('CRITICAL UPDATE STUDENT ERROR:', { studentId: id, patch, error });
       if (previous) setStudents((ss) => ss.map((s) => (s.id === id ? previous : s)));
       showToast('Eroare', 'error');
       return null;
