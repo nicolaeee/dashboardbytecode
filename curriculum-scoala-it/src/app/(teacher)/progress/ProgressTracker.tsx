@@ -147,6 +147,21 @@ function toEditableList(value: unknown): string[] {
   return list.length > 0 ? list : [''];
 }
 
+/**
+ * Valoarea unui input numeric controlat, care poate fi golit complet (fara sa forteze un 0
+ * nestergabil pe ecran). Cand campul e gol pastram '' - altfel convertim la Number(...), ceea
+ * ce elimina automat zerourile din fata (Number('07') === 7), deci nu mai apare bug-ul de
+ * concatenare la tastare peste un 0 existent.
+ */
+function numericInputValue(raw: string): number | '' {
+  return raw === '' ? '' : Number(raw);
+}
+
+/** Valoarea trimisa la salvare pentru un input numeric care poate fi gol - '' devine 0. */
+function numOrZero(value: number | ''): number {
+  return value === '' ? 0 : value;
+}
+
 function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank: number })[] {
   const ranked: (T & { rank: number })[] = [];
   let currentRank = 1;
@@ -254,15 +269,17 @@ export default function ProgressTracker({
   const [connectedState, setConnectedState] = useState<Record<string, ButtonState>>({});
   // Suprascriere manuala a pozitiei elevului (Modul/Lectie) - pentru elevi cu istoric
   // dinainte de Tracker. Devine noul punct de pornire (lesson_offset) la salvare.
-  const [editStudentModule, setEditStudentModule] = useState(1);
-  const [editStudentLesson, setEditStudentLesson] = useState(0);
+  // Toate cele 5 campuri de mai jos permit state '' (input golit complet) - vezi
+  // numericInputValue/numOrZero, ca sa nu ramana un 0 nestergabil pe ecran la editare.
+  const [editStudentModule, setEditStudentModule] = useState<number | ''>(1);
+  const [editStudentLesson, setEditStudentLesson] = useState<number | ''>(0);
   // Steluțe istorice (legacy) - suprascrie direct student.progress, campul deja folosit
   // de Cardul Elevului, bara de progres si parametrul trimis la generarea diplomei.
-  const [editStudentStars, setEditStudentStars] = useState(0);
+  const [editStudentStars, setEditStudentStars] = useState<number | ''>(0);
   // Prezente/Absente manuale (legacy) - suprascriu direct presence_count/absence_count,
   // acelasi tipar ca Steluțele de mai sus.
-  const [editStudentPresences, setEditStudentPresences] = useState(0);
-  const [editStudentAbsences, setEditStudentAbsences] = useState(0);
+  const [editStudentPresences, setEditStudentPresences] = useState<number | ''>(0);
+  const [editStudentAbsences, setEditStudentAbsences] = useState<number | ''>(0);
   const [newModuleReward, setNewModuleReward] = useState('stars');
   const [searchQuery, setSearchQuery] = useState('');
   const [newLessonForm, setNewLessonForm] = useState({ date: nowDate(), time: nowTime() });
@@ -525,11 +542,11 @@ export default function ProgressTracker({
     // Suprascrierea manuala de Modul/Lectie devine noul punct de pornire: decalajul se
     // recalculeaza ca diferenta fata de lectiile deja inregistrate automat in aplicatie,
     // ca de acum incolo calculele viitoare sa continue exact de la M/L introdus manual.
-    const desiredTotal = totalLessonsFor(editStudentModule, editStudentLesson);
+    const desiredTotal = totalLessonsFor(numOrZero(editStudentModule), numOrZero(editStudentLesson));
     const lessonOffset = desiredTotal - studentLessonCount(studentId);
-    const stars = Math.max(0, Math.round(editStudentStars));
-    const presences = Math.max(0, Math.round(editStudentPresences));
-    const absences = Math.max(0, Math.round(editStudentAbsences));
+    const stars = Math.max(0, Math.round(numOrZero(editStudentStars)));
+    const presences = Math.max(0, Math.round(numOrZero(editStudentPresences)));
+    const absences = Math.max(0, Math.round(numOrZero(editStudentAbsences)));
     const patch: Partial<TrackerStudent> = {
       name, lesson_offset: lessonOffset, progress: stars, short_name: editStudentShortName.trim() || null,
       presence_count: presences, absence_count: absences,
@@ -1337,7 +1354,7 @@ export default function ProgressTracker({
                     <span className="block text-[11px] text-gray-500 mb-1">Modul</span>
                     <input
                       type="number" min={1} value={editStudentModule}
-                      onChange={(e) => setEditStudentModule(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                      onChange={(e) => setEditStudentModule(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
                   </div>
@@ -1346,7 +1363,7 @@ export default function ProgressTracker({
                     <span className="block text-[11px] text-gray-500 mb-1">Lecție</span>
                     <input
                       type="number" min={1} max={16} value={editStudentLesson}
-                      onChange={(e) => setEditStudentLesson(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                      onChange={(e) => setEditStudentLesson(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
                   </div>
@@ -1361,7 +1378,7 @@ export default function ProgressTracker({
                 </label>
                 <input
                   type="number" min={0} value={editStudentStars}
-                  onChange={(e) => setEditStudentStars(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                  onChange={(e) => setEditStudentStars(numericInputValue(e.target.value))}
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
                 <p className="mt-1.5 text-[11px] text-gray-500">
@@ -1377,7 +1394,7 @@ export default function ProgressTracker({
                     <span className="block text-[11px] text-gray-500 mb-1">Prezențe</span>
                     <input
                       type="number" min={0} value={editStudentPresences}
-                      onChange={(e) => setEditStudentPresences(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                      onChange={(e) => setEditStudentPresences(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
                   </div>
@@ -1385,7 +1402,7 @@ export default function ProgressTracker({
                     <span className="block text-[11px] text-gray-500 mb-1">Absențe</span>
                     <input
                       type="number" min={0} value={editStudentAbsences}
-                      onChange={(e) => setEditStudentAbsences(Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber)}
+                      onChange={(e) => setEditStudentAbsences(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
                   </div>
@@ -2228,8 +2245,18 @@ function ClassView({
   const groupLessons = lessons.filter((l) => l.group_id === group.id);
   const groupLessonIds = new Set(groupLessons.map((l) => l.id));
   const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
-  const attendanceCountFor = (studentId: string) =>
-    groupAttendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
+  // Total afisat = istoric (presence_count/absence_count, salvat manual pt elevii cu istoric
+  // dinainte de Tracker) + dinamic (calculat din lectiile bifate efectiv in platforma).
+  const attendanceCountFor = (studentId: string) => {
+    const dynamic = groupAttendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
+    const historic = students.find((s) => s.id === studentId)?.presence_count ?? 0;
+    return dynamic + historic;
+  };
+  const absenceCountFor = (studentId: string) => {
+    const dynamic = groupAttendance.filter((a) => a.student_id === studentId && a.status === 'absent').length;
+    const historic = students.find((s) => s.id === studentId)?.absence_count ?? 0;
+    return dynamic + historic;
+  };
 
   return (
     <div>
@@ -2257,7 +2284,7 @@ function ClassView({
           students.map((s, i) => (
             <StudentCard
               key={s.id} isAdmin={isAdmin} student={s} index={i} totalStudents={students.length} moduleCount={group.module_count || 1}
-              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)}
+              rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} absenceCount={absenceCountFor(s.id)}
               onEdit={() => onEditStudent(s)}
               onOpenHistory={() => onOpenHistory(s.id)}
               notifyStatus={notifyState[s.id] ?? 'idle'}
@@ -2473,12 +2500,12 @@ function AttendanceBoard({
 }
 
 function StudentCard({
-  isAdmin, student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, onEdit, onOpenHistory,
+  isAdmin, student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, absenceCount, onEdit, onOpenHistory,
   notifyStatus, connectedStatus, onSendNotification, onChildConnected,
 }: {
   isAdmin: boolean;
   student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
-  rewardEmoji: string; attendanceCount: number; onEdit: () => void; onOpenHistory: () => void;
+  rewardEmoji: string; attendanceCount: number; absenceCount: number; onEdit: () => void; onOpenHistory: () => void;
   notifyStatus: ButtonState; connectedStatus: ButtonState;
   onSendNotification: () => void; onChildConnected: () => void;
 }) {
@@ -2514,6 +2541,9 @@ function StudentCard({
             </div>
             <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
               🗓️ {attendanceCount} prezențe
+            </div>
+            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-semibold">
+              ❌ {absenceCount} absențe
             </div>
           </div>
         </div>
