@@ -115,18 +115,55 @@ export async function moveNode(
 
 // ================================================================ PROFESORI
 export async function createTeacher(values: {
-  full_name: string; email: string; password: string; role: Role;
+  full_name: string; email: string; password: string; role: Role; phone?: string;
 }): Promise<Result> {
   try {
     await adminGuard();
     const admin = createAdminClient();
-    const { error } = await admin.auth.admin.createUser({
+    const { data, error } = await admin.auth.admin.createUser({
       email: values.email.trim(),
       password: values.password,
       email_confirm: true,
       user_metadata: { full_name: values.full_name, role: values.role },
     });
     if (error) throw new Error(error.message.includes('already') ? 'Există deja un cont cu acest email.' : error.message);
+    // Profilul se creeaza automat prin trigger-ul handle_new_user() (vezi schema.sql), care nu
+    // stie de telefon - il completam separat, dupa ce randul chiar exista.
+    const phone = values.phone?.trim();
+    if (phone && data.user) {
+      await admin.from('profiles').update({ phone }).eq('id', data.user.id);
+    }
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Editare completa din modalul deschis la click pe avatarul profesorului. */
+export async function updateTeacherProfile(userId: string, values: {
+  full_name: string; email: string; role: Role; level: TeacherLevel; phone: string;
+}): Promise<Result> {
+  try {
+    const { supabase, userId: me } = await adminGuard();
+    if (userId === me && values.role === 'teacher') {
+      return { ok: false, error: 'Nu îți poți retrage propriul rol de administrator.' };
+    }
+    const email = values.email.trim();
+    const admin = createAdminClient();
+    // Emailul e si credentiala de login (auth.users), nu doar afisaj - trebuie schimbat acolo,
+    // altfel profilul arata alt email decat cel cu care profesorul chiar se autentifica.
+    const { error: authError } = await admin.auth.admin.updateUserById(userId, { email });
+    if (authError) throw new Error(authError.message.includes('already') ? 'Există deja un cont cu acest email.' : authError.message);
+
+    const { error } = await supabase.from('profiles').update({
+      full_name: values.full_name.trim(),
+      email,
+      role: values.role,
+      level: values.level,
+      phone: values.phone.trim() || null,
+    }).eq('id', userId);
+    if (error) throw error;
     refresh();
     return { ok: true };
   } catch (e) {

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
 import type { CourseId } from '@/lib/types';
 import { Modal, Button, Field } from '@/components/ui';
@@ -18,14 +18,19 @@ const GRID_COURSES: { id: CourseId; emoji: string }[] = [
 ];
 
 export default function Diplome({
-  viewerId, viewerName, isAdmin, teacherOptions, initialGroups,
+  viewerId, viewerName, isAdmin, teacherOptions, initialGroups, initialStudentId, initialTeacherId,
 }: {
   viewerId: string; viewerName: string; isAdmin: boolean;
   teacherOptions: TeacherOption[]; initialGroups: DiplomaGroupWithStudents[];
+  // Pre-completare venita din Progress Tracker ("🎓 Genereaza Diploma" din Task-uri Urgente).
+  initialStudentId: string | null; initialTeacherId: string | null;
 }) {
   const [selectedTeacherId, setSelectedTeacherId] = useState(viewerId);
   const [groups, setGroups] = useState<DiplomaGroupWithStudents[]>(initialGroups);
   const [loading, setLoading] = useState(false);
+  // Aplicam pre-completarea o singura data - altfel orice schimbare ulterioara facuta manual
+  // de profesor (alta grupa/elev) ar fi suprascrisa la fiecare re-render.
+  const appliedPrefillRef = useRef(false);
 
   const [generatingCourse, setGeneratingCourse] = useState<CourseId | null>(null);
   const [mode, setMode] = useState<'group' | 'manual'>('group');
@@ -45,6 +50,33 @@ export default function Diplome({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [selectedTeacherId, viewerId, initialGroups]);
+
+  // Daca venim din Progress Tracker cu un teacherId diferit (adminul rasfoia clasele altui
+  // profesor), incarcam grupele acelui profesor - efectul de mai sus preia automat fetch-ul.
+  useEffect(() => {
+    if (isAdmin && initialTeacherId && initialTeacherId !== viewerId) setSelectedTeacherId(initialTeacherId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Odata ce grupele profesorului corect sunt incarcate, gasim elevul dupa initialStudentId
+  // si deschidem direct modalul pe cursul/grupa/elevul lui - profesorul mai alege doar Modulul.
+  useEffect(() => {
+    if (appliedPrefillRef.current || loading || !initialStudentId) return;
+    for (const g of groups) {
+      const student = g.students.find((s) => s.id === initialStudentId);
+      if (student && g.course) {
+        appliedPrefillRef.current = true;
+        setGeneratingCourse(g.course);
+        setMode('group');
+        setSelectedGroupId(g.id);
+        setSelectedStudentId(student.id);
+        setManualName(student.name);
+        setManualStars(16);
+        setSelectedModule(1);
+        break;
+      }
+    }
+  }, [groups, loading, initialStudentId]);
 
   const course = generatingCourse ? getCourse(generatingCourse) : null;
   const relevantGroups = useMemo(() => {

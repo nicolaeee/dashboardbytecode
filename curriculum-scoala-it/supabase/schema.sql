@@ -20,6 +20,9 @@ create table public.profiles (
   -- Nivelul profesorului in grila de promovare (vezi pagina /roadmap.html) - gestionat
   -- de admin din Panoul de Profesori, afisat profesorului pe pagina lui de Roadmap.
   level       text not null default 'Junior' check (level in ('Junior', 'Middle', 'Senior')),
+  -- Telefonul profesorului - editabil din Panoul de Profesori, folosit si ca teacherPhone
+  -- in payload-ul webhook-urilor de diploma (vezi progress/ProgressTracker.tsx).
+  phone       text,
   created_at  timestamptz not null default now()
 );
 
@@ -259,6 +262,11 @@ create table public.tracker_students (
   -- pentru stelute) - editabila din formularul "Editeaza Elev".
   presence_count int not null default 0,
   absence_count  int not null default 0,
+  -- Task-uri urgente de diploma: pragul (multiplu de 16 prezente) care asteapta diploma
+  -- trimisa, respectiv ultimul prag deja marcat ca trimis - vezi "Task-uri Urgente" din
+  -- dashboard-ul profesorului.
+  pending_diploma_milestone      int,
+  last_diploma_issued_milestone  int not null default 0,
   -- Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`,
   -- numele complet folosit in registru/tracker).
   short_name    text,

@@ -8,10 +8,18 @@ export type DiplomaGroupWithStudents = {
   students: Pick<TrackerStudent, 'id' | 'name' | 'progress'>[];
 };
 
-export default async function DiplomePage() {
+export default async function DiplomePage({
+  searchParams,
+}: {
+  // Pre-completare venita din Progress Tracker -> "🎓 Genereaza Diploma" din Task-uri Urgente:
+  // studentId + teacherId (daca adminul rasfoieste clasele altui profesor), ca modalul sa se
+  // deschida direct pe cursul/elevul corect, fara pasi manuali suplimentari.
+  searchParams: Promise<{ studentId?: string; teacherId?: string }>;
+}) {
   const profile = await requireUser();
   const supabase = await createClient();
   const isAdmin = profile.role === 'admin';
+  const { studentId: initialStudentId, teacherId: initialTeacherId } = await searchParams;
 
   const [{ data: groups }, { data: students }, teachersRes] = await Promise.all([
     supabase.from('tracker_groups').select('id, group_name, course').eq('teacher_id', profile.id).is('deleted_at', null).order('group_name'),
@@ -38,6 +46,8 @@ export default async function DiplomePage() {
       isAdmin={isAdmin}
       teacherOptions={(teachersRes.data ?? []).map((t) => ({ id: t.id, label: t.full_name || t.email }))}
       initialGroups={initialGroups}
+      initialStudentId={initialStudentId ?? null}
+      initialTeacherId={initialTeacherId ?? null}
     />
   );
 }

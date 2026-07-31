@@ -10,6 +10,8 @@ export type Profile = {
   role: Role;
   is_active: boolean;
   level: TeacherLevel;
+  /** Telefonul profesorului - editabil din Panoul de Profesori (Admin). */
+  phone: string | null;
   created_at: string;
 };
 
@@ -84,6 +86,14 @@ export type TrackerStudent = {
   /** Suprascriere manuala a totalului de prezente/absente - vezi formularul "Editeaza Elev". */
   presence_count: number;
   absence_count: number;
+  /**
+   * Task-uri urgente de diploma (vezi "🚨 Task-uri Urgente" din dashboard-ul profesorului):
+   * pending = pragul (multiplu de 16 prezente) care asteapta diploma trimisa, null daca
+   * elevul n-are niciun task deschis; last_issued = ultimul prag deja marcat ca trimis,
+   * ca sa nu redeclansam popup-ul de celebrare pentru acelasi multiplu de doua ori.
+   */
+  pending_diploma_milestone: number | null;
+  last_diploma_issued_milestone: number;
   /** Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`). */
   short_name: string | null;
   /**

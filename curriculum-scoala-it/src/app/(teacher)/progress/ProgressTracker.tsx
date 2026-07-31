@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
@@ -141,6 +142,17 @@ function cleanContactList(value: unknown): string[] {
   return asContactList(value).map((v) => v.trim()).filter(Boolean).slice(0, MAX_CONTACTS);
 }
 
+/**
+ * Numerele de telefon curatate (vezi cleanContactList), fiecare cu "+" in fata (adaugat doar
+ * daca lipseste) si unite prin rand nou - format gata pentru linkuri apelabile din WhatsApp in
+ * payload-urile trimise catre Pabbly. "Lipsă număr" daca lista e goala.
+ */
+function formatPhonesForWebhook(value: unknown): string {
+  const phones = cleanContactList(value);
+  if (phones.length === 0) return 'Lipsă număr';
+  return phones.map((p) => (p.startsWith('+') ? p : `+${p}`)).join('\n');
+}
+
 /** Lista pentru afisare in formular: mereu cel putin 1 input (gol daca elevul nu are inca date). */
 function toEditableList(value: unknown): string[] {
   const list = asContactList(value);
@@ -220,9 +232,9 @@ type ModalState =
   | { type: 'studentHistory'; studentId: string };
 
 export default function ProgressTracker({
-  teacherId, teacherName, isAdmin, teacherOptions, initialGroups, initialStudents, initialLessons, initialAttendance,
+  teacherId, teacherName, teacherPhone, isAdmin, teacherOptions, initialGroups, initialStudents, initialLessons, initialAttendance,
 }: {
-  teacherId: string; teacherName: string; isAdmin: boolean; teacherOptions: { id: string; label: string }[];
+  teacherId: string; teacherName: string; teacherPhone: string | null; isAdmin: boolean; teacherOptions: { id: string; label: string }[];
   initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
 }) {
@@ -244,6 +256,20 @@ export default function ProgressTracker({
   const [celebrations, setCelebrations] = useState<CelebrationItem[]>([]);
   const [confetti, setConfetti] = useState<ConfettiItem[]>([]);
   const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean } | null>(null);
+  // Popup automat "Task Urgent" de diploma - la fiecare 16 prezente (istoric + curent) ale
+  // unui elev, independent de modalul de editare (acelasi tipar ca magicPopup de mai sus).
+  const [diplomaMilestonePopup, setDiplomaMilestonePopup] = useState<{ studentId: string; milestone: number } | null>(null);
+  // Numele modulului completat de profesor pe popup-ul de celebrare, ca adminii sa stie
+  // exact pentru ce diploma trebuie generata (ex: "Modul 1 - Blocuri de cod").
+  const [diplomaModuleName, setDiplomaModuleName] = useState('');
+  // Previn dubla trimitere (dublu-click accidental) pe "Am inteles" si pe "Am trimis diploma" -
+  // butonul se dezactiveaza cat timp request-ul e in desfasurare.
+  const [acknowledgingMilestone, setAcknowledgingMilestone] = useState(false);
+  const [markingDiplomaSentIds, setMarkingDiplomaSentIds] = useState<Set<string>>(new Set());
+  // Evita redeschiderea popup-ului pentru acelasi elev+prag in aceeasi sesiune daca profesorul
+  // l-a inchis fara sa apese "Am inteles" (starea din DB - pending_diploma_milestone - ramane
+  // sursa de adevar pe termen lung, la urmatorul reload).
+  const shownMilestonesRef = useRef<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
   const [createForm, setCreateForm] = useState<{ module: number; count: number; reward: string; names: string[]; day: string | null; time: string; course: CourseId | null }>(
@@ -327,6 +353,9 @@ export default function ProgressTracker({
     if (list.length === 0) return 0;
     return Math.round(list.reduce((sum, s) => sum + s.progress, 0) / list.length);
   };
+  // "🚨 Task-uri Urgente" - elevii cu un task de diploma deschis (pending_diploma_milestone),
+  // pentru profesorul curent afisat (viewedTeacherId).
+  const pendingDiplomaStudents = students.filter((s) => !s.deleted_at && s.pending_diploma_milestone);
 
   const currentGroup = getGroupById(currentGroupId);
   const totalDataCount = groups.length + students.length;
@@ -536,6 +565,101 @@ export default function ProgressTracker({
     return attendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
   }
 
+  // Total real de prezente (istoric + curent) - istoric = presence_count (setat manual din
+  // Editeaza Elev), curent = prezente/recuperari inregistrate efectiv in aplicatie. Baza
+  // pentru task-urile "🚨 Task-uri Urgente" de diploma, la fiecare 16 prezente.
+  function totalPresencesFor(studentId: string) {
+    const student = students.find((s) => s.id === studentId);
+    return studentLessonCount(studentId) + (student?.presence_count ?? 0);
+  }
+
+  // Verifica daca elevul a atins un nou prag de 16 prezente si, daca da, deschide popup-ul
+  // de celebrare (o singura data per prag per sesiune - vezi shownMilestonesRef) - apelata
+  // dupa fiecare marcare "Prezent"/"Recuperat" din setAttendanceStatus, cu totalul deja
+  // calculat de acolo (nu recitim aici, ca sa evitam closure-ul invechit peste attendance).
+  function checkDiplomaMilestone(studentId: string, total: number) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+    if (total <= 0 || total % 16 !== 0) return;
+    if (total <= student.last_diploma_issued_milestone) return;
+    if (student.pending_diploma_milestone) return;
+    const key = `${studentId}-${total}`;
+    if (shownMilestonesRef.current.has(key)) return;
+    shownMilestonesRef.current.add(key);
+    launchConfetti('🎓');
+    setDiplomaModuleName('');
+    setDiplomaMilestonePopup({ studentId, milestone: total });
+  }
+
+
+  // Trimite catre admini (prin ruta noastra /api/diploma-milestone-alerts, proxy server-side
+  // catre Pabbly) un eveniment de task de diploma - 'acknowledged' la "Am inteles" pe popup,
+  // 'completed' la "Am trimis diploma" din dashboard. moduleName e completat de profesor doar
+  // la acknowledge (Fisa/dashboard-ul nu mai are cum sa-l retina separat dupa aceea).
+  async function sendDiplomaMilestoneAlert(
+    student: TrackerStudent, milestone: number, status: 'acknowledged' | 'completed', moduleName?: string
+  ) {
+    // Cautam telefonul profesorului logat DIRECT din baza de date, chiar acum - nu ne bazam
+    // doar pe prop-ul teacherPhone (incarcat o singura data la randarea initiala a paginii,
+    // care ar ramane invechit daca telefonul e salvat din Panoul de Profesori intr-un alt tab
+    // sau dupa ce acest tab a fost deja deschis).
+    const { data: teacherRow, error: teacherLookupError } = await supabase
+      .from('profiles').select('phone').eq('id', teacherId).single();
+    if (teacherLookupError) console.error('TEACHER PHONE LOOKUP ERROR:', teacherLookupError);
+    const resolvedTeacherPhone = teacherRow?.phone?.trim() || teacherPhone?.trim() || '';
+    console.log('[diploma-milestone-alert] teacherId:', teacherId, 'resolvedTeacherPhone:', resolvedTeacherPhone || '(gol)');
+    try {
+      await fetch('/api/diploma-milestone-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: student.short_name?.trim() || student.name,
+          teacherName,
+          teacherPhone: resolvedTeacherPhone || 'Lipsă număr',
+          className: getGroupById(student.group_id)?.group_name ?? '',
+          milestone,
+          status,
+          moduleName: moduleName?.trim() || '',
+          parentPhones: formatPhonesForWebhook(student.parent_phones),
+        }),
+      });
+    } catch (error) {
+      console.error('DIPLOMA MILESTONE ALERT ERROR:', error);
+    }
+  }
+
+  // "Am inteles" pe popup-ul de celebrare - deschide taskul pe dashboard (pending_diploma_milestone).
+  // Butonul ramane dezactivat (acknowledgingMilestone) cat timp request-ul e in desfasurare,
+  // ca un dublu-click sa nu trimita alerta de doua ori - popup-ul se inchide abia la final.
+  async function handleAcknowledgeDiplomaMilestone() {
+    if (!diplomaMilestonePopup || acknowledgingMilestone) return;
+    const { studentId, milestone } = diplomaMilestonePopup;
+    const student = students.find((s) => s.id === studentId);
+    const moduleName = diplomaModuleName;
+    if (!student) { setDiplomaMilestonePopup(null); return; }
+    setAcknowledgingMilestone(true);
+    await patchStudent(studentId, { pending_diploma_milestone: milestone });
+    await sendDiplomaMilestoneAlert(student, milestone, 'acknowledged', moduleName);
+    setAcknowledgingMilestone(false);
+    setDiplomaMilestonePopup(null);
+  }
+
+  // "✅ Am trimis diploma" din dashboard - inchide taskul si marcheaza pragul ca finalizat,
+  // ca sa nu redeclansam popup-ul pentru acelasi multiplu de 16. patchStudent e deja optimist
+  // (actualizeaza local inainte de raspunsul serverului), deci elevul dispare instant din
+  // Task-uri Urgente; markingDiplomaSentIds blocheaza doar un eventual dublu-click pe acelasi buton.
+  async function handleMarkDiplomaSent(student: TrackerStudent) {
+    const milestone = student.pending_diploma_milestone;
+    if (!milestone || markingDiplomaSentIds.has(student.id)) return;
+    setMarkingDiplomaSentIds((s) => new Set(s).add(student.id));
+    const ok = await patchStudent(student.id, { last_diploma_issued_milestone: milestone, pending_diploma_milestone: null });
+    if (ok) {
+      await sendDiplomaMilestoneAlert(student, milestone, 'completed');
+      showToast('Diploma a fost marcată ca trimisă!');
+    }
+    setMarkingDiplomaSentIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
+  }
+
   async function handleEditStudent(e: React.FormEvent, studentId: string) {
     e.preventDefault();
     const name = editStudentName.trim();
@@ -625,13 +749,7 @@ export default function ProgressTracker({
   // / "Nu s-a conectat", vizibile atat pentru admin cat si pentru profesor.
   async function handleChildConnectionStatus(student: TrackerStudent, status: 'conectat' | 'neconectat') {
     setConnectedState((s) => ({ ...s, [student.id]: 'loading' }));
-    // Telefoanele parintelui, curate (fara sufixul @c.us folosit la Green API) si cu "+" in
-    // fata fiecaruia - ca WhatsApp sa le recunoasca drept numere apelabile la click. Fiecare
-    // numar pe randul lui (\n) in mesajul trimis. "Lipsă număr" daca elevul nu are niciunul.
-    const phones = cleanContactList(student.parent_phones);
-    const parentPhones = phones.length > 0
-      ? phones.map((p) => (p.startsWith('+') ? p : `+${p}`)).join('\n')
-      : 'Lipsă număr';
+    const parentPhones = formatPhonesForWebhook(student.parent_phones);
     try {
       await fetch('/api/admin-alerts', {
         method: 'POST',
@@ -795,6 +913,11 @@ export default function ProgressTracker({
     const nextStarCount = status === 'absent' ? 0 : prevStarCount;
     const nextRecoveryDate = status === 'made_up' ? (recoveryDate ?? current?.recovery_date ?? nowDate()) : null;
     const nextRecoveryTime = status === 'made_up' ? (recoveryTime ?? current?.recovery_time ?? null) : null;
+    // Calculat ACUM (inainte de orice setAttendance) - altfel am citi starea veche din
+    // closure dupa upsert, pentru ca setAttendance nu actualizeaza sincron variabila locala.
+    const wasCounted = current?.status === 'present' || current?.status === 'made_up';
+    const willBeCounted = status === 'present' || status === 'made_up';
+    const newTotalPresences = totalPresencesFor(studentId) + (willBeCounted ? 1 : 0) - (wasCounted ? 1 : 0);
 
     const previousAttendance = attendance;
     if (current) {
@@ -826,6 +949,7 @@ export default function ProgressTracker({
     setAttendance((as) => [...as.filter((a) => !(a.lesson_id === lessonId && a.student_id === studentId)), data as TrackerAttendance]);
 
     if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group);
+    if (willBeCounted && !wasCounted) checkDiplomaMilestone(studentId, newTotalPresences);
   }
 
   function openNewLessonModal(groupId: string) {
@@ -925,6 +1049,16 @@ export default function ProgressTracker({
             >
               👶 <span className="hidden sm:inline">Lista Copiilor</span>
             </button>
+            {pendingDiplomaStudents.length > 0 && (
+              <button
+                onClick={goHome}
+                title={`${pendingDiplomaStudents.length} task-uri urgente de diploma - click pentru lista`}
+                aria-label="Task-uri urgente de diploma"
+                className="relative w-10 h-10 rounded-xl bg-black border border-[#C8F023]/40 flex items-center justify-center shrink-0 animate-pulse"
+              >
+                <span className="text-lg font-bold" style={{ color: '#C8F023' }}>!</span>
+              </button>
+            )}
             <button
               onClick={() => { setMenuOpen((v) => !v); setStudentsDrawerOpen(false); }}
               className="w-10 h-10 bg-[#C8F023] rounded-xl flex flex-col items-center justify-center gap-1.5 z-50 shrink-0"
@@ -958,6 +1092,45 @@ export default function ProgressTracker({
                 className="w-full bg-gray-900 border border-gray-700 rounded-2xl pl-11 pr-4 py-3 text-white placeholder:text-gray-500"
               />
             </div>
+
+            {pendingDiplomaStudents.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-400 mb-3">
+                  <span className="inline-block animate-bounce">🚨</span> Task-uri Urgente
+                </h3>
+                <div className="space-y-2">
+                  {pendingDiplomaStudents.map((s) => (
+                    <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
+                      <p className="text-sm">
+                        <span className="font-semibold">{s.short_name?.trim() || s.name}</span>
+                        {' - '}Clasa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>
+                        {' '}așteaptă diploma pentru modulul de {s.pending_diploma_milestone} lecții.
+                      </p>
+                      <div className="flex gap-2 shrink-0">
+                        <Link
+                          href={`/diplome?studentId=${s.id}&teacherId=${viewedTeacherId}`}
+                          title="Deschide generatorul de diplome, precompletat cu cursul si elevul - alege doar modulul"
+                          className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors"
+                        >
+                          🎓 Generează Diplomă
+                        </Link>
+                        <button
+                          onClick={() => handleMarkDiplomaSent(s)}
+                          disabled={markingDiplomaSentIds.has(s.id)}
+                          className="bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        >
+                          {markingDiplomaSentIds.has(s.id) ? (
+                            <span className="tracker-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                          ) : (
+                            '✅ Am trimis diploma'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {activeGroups.length === 0 ? (
               <div className="text-center py-20">
@@ -1737,6 +1910,46 @@ export default function ProgressTracker({
           </div>
         </div>
       )}
+
+      {/* Popup automat "Task Urgent" de diploma - la fiecare 16 prezente (istoric + curent). */}
+      {diplomaMilestonePopup && (() => {
+        const student = students.find((s) => s.id === diplomaMilestonePopup.studentId);
+        if (!student) return null;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              {confetti.map((c) => (
+                <div
+                  key={c.id} className="absolute text-2xl"
+                  style={{ left: `${c.left}%`, animation: `tracker-confetti-fall ${c.duration}s linear ${c.delay}s forwards` }}
+                >
+                  {c.emoji}
+                </div>
+              ))}
+            </div>
+            <div className="tracker-magic-popup rounded-3xl p-8 text-center relative z-10 max-w-sm w-full tracker-card-shadow">
+              <div className="text-5xl mb-4">🎓</div>
+              <h3 className="text-2xl font-bold text-black mb-2">Felicitări!</h3>
+              <p className="text-black/90 font-semibold mb-6">
+                🎉 Felicitări! Elevul {student.short_name?.trim() || student.name} a ajuns la {diplomaMilestonePopup.milestone} prezențe!
+                {' '}Te rugăm să generezi diploma și să o trimiți pe grupul adminilor în maxim 3 zile.
+              </p>
+              <input
+                type="text" value={diplomaModuleName} onChange={(e) => setDiplomaModuleName(e.target.value)}
+                placeholder="Ce modul a finalizat? (ex: Modul 1 - Blocuri de cod)"
+                className="w-full bg-white/80 border border-black/10 rounded-2xl px-4 py-2.5 mb-6 text-sm text-black placeholder:text-black/40 focus:outline-none focus:border-black/30"
+              />
+              <button
+                onClick={handleAcknowledgeDiplomaMilestone} disabled={acknowledgingMilestone}
+                className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {acknowledgingMilestone ? <span className="tracker-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : 'Am înțeles'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
