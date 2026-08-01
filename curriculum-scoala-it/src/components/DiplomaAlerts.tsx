@@ -1,19 +1,11 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
+import { useEffect, useState } from 'react';
+import { COURSES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted, DIPLOMA_MODULES } from '@/lib/diplomas';
+import { useDiplomaGroupAlerts, completedModuleFor, type DiplomaGroupAlert } from '@/lib/useDiplomaGroupAlerts';
 import type { CourseId, Profile } from '@/lib/types';
 import { Modal, Button, Field } from './ui';
 
-/** Modulul tocmai incheiat de grupa (lessonCount lectii tinute = M{n} / L16), clampat la
- * modulele cu sablon de diploma disponibile (1-4). */
-function completedModuleFor(lessonCount: number) {
-  const n = Math.floor(lessonCount / 16);
-  return Math.min(Math.max(n, DIPLOMA_MODULES[0]), DIPLOMA_MODULES[DIPLOMA_MODULES.length - 1]);
-}
-
-type DiplomaStudent = { id: string; name: string; progress: number };
-type DiplomaGroup = { id: string; group_name: string; lessonCount: number; course: CourseId | null; students: DiplomaStudent[] };
+type DiplomaGroup = DiplomaGroupAlert;
 
 /**
  * Alerta "trebuie sa trimiti diploma" - apare in coltul din stanga-jos al panoului ca o
@@ -23,68 +15,21 @@ type DiplomaGroup = { id: string; group_name: string; lessonCount: number; cours
  * (cu steluțele lui curente) si dropdown de modul; la generare se deschide sablonul HTML
  * curatat (fara feedback) intr-un tab nou, precompletat, si se marcheaza diploma trimisa.
  *
- * Datele vin din /api/diploma-alerts (server), NU direct din client cu RLS: adminul foloseste
- * acolo clientul cu service_role, ca sa vada TOATE grupele scolii indiferent de profesor.
+ * NEFOLOSIT in prezent (nu mai e montat in Shell.tsx) - continutul a fost centralizat in
+ * "🚨 Task-uri Urgente" din ProgressTracker.tsx (vezi useDiplomaGroupAlerts, de unde vine
+ * si acest widget). Lasat aici pentru referinta / eventuala reactivare ca widget separat.
  */
 export default function DiplomaAlerts({ profile }: { profile: Profile }) {
-  const [pending, setPending] = useState<DiplomaGroup[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const { pending, markSent, busyId } = useDiplomaGroupAlerts();
   const [open, setOpen] = useState(false);
   const [generatingFor, setGeneratingFor] = useState<DiplomaGroup | null>(null);
   const [fallbackCourse, setFallbackCourse] = useState<CourseId | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [selectedModule, setSelectedModule] = useState(1);
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch('/api/diploma-alerts', { cache: 'no-store' });
-      if (!res.ok) return;
-      const { groups } = (await res.json()) as { groups: DiplomaGroup[] };
-      setPending(groups);
-    } catch {
-      // eroare de retea - incercam din nou la urmatorul refresh programat
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    // Poll periodic (independent de Realtime/RLS) + Realtime best-effort pentru actualizare instant.
-    const poll = setInterval(refresh, 45000);
-    const supabase = createClient();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefresh = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(refresh, 400);
-    };
-    const channel = supabase.channel('diploma-alerts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tracker_lessons' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tracker_groups' }, scheduleRefresh)
-      .subscribe();
-    return () => {
-      clearInterval(poll);
-      if (timer) clearTimeout(timer);
-      supabase.removeChannel(channel);
-    };
-  }, [refresh]);
-
   useEffect(() => {
     if (pending.length === 0) setOpen(false);
   }, [pending.length]);
-
-  async function markSent(group: DiplomaGroup) {
-    setBusyId(group.id);
-    try {
-      const res = await fetch('/api/diploma-alerts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: group.id, milestone: Math.floor(group.lessonCount / 16) * 16 }),
-      });
-      const { ok } = (await res.json()) as { ok: boolean };
-      if (ok) setPending((p) => p.filter((g) => g.id !== group.id));
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   function openGenerateModal(group: DiplomaGroup) {
     setFallbackCourse(null);

@@ -6,7 +6,6 @@ import { signOut } from '@/app/auth-actions';
 import type { Profile, TeacherLevel } from '@/lib/types';
 import { Badge } from './ui';
 import RealtimeRefresher from './RealtimeRefresher';
-import DiplomaAlerts from './DiplomaAlerts';
 import NavLinks, { type NavItem } from './NavLinks';
 
 // Aceeasi paleta ca in admin/teachers/TeachersClient.tsx (lista de profesori) - pastrata
@@ -25,8 +24,8 @@ export default function Shell({
     <div className="min-h-screen lg:flex">
       {/* Sincronizare live cu modificările adminului */}
       <RealtimeRefresher />
-      {/* Alerta "trimite diploma" - grupele care au atins 16 lectii */}
-      <DiplomaAlerts profile={profile} />
+      {/* Alerta "trimite diploma" (grupele care au atins 16 lectii) a fost centralizata in
+          "🚨 Task-uri Urgente" din Progress Tracker - vezi useDiplomaGroupAlerts. */}
 
       {/* Bara mobilă: logo + hamburger. Ascunsă pe ecrane mari (sidebar-ul e mereu vizibil acolo). */}
       <div className="glass sticky top-0 z-40 flex items-center justify-between border-b border-line px-4 py-3 lg:hidden">
