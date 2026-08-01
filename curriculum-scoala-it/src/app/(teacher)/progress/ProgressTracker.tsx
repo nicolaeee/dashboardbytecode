@@ -170,6 +170,17 @@ function makeupDaysRemaining(absenceDate: string | null): number | null {
   return 7 - daysElapsed;
 }
 
+// Ora curenta STRICT in fusul Europe/Bucharest (0-23), indiferent de fusul orar local al
+// dispozitivului profesorului - folosita pentru "ore de liniste" (nu trimitem notificari catre
+// parinti intre 20:00 si 8:00). hourCycle: 'h23' evita un bug cunoscut Intl unde miezul noptii
+// poate iesi ca "24" in loc de "0" cu hour12: false.
+function getBucharestHour(): number {
+  return parseInt(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Bucharest', hour: 'numeric', hourCycle: 'h23' }).format(new Date()),
+    10
+  );
+}
+
 const DAY_TO_JS_INDEX: Record<string, number> = { duminica: 0, luni: 1, marti: 2, miercuri: 3, joi: 4, vineri: 5, sambata: 6 };
 
 // Numele clasei se genereaza automat din Modul + Ziua + Ora, nu se mai scrie manual.
@@ -313,28 +324,37 @@ export default function ProgressTracker({
     if (viewedTeacherId === teacherId) {
       setGroups(initialGroups); setStudents(initialStudents);
       setLessons(initialLessons); setAttendance(initialAttendance);
+      // Link-ul de recuperari e per-profesor (coloana makeup_calendar_link din profiles) -
+      // la revenirea pe propriul cont, redevine cel din props (incarcat initial de page.tsx
+      // pentru profile.id-ul autentificat), nu cel al profesorului vizualizat anterior.
+      setMakeupCalendarLink(initialMakeupCalendarLink);
       setView('home'); setCurrentGroupId(null); setModal({ type: null });
       return;
     }
     let cancelled = false;
     setTeacherSwitchLoading(true);
     (async () => {
-      const [{ data: g }, { data: s }, { data: l }, { data: a }] = await Promise.all([
+      const [{ data: g }, { data: s }, { data: l }, { data: a }, { data: p }] = await Promise.all([
         supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
         supabase.from('tracker_students').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
         supabase.from('tracker_lessons').select('*').eq('teacher_id', viewedTeacherId).order('session_number'),
         supabase.from('tracker_attendance').select('*').eq('teacher_id', viewedTeacherId),
+        // RLS pe profiles ("profil propriu sau admin") permite acest select DOAR pentru ca
+        // cel ce vizualizeaza e admin (un profesor obisnuit nu poate ajunge in aceasta ramura,
+        // viewedTeacherId al lui fiind mereu egal cu teacherId al lui).
+        supabase.from('profiles').select('makeup_calendar_link').eq('id', viewedTeacherId).single(),
       ]);
       if (cancelled) return;
       setGroups((g ?? []) as TrackerGroup[]);
       setStudents((s ?? []) as TrackerStudent[]);
       setLessons((l ?? []) as TrackerLesson[]);
       setAttendance((a ?? []) as TrackerAttendance[]);
+      setMakeupCalendarLink(p?.makeup_calendar_link ?? null);
       setView('home'); setCurrentGroupId(null); setModal({ type: null });
       setTeacherSwitchLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [viewedTeacherId, teacherId, initialGroups, initialStudents, initialLessons, initialAttendance, supabase]);
+  }, [viewedTeacherId, teacherId, initialGroups, initialStudents, initialLessons, initialAttendance, initialMakeupCalendarLink, supabase]);
 
   // ---- selectori ----
   // Recalculate doar cand `groups`/`students` chiar se schimba, nu la fiecare re-render al
@@ -687,6 +707,18 @@ export default function ProgressTracker({
     }
   }
 
+  // Click pe "🔔 Trimite Notificare" - "ore de liniste": intre 20:00 si 8:00 (ora Bucuresti,
+  // indiferent de fusul orar al dispozitivului) blocam complet actiunea, inainte sa apuce sa
+  // deschida pop-up-ul de confirmare "Ai sloturi disponibile?".
+  function handleOpenMakeupNotifyConfirm(student: TrackerStudent) {
+    const hour = getBucharestHour();
+    if (hour >= 20 || hour < 8) {
+      showToast('Nu e posibil la ora asta să trimiți notificări. Revino mâine de la 8:00 dimineața.', 'error');
+      return;
+    }
+    setMakeupNotifyConfirm(student);
+  }
+
   // "Trimite Notificare" pe cardul de recuperare - permis oricand la prima trimitere (count 0),
   // apoi necesita minim 48h de la ultima trimitere; peste 3 trimiteri butonul se dezactiveaza
   // complet (vezi canSendMakeupNotification mai jos, folosit si pentru disabled pe buton).
@@ -862,8 +894,11 @@ export default function ProgressTracker({
     if (ok) showToast(meetLink ? 'Link Meet salvat!' : 'Link Meet șters');
   }
 
-  // Salveaza link-ul de calendar recuperari al contului logat - prin API (ocoleste RLS-ul
-  // de pe profiles, care permite update doar adminului), nu direct din client ca patchGroup.
+  // Salveaza link-ul de calendar recuperari - prin API (ocoleste RLS-ul de pe profiles, care
+  // permite update doar adminului), nu direct din client ca patchGroup. Trimitem explicit
+  // viewedTeacherId (profesorul al carui dashboard e afisat acum), nu doar contul logat -
+  // altfel adminul care previzualizeaza profesorul B ar edita mereu propriul lui link (bug
+  // raportat: "linkul e acelasi pentru toti"). Ruta ignora acest camp pentru non-admini.
   async function handleSaveMakeupLink(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = makeupLinkDraft.trim();
@@ -873,7 +908,7 @@ export default function ProgressTracker({
       const res = await fetch('/api/makeup-calendar-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link: normalized || null }),
+        body: JSON.stringify({ link: normalized || null, teacherId: viewedTeacherId }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) return showToast('Eroare', 'error');
@@ -1244,7 +1279,7 @@ export default function ProgressTracker({
                         </div>
                         <div className="flex gap-2 shrink-0 flex-wrap">
                           <button
-                            onClick={() => setMakeupNotifyConfirm(s)}
+                            onClick={() => handleOpenMakeupNotifyConfirm(s)}
                             disabled={busy || !canNotify}
                             title={!canNotify && notifyCount < 3 ? 'Poti retrimite dupa 48h de la ultima notificare' : undefined}
                             className="bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
