@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
+import { checkRateLimit, isSafeString, isSafeOptionalString, readJsonBody, RATE_LIMITS } from '@/lib/apiSecurity';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,14 +14,23 @@ const DIPLOMA_MILESTONE_WEBHOOK_URL = 'https://connect.pabbly.com/webhook-listen
  * nivel de GRUPA (folosita de pagina /diplome) - acesta e un sistem separat, per elev.
  */
 export async function POST(request: Request) {
-  await requireUser();
+  const profile = await requireUser();
+  if (!checkRateLimit(`diploma-milestone-alerts:${profile.id}`, RATE_LIMITS.WEBHOOK_WRITE.limit, RATE_LIMITS.WEBHOOK_WRITE.windowMs)) {
+    return NextResponse.json({ ok: false, error: 'Prea multe cereri, încearcă din nou peste un minut.' }, { status: 429 });
+  }
 
-  const body = (await request.json().catch(() => null)) as {
+  const body = (await readJsonBody(request)) as {
     studentName?: string; teacherName?: string; teacherPhone?: string; className?: string;
     milestone?: number; status?: string; moduleName?: string; parentPhones?: string;
   } | null;
-  if (!body || !body.studentName || typeof body.milestone !== 'number' || !body.status) {
-    return NextResponse.json({ ok: false, error: 'Date lipsa' }, { status: 400 });
+  if (
+    !body || !isSafeString(body.studentName) || typeof body.milestone !== 'number' || !Number.isInteger(body.milestone)
+    || body.milestone < 0 || body.milestone > 100_000 || !isSafeString(body.status, 30)
+    || !isSafeOptionalString(body.teacherName) || !isSafeOptionalString(body.teacherPhone, 50)
+    || !isSafeOptionalString(body.className) || !isSafeOptionalString(body.moduleName)
+    || !isSafeOptionalString(body.parentPhones, 1000)
+  ) {
+    return NextResponse.json({ ok: false, error: 'Date lipsa sau invalide' }, { status: 400 });
   }
   const { studentName, teacherName, teacherPhone, className, milestone, status, moduleName, parentPhones } = body;
 

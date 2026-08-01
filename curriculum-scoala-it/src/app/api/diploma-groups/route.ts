@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/apiSecurity';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,9 @@ type StudentRow = { id: string; group_id: string; name: string; progress: number
 export async function GET(request: Request) {
   const profile = await requireUser();
   const isAdmin = profile.role === 'admin';
+  if (!checkRateLimit(`diploma-groups:${profile.id}`, RATE_LIMITS.READ.limit, RATE_LIMITS.READ.windowMs)) {
+    return NextResponse.json({ groups: [] }, { status: 429 });
+  }
   const { searchParams } = new URL(request.url);
   const requestedTeacherId = searchParams.get('teacherId');
   const targetTeacherId = isAdmin && requestedTeacherId ? requestedTeacherId : profile.id;

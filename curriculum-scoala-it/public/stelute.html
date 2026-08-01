@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ro" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem - Premii</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Fredoka', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    .star-gradient {
+      background: linear-gradient(135deg, #C8F023, #4ade80, #C8F023);
+      background-size: 200% 200%;
+      animation: gradient-shift 3s ease infinite;
+    }
+
+    @keyframes gradient-shift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .card-reward {
+      background: linear-gradient(135deg, rgba(200, 240, 35, 0.1), rgba(74, 222, 128, 0.1));
+      border: 3px solid rgba(200, 240, 35, 0.3);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-reward::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(200, 240, 35, 0.1) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .card-reward:hover {
+      transform: translateY(-10px) scale(1.02);
+      border-color: #C8F023;
+      box-shadow: 0 20px 60px rgba(200, 240, 35, 0.3), 0 0 40px rgba(74, 222, 128, 0.2);
+    }
+
+    .card-reward:hover::before {
+      opacity: 1;
+    }
+
+    .btn-play {
+      background: linear-gradient(135deg, #C8F023, #4ade80);
+      color: #000;
+      font-weight: 700;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-play::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .btn-play:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .btn-play:hover {
+      transform: scale(1.05);
+      box-shadow: 0 10px 30px rgba(200, 240, 35, 0.5);
+    }
+
+    .btn-play:active {
+      transform: scale(0.98);
+    }
+
+    .star-badge {
+      background: linear-gradient(135deg, #ffd700, #ffed4e);
+      border: 3px solid rgba(255, 215, 0, 0.5);
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 15px rgba(255, 255, 255, 0.3);
+      animation: star-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes star-pulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 15px rgba(255, 255, 255, 0.3);
+      }
+      50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.5);
+      }
+    }
+
+    .floating-stars {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .floating-star {
+      position: absolute;
+      font-size: 1.5rem;
+      animation: float-star 8s infinite ease-in-out;
+      opacity: 0.6;
+    }
+
+    @keyframes float-star {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 0.6;
+      }
+      50% {
+        transform: translateY(-30px) rotate(180deg);
+        opacity: 1;
+      }
+    }
+
+    .reward-icon {
+      font-size: 4rem;
+      animation: bounce-icon 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce-icon {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .progress-stars {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 0.5rem;
+    }
+
+    .progress-star {
+      width: 100%;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .progress-star.earned {
+      background: linear-gradient(135deg, #C8F023, #4ade80);
+      transform: scale(1);
+      animation: star-pop 0.5s ease;
+    }
+
+    .progress-star.locked {
+      background: rgba(255, 255, 255, 0.1);
+      opacity: 0.4;
+    }
+
+    @keyframes star-pop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    .hero-glow {
+      text-shadow: 0 0 40px rgba(200, 240, 35, 0.5), 0 0 80px rgba(74, 222, 128, 0.3);
+    }
+
+    .feature-list li {
+      position: relative;
+      padding-left: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .feature-list li::before {
+      content: '✨';
+      position: absolute;
+      left: 0;
+      font-size: 1.25rem;
+    }
+
+    @keyframes shimmer-line {
+      0% { background-position: -1000px 0; }
+      100% { background-position: 1000px 0; }
+    }
+
+    .shimmer-border {
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(200, 240, 35, 0.8) 50%,
+        transparent 100%);
+      background-size: 1000px 100%;
+      animation: shimmer-line 3s infinite linear;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full bg-black text-white overflow-auto">
+  <div class="floating-stars" id="floating-stars"></div>
+  <div class="min-h-full flex flex-col"><!-- Hero Section -->
+   <header class="relative py-16 px-4 text-center overflow-hidden">
+    <div class="absolute inset-0 star-gradient opacity-20"></div>
+    <div class="relative z-10 max-w-4xl mx-auto">
+     <div class="text-7xl mb-6 reward-icon">
+      ⭐
+     </div>
+     <h1 class="text-4xl md:text-6xl font-bold mb-4 hero-glow">Sistemul nostru de STELUȚE și SURPRIZE</h1>
+     <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">Fiecare steluță câștigată te apropie de surprize incredibile!</p>
+    </div>
+   </header><!-- Rewards Grid -->
+   <main class="flex-1 px-4 py-12 max-w-7xl mx-auto w-full">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8"><!-- Card 1: 16 Lecții -->
+     <div class="card-reward rounded-3xl p-8 relative">
+      <div class="star-badge w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-black mb-4 relative z-10">
+       16
+      </div>
+      <h2 class="text-2xl md:text-3xl font-bold mb-4 text-[#C8F023]">16 lecții – Anagrame</h2>
+      <div class="progress-stars mb-6">
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+      </div>
+      <div class="text-gray-300 mb-6 leading-relaxed">
+       <p class="font-semibold mb-2">Activitate de grup</p>
+       <p class="mb-2">Toată clasa lucrează împreună. Primiți anagrame (litere amestecate). Trebuie să aranjați corect literele pentru a forma o frază.</p>
+      </div>
+      <ul class="feature-list text-gray-300 mb-6 text-sm">
+       <li>Toată clasa colaborează</li>
+       <li>Rezolvați anagrame împreună</li>
+       <li>Descoperiți mesajul secret</li>
+      </ul><a href="https://wordwall.net/ro/resource/105185462" target="_blank" rel="noopener noreferrer" class="btn-play w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 relative z-10"> <span>Accesează Jocul</span> </a>
+     </div><!-- Card 2: 32 Lecții -->
+     <div class="card-reward rounded-3xl p-8 relative">
+      <div class="star-badge w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-black mb-4 relative z-10">
+       32
+      </div>
+      <h2 class="text-2xl md:text-3xl font-bold mb-4 text-[#C8F023]">32 lecții – Roata surprizelor</h2>
+      <div class="progress-stars mb-6">
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+      </div>
+      <div class="text-gray-300 mb-6 leading-relaxed">
+       <p class="font-semibold mb-2">Individual</p>
+       <p class="mb-2">Fiecare copil învârte roata surprizelor și descoperă ce premiu special a primit!</p>
+      </div>
+      <ul class="feature-list text-gray-300 mb-6 text-sm">
+       <li>Fiecare copil învârte roata</li>
+       <li>Bonusuri personale</li>
+       <li>Provocări amuzante</li>
+      </ul><a href="https://wordwall.net/ro/resource/92618755" target="_blank" rel="noopener noreferrer" class="btn-play w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 relative z-10"> <span>Accesează Roata</span> </a>
+     </div><!-- Card 3: 48 Lecții -->
+     <div class="card-reward rounded-3xl p-8 relative">
+      <div class="star-badge w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-black mb-4 relative z-10">
+       48
+      </div>
+      <h2 class="text-2xl md:text-3xl font-bold mb-4 text-[#C8F023]">48 lecții – Căsuțele misterului</h2>
+      <div class="progress-stars mb-6">
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+      </div>
+      <div class="text-gray-300 mb-6 leading-relaxed">
+       <p class="font-semibold mb-2">Un copil pentru toată clasa</p>
+       <p class="mb-2">Este ales un singur copil din grupă. Sunt 6 căsuțe misterioase. Copilul alege și deschide o singură căsuță. În căsuță se află cadoul pentru întreaga clasă.</p>
+      </div>
+      <ul class="feature-list text-gray-300 mb-6 text-sm">
+       <li>Un singur coleg</li>
+       <li>6 căsuțe misterioase</li>
+       <li>Cadou pentru toată clasa</li>
+      </ul><a href="https://wordwall.net/ro/resource/105229633" target="_blank" rel="noopener noreferrer" class="btn-play w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 relative z-10"> <span>Accesează Jocul</span> </a>
+     </div><!-- Card 4: 60 Lecții -->
+     <div class="card-reward rounded-3xl p-8 relative">
+      <div class="star-badge w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-black mb-4 relative z-10">
+       60
+      </div>
+      <h2 class="text-2xl md:text-3xl font-bold mb-4 text-[#C8F023]">60 lecții – Marea roată a surprizelor</h2>
+      <div class="progress-stars mb-6">
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+       <div class="progress-star earned">⭐</div>
+      </div>
+      <div class="text-gray-300 mb-6 leading-relaxed">
+       <p class="font-semibold mb-2">Individual</p>
+       <p class="mb-2">Fiecare copil, pe rând, învârte roata. Roata conține mai multe surprize. Fiecare descoperă ce surpriză primește.</p>
+      </div>
+      <ul class="feature-list text-gray-300 mb-6 text-sm">
+       <li>Fiecare învârte roata</li>
+       <li>Multe surprize diferite</li>
+       <li>Nivel maxim atins!</li>
+      </ul><a href="https://wordwall.net/ro/resource/105184692" target="_blank" rel="noopener noreferrer" class="btn-play w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 relative z-10"> <span>Accesează Roata</span> </a>
+     </div>
+    </div>
+   </main><!-- Reuse Card -->
+   <section class="px-4 pb-12 max-w-7xl mx-auto w-full">
+    <div class="card-reward rounded-3xl p-8 md:p-12 relative overflow-hidden">
+     <div class="absolute top-0 left-0 w-full h-2 shimmer-border"></div>
+     <div class="text-center mb-8">
+      <div class="text-6xl mb-6 reward-icon">
+       ⭐
+      </div>
+      <h2 class="text-3xl md:text-4xl font-bold mb-6 text-[#C8F023]">Sistem Reutilizabil</h2>
+     </div>
+     <div class="max-w-3xl mx-auto">
+      <p class="text-lg md:text-xl text-gray-300 mb-8 leading-relaxed text-center">Felicitări! După ce ați finalizat toate cele 4 carduri (60 de lecții), puteți reîncepe sistemul de la primul card cu 16 steluțe! Acest sistem este reutilizabil la nesfârșit pentru aceeași grupă de copii. Când vor apărea mai multe niveluri, vom face update și vom adăuga surprize noi!</p>
+      <div class="flex flex-wrap justify-center gap-4 mb-8">
+       <div class="bg-gradient-to-r from-[#C8F023]/20 to-green-500/20 px-6 py-3 rounded-full border-2 border-[#C8F023]/30"><span class="text-xl font-bold">Nelimitat</span>
+       </div>
+       <div class="bg-gradient-to-r from-[#C8F023]/20 to-green-500/20 px-6 py-3 rounded-full border-2 border-[#C8F023]/30"><span class="text-xl font-bold">Reîncepe când vrei</span>
+       </div>
+       <div class="bg-gradient-to-r from-[#C8F023]/20 to-green-500/20 px-6 py-3 rounded-full border-2 border-[#C8F023]/30"><span class="text-xl font-bold">Update-uri viitoare</span>
+       </div>
+      </div>
+      <div class="text-center"><a href="https://wordwall.net/ro/resource/105185462" target="_blank" rel="noopener noreferrer" class="btn-play inline-flex items-center justify-center gap-3 px-8 py-5 rounded-2xl font-bold text-xl relative z-10"> <span>Reîncepe de la Card 1</span> </a>
+      </div>
+     </div>
+    </div>
+   </section><!-- Footer -->
+   <footer class="py-8 px-4 text-center border-t border-[#C8F023]/20">
+    <div class="max-w-4xl mx-auto">
+     <p class="text-gray-400 mb-4">ByteCode School - Învățăm programare distractiv!</p><a href="https://bytecodeschool.com" target="_blank" rel="noopener noreferrer" class="text-[#C8F023] hover:underline font-semibold text-lg"> bytecodeschool.com </a>
+    </div>
+   </footer>
+  </div>
+  <script>
+    // Floating Stars Animation
+    function createFloatingStars() {
+      const container = document.getElementById('floating-stars');
+      const stars = ['⭐', '✨', '🌟', '💫'];
+
+      for (let i = 0; i < 15; i++) {
+        const star = document.createElement('div');
+        star.className = 'floating-star';
+        star.textContent = stars[Math.floor(Math.random() * stars.length)];
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 100 + '%';
+        star.style.animationDelay = Math.random() * 8 + 's';
+        star.style.animationDuration = (8 + Math.random() * 4) + 's';
+        container.appendChild(star);
+      }
+    }
+
+    createFloatingStars();
+  </script>
+ </body>
+</html>

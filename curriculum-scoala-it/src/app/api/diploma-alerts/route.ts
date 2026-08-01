@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkRateLimit, isSafeString, readJsonBody, RATE_LIMITS } from '@/lib/apiSecurity';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,9 @@ type StudentRow = { id: string; group_id: string; name: string; progress: number
 export async function GET() {
   const profile = await requireUser();
   const isAdmin = profile.role === 'admin';
+  if (!checkRateLimit(`diploma-alerts-get:${profile.id}`, RATE_LIMITS.READ.limit, RATE_LIMITS.READ.windowMs)) {
+    return NextResponse.json({ groups: [] }, { status: 429 });
+  }
 
   const supabase = isAdmin ? createAdminClient() : await createClient();
   let query = supabase
@@ -72,9 +76,14 @@ export async function GET() {
 export async function POST(request: Request) {
   const profile = await requireUser();
   const isAdmin = profile.role === 'admin';
-  const { groupId, milestone } = (await request.json()) as { groupId: string; milestone: number };
-  if (!groupId || typeof milestone !== 'number') {
-    return NextResponse.json({ ok: false }, { status: 400 });
+  if (!checkRateLimit(`diploma-alerts-post:${profile.id}`, RATE_LIMITS.WEBHOOK_WRITE.limit, RATE_LIMITS.WEBHOOK_WRITE.windowMs)) {
+    return NextResponse.json({ ok: false, error: 'Prea multe cereri, încearcă din nou peste un minut.' }, { status: 429 });
+  }
+
+  const body = (await readJsonBody(request)) as { groupId?: string; milestone?: number } | null;
+  const { groupId, milestone } = body ?? {};
+  if (!isSafeString(groupId, 100) || typeof milestone !== 'number' || !Number.isInteger(milestone) || milestone < 0 || milestone > 100_000) {
+    return NextResponse.json({ ok: false, error: 'Date lipsa sau invalide' }, { status: 400 });
   }
 
   const supabase = isAdmin ? createAdminClient() : await createClient();

@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2 } from 'lucide-react';
+import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
+import { MAX_CONTACTS, asContactList, cleanContactList, formatPhonesForWebhook, toEditableList } from '@/lib/contactList';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -123,41 +124,8 @@ function norm(s: string) {
   return s.normalize('NFD').replace(DIACRITICS_RE, '').toLowerCase();
 }
 
-// Maxim de telefoane/email-uri de parinte per elev (vezi PARTEA 1/2 - camp dinamic).
-const MAX_CONTACTS = 5;
-
-/**
- * Normalizeaza orice valoare venita din DB/state la un array de string-uri, indiferent
- * daca e deja array, null/undefined (elevi vechi, dinainte de migratie) sau un string
- * simplu ramas dintr-o migrare partiala - niciodata nu lasam un .map() sa crape pe el.
- */
-function asContactList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
-  if (typeof value === 'string') return value ? [value] : [];
-  return [];
-}
-
-/** Curata lista pentru salvare: trim + elimina golurile + plafoneaza la MAX_CONTACTS. */
-function cleanContactList(value: unknown): string[] {
-  return asContactList(value).map((v) => v.trim()).filter(Boolean).slice(0, MAX_CONTACTS);
-}
-
-/**
- * Numerele de telefon curatate (vezi cleanContactList), fiecare cu "+" in fata (adaugat doar
- * daca lipseste) si unite prin rand nou - format gata pentru linkuri apelabile din WhatsApp in
- * payload-urile trimise catre Pabbly. "Lipsă număr" daca lista e goala.
- */
-function formatPhonesForWebhook(value: unknown): string {
-  const phones = cleanContactList(value);
-  if (phones.length === 0) return 'Lipsă număr';
-  return phones.map((p) => (p.startsWith('+') ? p : `+${p}`)).join('\n');
-}
-
-/** Lista pentru afisare in formular: mereu cel putin 1 input (gol daca elevul nu are inca date). */
-function toEditableList(value: unknown): string[] {
-  const list = asContactList(value);
-  return list.length > 0 ? list : [''];
-}
+// MAX_CONTACTS, asContactList, cleanContactList, formatPhonesForWebhook, toEditableList
+// sunt importate din @/lib/contactList (partajate cu rutele API care retrimit notificari).
 
 /**
  * Valoarea unui input numeric controlat, care poate fi golit complet (fara sa forteze un 0
@@ -189,6 +157,18 @@ function nextLocalId() { uid += 1; return `local-${Date.now()}-${uid}`; }
 
 function nowDate() { return new Date().toISOString().slice(0, 10); }
 function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+
+// Zile ramase din cele 7 permise de la absenta (absence_date, format YYYY-MM-DD) pana la
+// recuperare - folosit pentru badge-ul "⏳ Mai sunt N zile" din cardul de recuperare. Comparam
+// la nivel de zi calendaristica (nu ore), ca sa nu scada un zi doar din cauza orei curente.
+function makeupDaysRemaining(absenceDate: string | null): number | null {
+  if (!absenceDate) return null;
+  const start = new Date(`${absenceDate}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysElapsed = Math.round((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  return 7 - daysElapsed;
+}
 
 const DAY_TO_JS_INDEX: Record<string, number> = { duminica: 0, luni: 1, marti: 2, miercuri: 3, joi: 4, vineri: 5, sambata: 6 };
 
@@ -229,12 +209,15 @@ type ModalState =
   | { type: 'confirmDeleteLesson'; lessonId: string }
   | { type: 'newLesson'; groupId: string }
   | { type: 'recordRecovery'; studentId: string; lessonId: string }
-  | { type: 'studentHistory'; studentId: string };
+  | { type: 'studentHistory'; studentId: string }
+  | { type: 'editMakeupLink' };
 
 export default function ProgressTracker({
-  teacherId, teacherName, teacherPhone, isAdmin, teacherOptions, initialGroups, initialStudents, initialLessons, initialAttendance,
+  teacherId, teacherName, teacherPhone, makeupCalendarLink: initialMakeupCalendarLink, isAdmin, teacherOptions,
+  initialGroups, initialStudents, initialLessons, initialAttendance,
 }: {
-  teacherId: string; teacherName: string; teacherPhone: string | null; isAdmin: boolean; teacherOptions: { id: string; label: string }[];
+  teacherId: string; teacherName: string; teacherPhone: string | null; makeupCalendarLink: string | null;
+  isAdmin: boolean; teacherOptions: { id: string; label: string }[];
   initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
 }) {
@@ -259,13 +242,24 @@ export default function ProgressTracker({
   // Popup automat "Task Urgent" de diploma - la fiecare 16 prezente (istoric + curent) ale
   // unui elev, independent de modalul de editare (acelasi tipar ca magicPopup de mai sus).
   const [diplomaMilestonePopup, setDiplomaMilestonePopup] = useState<{ studentId: string; milestone: number } | null>(null);
-  // Numele modulului completat de profesor pe popup-ul de celebrare, ca adminii sa stie
-  // exact pentru ce diploma trebuie generata (ex: "Modul 1 - Blocuri de cod").
-  const [diplomaModuleName, setDiplomaModuleName] = useState('');
+  // Popup de confirmare dupa "✅ Recuperare efectuata" pe cardul de recuperare din Task-uri Urgente.
+  const [makeupDoneNotice, setMakeupDoneNotice] = useState(false);
+  // Elevul pentru care s-a apasat "Trimite Notificare" si asteapta confirmarea "Ai sloturi
+  // disponibile in calendar?" (Da/Nu) inainte de trimiterea efectiva catre Pabbly.
+  const [makeupNotifyConfirm, setMakeupNotifyConfirm] = useState<TrackerStudent | null>(null);
+  // Link catre calendarul propriu de recuperari (buton "📅 Link Recuperari" de langa "+ Adauga
+  // Clasa") - apartine contului autentificat (teacherId), nu profesorului vizualizat de admin
+  // (acelasi tipar ca teacherPhone mai jos). draft/saving alimenteaza modalul de editare.
+  const [makeupCalendarLink, setMakeupCalendarLink] = useState(initialMakeupCalendarLink);
+  const [makeupLinkDraft, setMakeupLinkDraft] = useState('');
+  const [savingMakeupLink, setSavingMakeupLink] = useState(false);
   // Previn dubla trimitere (dublu-click accidental) pe "Am inteles" si pe "Am trimis diploma" -
   // butonul se dezactiveaza cat timp request-ul e in desfasurare.
   const [acknowledgingMilestone, setAcknowledgingMilestone] = useState(false);
   const [markingDiplomaSentIds, setMarkingDiplomaSentIds] = useState<Set<string>>(new Set());
+  // Acelasi rol ca markingDiplomaSentIds, dar pentru cardul de recuperare (pending_makeups)
+  // din Task-uri Urgente - previne dublu-click pe "Recuperare efectuata" / "Nu mai e nevoie".
+  const [markingMakeupIds, setMarkingMakeupIds] = useState<Set<string>>(new Set());
   // Evita redeschiderea popup-ului pentru acelasi elev+prag in aceeasi sesiune daca profesorul
   // l-a inchis fara sa apese "Am inteles" (starea din DB - pending_diploma_milestone - ramane
   // sursa de adevar pe termen lung, la urmatorul reload).
@@ -343,8 +337,12 @@ export default function ProgressTracker({
   }, [viewedTeacherId, teacherId, initialGroups, initialStudents, initialLessons, initialAttendance, supabase]);
 
   // ---- selectori ----
-  const activeGroups = groups.filter((g) => !g.deleted_at);
-  const deletedGroups = groups.filter((g) => g.deleted_at);
+  // Recalculate doar cand `groups`/`students` chiar se schimba, nu la fiecare re-render al
+  // componentei (toast-uri, animatii de celebrare, deschidere/inchidere meniu etc. re-randeaza
+  // ProgressTracker foarte des, iar aceste liste ar fi refiltrate/resortate degeaba de fiecare
+  // data - vezi audit-ul de performanta, "Progress Tracker").
+  const activeGroups = useMemo(() => groups.filter((g) => !g.deleted_at), [groups]);
+  const deletedGroups = useMemo(() => groups.filter((g) => g.deleted_at), [groups]);
   const getStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && !s.deleted_at);
   const getDeletedStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && s.deleted_at);
   const getGroupById = (groupId: string | null) => activeGroups.find((g) => g.id === groupId) ?? null;
@@ -355,24 +353,37 @@ export default function ProgressTracker({
   };
   // "🚨 Task-uri Urgente" - elevii cu un task de diploma deschis (pending_diploma_milestone),
   // pentru profesorul curent afisat (viewedTeacherId).
-  const pendingDiplomaStudents = students.filter((s) => !s.deleted_at && s.pending_diploma_milestone);
+  const pendingDiplomaStudents = useMemo(
+    () => students.filter((s) => !s.deleted_at && s.pending_diploma_milestone),
+    [students]
+  );
+  // "🚨 Task-uri Urgente" - elevii cu recuperari neefectuate (pending_makeups), crescute cand
+  // profesorul marcheaza un elev "Absent" la o lectie (vezi setAttendanceStatus).
+  const pendingMakeupStudents = useMemo(
+    () => students.filter((s) => !s.deleted_at && s.pending_makeups > 0),
+    [students]
+  );
+  const hasUrgentTasks = pendingDiplomaStudents.length > 0 || pendingMakeupStudents.length > 0;
 
   const currentGroup = getGroupById(currentGroupId);
   const totalDataCount = groups.length + students.length;
 
   // ---- cautare + organizare pe zile ----
   const searchNorm = norm(searchQuery.trim());
-  const searchedGroups = !searchNorm ? activeGroups : activeGroups.filter((g) => {
+  const searchedGroups = useMemo(() => (!searchNorm ? activeGroups : activeGroups.filter((g) => {
     if (norm(g.group_name).includes(searchNorm)) return true;
-    return getStudentsForGroup(g.id).some((s) => norm(s.name).includes(searchNorm));
-  });
-  const groupsByDay = DAYS.map((d) => ({
+    return students.some((s) => s.group_id === g.id && !s.deleted_at && norm(s.name).includes(searchNorm));
+  })), [activeGroups, students, searchNorm]);
+  const groupsByDay = useMemo(() => DAYS.map((d) => ({
     ...d,
     groups: searchedGroups
       .filter((g) => g.day_of_week === d.id)
       .sort((a, b) => (a.time_of_day || '99:99').localeCompare(b.time_of_day || '99:99')),
-  }));
-  const unscheduledGroups = searchedGroups.filter((g) => !DAYS.some((d) => d.id === g.day_of_week));
+  })), [searchedGroups]);
+  const unscheduledGroups = useMemo(
+    () => searchedGroups.filter((g) => !DAYS.some((d) => d.id === g.day_of_week)),
+    [searchedGroups]
+  );
 
   // ---- toasts / celebrari ----
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -587,17 +598,15 @@ export default function ProgressTracker({
     if (shownMilestonesRef.current.has(key)) return;
     shownMilestonesRef.current.add(key);
     launchConfetti('🎓');
-    setDiplomaModuleName('');
     setDiplomaMilestonePopup({ studentId, milestone: total });
   }
 
 
   // Trimite catre admini (prin ruta noastra /api/diploma-milestone-alerts, proxy server-side
   // catre Pabbly) un eveniment de task de diploma - 'acknowledged' la "Am inteles" pe popup,
-  // 'completed' la "Am trimis diploma" din dashboard. moduleName e completat de profesor doar
-  // la acknowledge (Fisa/dashboard-ul nu mai are cum sa-l retina separat dupa aceea).
+  // 'completed' la "Am trimis diploma" din dashboard.
   async function sendDiplomaMilestoneAlert(
-    student: TrackerStudent, milestone: number, status: 'acknowledged' | 'completed', moduleName?: string
+    student: TrackerStudent, milestone: number, status: 'acknowledged' | 'completed'
   ) {
     // Cautam telefonul profesorului logat DIRECT din baza de date, chiar acum - nu ne bazam
     // doar pe prop-ul teacherPhone (incarcat o singura data la randarea initiala a paginii,
@@ -619,7 +628,7 @@ export default function ProgressTracker({
           className: getGroupById(student.group_id)?.group_name ?? '',
           milestone,
           status,
-          moduleName: moduleName?.trim() || '',
+          moduleName: '',
           parentPhones: formatPhonesForWebhook(student.parent_phones),
         }),
       });
@@ -635,11 +644,10 @@ export default function ProgressTracker({
     if (!diplomaMilestonePopup || acknowledgingMilestone) return;
     const { studentId, milestone } = diplomaMilestonePopup;
     const student = students.find((s) => s.id === studentId);
-    const moduleName = diplomaModuleName;
     if (!student) { setDiplomaMilestonePopup(null); return; }
     setAcknowledgingMilestone(true);
     await patchStudent(studentId, { pending_diploma_milestone: milestone });
-    await sendDiplomaMilestoneAlert(student, milestone, 'acknowledged', moduleName);
+    await sendDiplomaMilestoneAlert(student, milestone, 'acknowledged');
     setAcknowledgingMilestone(false);
     setDiplomaMilestonePopup(null);
   }
@@ -658,6 +666,70 @@ export default function ProgressTracker({
       showToast('Diploma a fost marcată ca trimisă!');
     }
     setMarkingDiplomaSentIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
+  }
+
+  // "✅ Recuperat" / "❌ Nu mai e nevoie" pe cardul de recuperare din Task-uri Urgente - ambele
+  // inchid complet alerta curenta (pending_makeups, absence_date si contorul/cooldown-ul de
+  // notificari, toate la 0/null); patchStudent e deja optimist, deci cardul dispare instant
+  // din dashboard. Singura diferenta intre butoane e mesajul aratat profesorului dupa succes.
+  async function handleMakeupResolved(student: TrackerStudent, outcome: 'done' | 'dismiss') {
+    if (markingMakeupIds.has(student.id)) return;
+    setMarkingMakeupIds((s) => new Set(s).add(student.id));
+    const ok = await patchStudent(student.id, {
+      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null,
+    });
+    setMarkingMakeupIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
+    if (!ok) return;
+    if (outcome === 'done') {
+      setMakeupDoneNotice(true);
+    } else {
+      showToast('Alertă ștearsă');
+    }
+  }
+
+  // "Trimite Notificare" pe cardul de recuperare - permis oricand la prima trimitere (count 0),
+  // apoi necesita minim 48h de la ultima trimitere; peste 3 trimiteri butonul se dezactiveaza
+  // complet (vezi canSendMakeupNotification mai jos, folosit si pentru disabled pe buton).
+  function canSendMakeupNotification(student: TrackerStudent) {
+    const count = student.makeup_notification_count ?? 0;
+    if (count >= 3) return false;
+    if (count === 0) return true;
+    if (!student.last_makeup_notification) return true;
+    const hoursSinceLast = (Date.now() - new Date(student.last_makeup_notification).getTime()) / (1000 * 60 * 60);
+    return hoursSinceLast >= 48;
+  }
+
+  // Confirmarea "Ai sloturi/date disponibile in calendar?" apare inainte de a trimite efectiv
+  // notificarea - profesorul trebuie sa verifice calendarul de recuperari inainte sa promita
+  // ceva parintelui. "Nu" doar inchide popup-ul, fara alt efect.
+  async function handleConfirmMakeupNotification(student: TrackerStudent) {
+    setMakeupNotifyConfirm(null);
+    if (markingMakeupIds.has(student.id) || !canSendMakeupNotification(student)) return;
+    setMarkingMakeupIds((s) => new Set(s).add(student.id));
+    try {
+      // studentId + teacherId/calendarLink - ruta reciteste ea insasi elevul (nume, telefoane
+      // parinte, contorul si cooldown-ul de notificari) direct din DB, prin clientul cu
+      // sesiunea profesorului (RLS ii blocheaza accesul la un elev care nu e al lui) - nu mai
+      // trimitem noi valorile "de incredere", ca sa nu poata fi falsificate dintr-un request
+      // manual (ex. consola browser-ului).
+      const res = await fetch('/api/makeup-notification-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: student.id,
+          teacherName,
+          calendarLink: makeupCalendarLink ?? '',
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) return showToast('Eroare', 'error');
+      setStudents((ss) => ss.map((s) => (s.id === student.id
+        ? { ...s, makeup_notification_count: json.makeup_notification_count, last_makeup_notification: json.last_makeup_notification }
+        : s)));
+      showToast('Notificare trimisă!');
+    } finally {
+      setMarkingMakeupIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
+    }
   }
 
   async function handleEditStudent(e: React.FormEvent, studentId: string) {
@@ -791,6 +863,29 @@ export default function ProgressTracker({
   async function saveMeetLink(groupId: string, meetLink: string | null) {
     const ok = await patchGroup(groupId, { meet_link: meetLink });
     if (ok) showToast(meetLink ? 'Link Meet salvat!' : 'Link Meet șters');
+  }
+
+  // Salveaza link-ul de calendar recuperari al contului logat - prin API (ocoleste RLS-ul
+  // de pe profiles, care permite update doar adminului), nu direct din client ca patchGroup.
+  async function handleSaveMakeupLink(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = makeupLinkDraft.trim();
+    const normalized = trimmed && !/^https?:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed;
+    setSavingMakeupLink(true);
+    try {
+      const res = await fetch('/api/makeup-calendar-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link: normalized || null }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) return showToast('Eroare', 'error');
+      setMakeupCalendarLink(normalized || null);
+      setModal({ type: null });
+      showToast(normalized ? 'Link recuperări salvat!' : 'Link recuperări șters');
+    } finally {
+      setSavingMakeupLink(false);
+    }
   }
 
   async function addModuleWithReward() {
@@ -950,6 +1045,33 @@ export default function ProgressTracker({
 
     if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group);
     if (willBeCounted && !wasCounted) checkDiplomaMilestone(studentId, newTotalPresences);
+
+    // Task-uri Urgente de recuperare: marcarea explicita "Absent" adauga o restanta;
+    // anularea ei (trecerea la Prezent/Recuperat dintr-un rand deja marcat Absent) o scade
+    // la loc (fara sa scada sub 0). wasAbsent se uita la statusul PRECEDENT (current), nu la
+    // eticheta vizuala implicita din UI (care arata "absent" si atunci cand nu exista inca
+    // niciun rand in tracker_attendance).
+    const wasAbsent = current?.status === 'absent';
+    const willBeAbsent = status === 'absent';
+    if (willBeAbsent && !wasAbsent) {
+      const nextPending = (student.pending_makeups ?? 0) + 1;
+      const patch: Partial<TrackerStudent> = { pending_makeups: nextPending };
+      // Prima absenta nerezolvata (0 -> 1) porneste countdown-ul de 7 zile pentru cardul
+      // "🚨 Recuperare necesara" - daca mai era deja una in asteptare, nu resetam data (ramane
+      // legata de alerta activa) si nici contorul/cooldown-ul de notificari.
+      if (nextPending === 1) patch.absence_date = nowDate();
+      await patchStudent(studentId, patch);
+    } else if (!willBeAbsent && wasAbsent) {
+      const nextPending = Math.max(0, (student.pending_makeups ?? 0) - 1);
+      const patch: Partial<TrackerStudent> = { pending_makeups: nextPending };
+      // Absenta anulata si nu mai e nicio alta in asteptare - inchidem complet alerta.
+      if (nextPending === 0) {
+        patch.absence_date = null;
+        patch.makeup_notification_count = 0;
+        patch.last_makeup_notification = null;
+      }
+      await patchStudent(studentId, patch);
+    }
   }
 
   function openNewLessonModal(groupId: string) {
@@ -1049,11 +1171,11 @@ export default function ProgressTracker({
             >
               👶 <span className="hidden sm:inline">Lista Copiilor</span>
             </button>
-            {pendingDiplomaStudents.length > 0 && (
+            {hasUrgentTasks && (
               <button
                 onClick={goHome}
-                title={`${pendingDiplomaStudents.length} task-uri urgente de diploma - click pentru lista`}
-                aria-label="Task-uri urgente de diploma"
+                title={`${pendingDiplomaStudents.length + pendingMakeupStudents.length} task-uri urgente - click pentru lista`}
+                aria-label="Task-uri urgente"
                 className="relative w-10 h-10 rounded-xl bg-black border border-[#C8F023]/40 flex items-center justify-center shrink-0 animate-pulse"
               >
                 <span className="text-lg font-bold" style={{ color: '#C8F023' }}>!</span>
@@ -1077,11 +1199,17 @@ export default function ProgressTracker({
           <div className="flex justify-center py-20"><div className="tracker-spinner" /></div>
         ) : view === 'home' ? (
           <div>
-            <div className="flex justify-between items-center mb-4 gap-3">
+            <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
               <h2 className="text-lg md:text-xl font-semibold">📚 Clasele Tale</h2>
-              <button onClick={() => setModal({ type: 'createClass' })} className="tracker-btn-primary px-4 py-2 rounded-2xl font-semibold text-sm shrink-0">
-                ➕ Adauga Clasa
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <MakeupLinkButton
+                  link={makeupCalendarLink}
+                  onOpen={() => { setMakeupLinkDraft(makeupCalendarLink ?? ''); setModal({ type: 'editMakeupLink' }); }}
+                />
+                <button onClick={() => setModal({ type: 'createClass' })} className="tracker-btn-primary px-4 py-2 rounded-2xl font-semibold text-sm shrink-0">
+                  ➕ Adauga Clasa
+                </button>
+              </div>
             </div>
 
             <div className="relative mb-6">
@@ -1093,12 +1221,57 @@ export default function ProgressTracker({
               />
             </div>
 
-            {pendingDiplomaStudents.length > 0 && (
+            {hasUrgentTasks && (
               <div className="mb-6">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-400 mb-3">
                   <span className="inline-block animate-bounce">🚨</span> Task-uri Urgente
                 </h3>
                 <div className="space-y-2">
+                  {pendingMakeupStudents.map((s) => {
+                    const daysLeft = makeupDaysRemaining(s.absence_date);
+                    const notifyCount = s.makeup_notification_count ?? 0;
+                    const canNotify = canSendMakeupNotification(s);
+                    const busy = markingMakeupIds.has(s.id);
+                    return (
+                      <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3">
+                        <div className="flex flex-col gap-1.5">
+                          <p className="text-sm">
+                            🚨 Recuperare necesară: <span className="font-semibold">{s.short_name?.trim() || s.name}</span>
+                            {' - '}Clasa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>
+                          </p>
+                          {daysLeft !== null && (
+                            <span className={`inline-flex w-fit items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${daysLeft > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-red-500/20 text-red-400'}`}>
+                              {daysLeft > 0 ? `⏳ Mai sunt ${daysLeft} ${daysLeft === 1 ? 'zi' : 'zile'}` : '⏳ Termen depășit'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2 shrink-0 flex-wrap">
+                          <button
+                            onClick={() => setMakeupNotifyConfirm(s)}
+                            disabled={busy || !canNotify}
+                            title={!canNotify && notifyCount < 3 ? 'Poti retrimite dupa 48h de la ultima notificare' : undefined}
+                            className="bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            🔔 Trimite Notificare ({notifyCount}/3)
+                          </button>
+                          <button
+                            onClick={() => handleMakeupResolved(s, 'done')}
+                            disabled={busy}
+                            className="bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                          >
+                            ✅ Recuperat
+                          </button>
+                          <button
+                            onClick={() => handleMakeupResolved(s, 'dismiss')}
+                            disabled={busy}
+                            className="bg-transparent hover:bg-red-500/10 border border-red-500/40 text-red-400 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                          >
+                            ❌ Nu mai e nevoie
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {pendingDiplomaStudents.map((s) => (
                     <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
                       <p className="text-sm">
@@ -1751,6 +1924,30 @@ export default function ProgressTracker({
         );
       })()}
 
+      {modal.type === 'editMakeupLink' && (
+        <ModalShell onClose={() => setModal({ type: null })}>
+          <h3 className="text-xl font-bold mb-4 text-[#C8F023]">📅 Link Recuperări</h3>
+          <form onSubmit={handleSaveMakeupLink}>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">Link calendar recuperări</label>
+              <input
+                type="text" value={makeupLinkDraft} onChange={(e) => setMakeupLinkDraft(e.target.value)}
+                placeholder="https://calendar.google.com/..."
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                Anuleaza
+              </button>
+              <button type="submit" disabled={savingMakeupLink} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold disabled:opacity-70 disabled:cursor-not-allowed">
+                ✅ Salveaza
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
       {modal.type === 'recordRecovery' && (() => {
         const student = students.find((s) => s.id === modal.studentId);
         if (!student) return null;
@@ -1916,8 +2113,7 @@ export default function ProgressTracker({
         const student = students.find((s) => s.id === diplomaMilestonePopup.studentId);
         if (!student) return null;
         return (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80">
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
               {confetti.map((c) => (
                 <div
@@ -1928,18 +2124,13 @@ export default function ProgressTracker({
                 </div>
               ))}
             </div>
-            <div className="tracker-magic-popup rounded-3xl p-8 text-center relative z-10 max-w-sm w-full tracker-card-shadow">
+            <div className="bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[90%] overflow-y-auto tracker-card-shadow text-center relative z-10">
               <div className="text-5xl mb-4">🎓</div>
-              <h3 className="text-2xl font-bold text-black mb-2">Felicitări!</h3>
-              <p className="text-black/90 font-semibold mb-6">
-                🎉 Felicitări! Elevul {student.short_name?.trim() || student.name} a ajuns la {diplomaMilestonePopup.milestone} prezențe!
+              <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Felicitări!</h3>
+              <p className="text-sm text-gray-400 mb-6">
+                🎉 Felicitări! Elevul <span className="text-white font-semibold">{student.short_name?.trim() || student.name}</span> a ajuns la {diplomaMilestonePopup.milestone} prezențe!
                 {' '}Te rugăm să generezi diploma și să o trimiți pe grupul adminilor în maxim 3 zile.
               </p>
-              <input
-                type="text" value={diplomaModuleName} onChange={(e) => setDiplomaModuleName(e.target.value)}
-                placeholder="Ce modul a finalizat? (ex: Modul 1 - Blocuri de cod)"
-                className="w-full bg-white/80 border border-black/10 rounded-2xl px-4 py-2.5 mb-6 text-sm text-black placeholder:text-black/40 focus:outline-none focus:border-black/30"
-              />
               <button
                 onClick={handleAcknowledgeDiplomaMilestone} disabled={acknowledgingMilestone}
                 className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -1950,6 +2141,61 @@ export default function ProgressTracker({
           </div>
         );
       })()}
+
+      {/* Popup de confirmare dupa "✅ Recuperare efectuata" pe cardul din Task-uri Urgente. */}
+      {makeupDoneNotice && (
+        <ModalShell onClose={() => setMakeupDoneNotice(false)}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">🔄</div>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Recuperare marcată!</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Perfect! Acum mergi în clasa elevului și modifică iconița în &bdquo;Recuperat&rdquo; pe fișa lui.
+            </p>
+            <button
+              onClick={() => setMakeupDoneNotice(false)}
+              className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold"
+            >
+              Am înțeles
+            </button>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Confirmare inainte de "Trimite Notificare" - profesorul trebuie sa verifice calendarul
+          de recuperari inainte sa promita un slot parintelui. */}
+      {makeupNotifyConfirm && (
+        <ModalShell onClose={() => setMakeupNotifyConfirm(null)}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">🔔</div>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Verifică Recuperările</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Verifică link-ul de recuperare. Ai sloturi/date disponibile în calendar?
+            </p>
+            {makeupCalendarLink && (
+              <a
+                href={makeupCalendarLink} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-[#C8F023] border border-[#C8F023]/40 hover:border-[#C8F023] hover:bg-[#C8F023]/10 rounded-2xl px-3 py-2 mb-6 transition-colors"
+              >
+                <Calendar size={15} /> Deschide calendarul <ExternalLink size={13} className="opacity-70" />
+              </a>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button" onClick={() => setMakeupNotifyConfirm(null)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors"
+              >
+                Nu
+              </button>
+              <button
+                type="button" onClick={() => handleConfirmMakeupNotification(makeupNotifyConfirm)}
+                className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold"
+              >
+                Da
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }
@@ -2491,6 +2737,43 @@ function MeetLinkControl({
       </a>
       <button
         onClick={startEdit} title="Editeaza link-ul"
+        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
+      >
+        <Pencil size={14} />
+      </button>
+    </div>
+  );
+}
+
+// Buton "📅 Link Recuperari" de langa "+ Adauga Clasa" - identic ca stil/structura cu
+// MeetLinkControl de mai sus (buton punctat cand nu exista link, pill + creion cand exista),
+// dar editarea se face printr-un modal (ModalShell), nu inline - vezi modal.type ===
+// 'editMakeupLink' si handleSaveMakeupLink mai sus, in ProgressTracker.
+function MakeupLinkButton({ link, onOpen }: { link: string | null; onOpen: () => void }) {
+  if (!link) {
+    return (
+      <button
+        onClick={onOpen}
+        className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 hover:text-[#C8F023] border border-dashed border-gray-700 hover:border-[#C8F023]/50 rounded-2xl px-3 py-2 transition-colors"
+      >
+        <Calendar size={15} /> + Setează Link Recuperări
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <a
+        href={link} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-2 text-sm font-semibold text-[#C8F023] border border-[#C8F023]/40 hover:border-[#C8F023] hover:bg-[#C8F023]/10 rounded-2xl px-3 py-2 transition-colors max-w-[240px]"
+        title={link}
+      >
+        <Calendar size={15} className="shrink-0" />
+        <span className="truncate">Link Recuperări</span>
+        <ExternalLink size={13} className="shrink-0 opacity-70" />
+      </a>
+      <button
+        onClick={onOpen} title="Editeaza link-ul"
         className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
       >
         <Pencil size={14} />

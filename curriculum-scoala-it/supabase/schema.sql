@@ -23,6 +23,9 @@ create table public.profiles (
   -- Telefonul profesorului - editabil din Panoul de Profesori, folosit si ca teacherPhone
   -- in payload-ul webhook-urilor de diploma (vezi progress/ProgressTracker.tsx).
   phone       text,
+  -- Link catre calendarul propriu de recuperari al profesorului - editabil chiar de
+  -- profesor din butonul "📅 Link Recuperari" de pe dashboard (progress/ProgressTracker.tsx).
+  makeup_calendar_link text,
   created_at  timestamptz not null default now()
 );
 
@@ -267,6 +270,15 @@ create table public.tracker_students (
   -- dashboard-ul profesorului.
   pending_diploma_milestone      int,
   last_diploma_issued_milestone  int not null default 0,
+  -- Numar de recuperari neefectuate: +1 la marcarea "Absent" la o lectie, -1 (fara sa scada
+  -- sub 0) cand absenta e anulata sau recuperarea e rezolvata din "Task-uri Urgente".
+  pending_makeups int not null default 0,
+  -- Countdown de 7 zile + cooldown de 48h intre notificari (max 3) pentru cardul "🚨 Recuperare
+  -- necesara" din Task-uri Urgente: ziua absentei care a declansat alerta curenta, cate
+  -- notificari s-au trimis deja si cand s-a trimis ultima.
+  absence_date date,
+  makeup_notification_count int not null default 0,
+  last_makeup_notification timestamptz,
   -- Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`,
   -- numele complet folosit in registru/tracker).
   short_name    text,
@@ -319,8 +331,14 @@ create index on public.tracker_groups (teacher_id);
 create index on public.tracker_students (teacher_id);
 create index on public.tracker_students (group_id);
 create index on public.tracker_lessons (group_id);
+create index on public.tracker_lessons (teacher_id);
 create index on public.tracker_attendance (lesson_id);
 create index on public.tracker_attendance (student_id);
+create index on public.tracker_attendance (teacher_id);
+-- Cel mai frecvent filtru din aplicatie: randurile ACTIVE ale profesorului curent
+-- (teacher_id = ... and deleted_at is null) - vezi progress/page.tsx, diploma-groups etc.
+create index on public.tracker_groups (teacher_id, deleted_at);
+create index on public.tracker_students (teacher_id, deleted_at);
 
 create trigger tracker_attendance_touch before update on public.tracker_attendance
   for each row execute function public.touch_updated_at();
@@ -331,17 +349,34 @@ alter table public.tracker_lessons    enable row level security;
 alter table public.tracker_attendance enable row level security;
 
 -- Izolare stricta: fiecare profesor vede si scrie doar propriile grupe/elevi/lectii/prezenta.
+-- WITH CHECK verifica in plus, la insert/update, ca orice referinta parinte (group_id /
+-- lesson_id / student_id) apartine tot profesorului care scrie randul - altfel un profesor
+-- ar putea "agata" un rand de-al lui de o grupa/lectie/elev straina printr-un request direct
+-- catre REST-ul Supabase (ex. din consola), ocolind UI-ul aplicatiei.
 create policy "profesorul isi gestioneaza grupele" on public.tracker_groups
   for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
 
 create policy "profesorul isi gestioneaza elevii" on public.tracker_students
-  for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+  for all to authenticated using (teacher_id = auth.uid())
+  with check (
+    teacher_id = auth.uid()
+    and exists (select 1 from public.tracker_groups g where g.id = tracker_students.group_id and g.teacher_id = auth.uid())
+  );
 
 create policy "profesorul isi gestioneaza lectiile" on public.tracker_lessons
-  for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+  for all to authenticated using (teacher_id = auth.uid())
+  with check (
+    teacher_id = auth.uid()
+    and exists (select 1 from public.tracker_groups g where g.id = tracker_lessons.group_id and g.teacher_id = auth.uid())
+  );
 
 create policy "profesorul isi gestioneaza prezenta" on public.tracker_attendance
-  for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+  for all to authenticated using (teacher_id = auth.uid())
+  with check (
+    teacher_id = auth.uid()
+    and exists (select 1 from public.tracker_lessons l where l.id = tracker_attendance.lesson_id and l.teacher_id = auth.uid())
+    and exists (select 1 from public.tracker_students s where s.id = tracker_attendance.student_id and s.teacher_id = auth.uid())
+  );
 
 -- Adminul are acces complet peste toate grupele/elevii/lectiile/prezenta tuturor profesorilor
 -- (necesar pentru panoul de admin si alerta de diploma la nivel global).

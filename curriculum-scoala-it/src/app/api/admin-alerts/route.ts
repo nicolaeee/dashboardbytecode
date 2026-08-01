@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
+import { checkRateLimit, isSafeString, isSafeOptionalString, readJsonBody, RATE_LIMITS } from '@/lib/apiSecurity';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,13 +14,20 @@ const ADMIN_ALERT_WEBHOOK_URL = 'https://connect.pabbly.com/webhook-listener/web
  * Webhook-ului si sa logam eventualele erori.
  */
 export async function POST(request: Request) {
-  await requireUser();
+  const profile = await requireUser();
+  if (!checkRateLimit(`admin-alerts:${profile.id}`, RATE_LIMITS.WEBHOOK_WRITE.limit, RATE_LIMITS.WEBHOOK_WRITE.windowMs)) {
+    return NextResponse.json({ ok: false, error: 'Prea multe cereri, încearcă din nou peste un minut.' }, { status: 429 });
+  }
 
-  const body = (await request.json().catch(() => null)) as {
+  const body = (await readJsonBody(request)) as {
     studentName?: string; teacherName?: string; className?: string; status?: string; parentPhones?: string;
   } | null;
-  if (!body || !body.studentName || !body.status) {
-    return NextResponse.json({ ok: false, error: 'Date lipsa' }, { status: 400 });
+  if (
+    !body || !isSafeString(body.studentName) || !isSafeString(body.status, 30)
+    || !isSafeOptionalString(body.teacherName) || !isSafeOptionalString(body.className)
+    || !isSafeOptionalString(body.parentPhones, 1000)
+  ) {
+    return NextResponse.json({ ok: false, error: 'Date lipsa sau invalide' }, { status: 400 });
   }
   const { studentName, teacherName, className, status, parentPhones } = body;
 

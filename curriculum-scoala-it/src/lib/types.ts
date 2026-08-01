@@ -12,6 +12,8 @@ export type Profile = {
   level: TeacherLevel;
   /** Telefonul profesorului - editabil din Panoul de Profesori (Admin). */
   phone: string | null;
+  /** Link catre calendarul propriu de recuperari - editabil de profesor din dashboard. */
+  makeup_calendar_link: string | null;
   created_at: string;
 };
 
@@ -94,6 +96,26 @@ export type TrackerStudent = {
    */
   pending_diploma_milestone: number | null;
   last_diploma_issued_milestone: number;
+  /**
+   * Numar de recuperari neefectuate (vezi "🚨 Task-uri Urgente" din dashboard-ul profesorului):
+   * crescut cu 1 cand elevul e marcat "Absent" la o lectie, scazut cu 1 (fara sa scada sub 0)
+   * cand absenta e anulata sau cand recuperarea e rezolvata din dashboard.
+   */
+  pending_makeups: number;
+  /**
+   * Ziua (YYYY-MM-DD) cand elevul a fost marcat "Absent" - porneste countdown-ul de 7 zile
+   * din cardul de recuperare ("⏳ Mai sunt N zile"). Setat automat la prima absenta nerezolvata
+   * (pending_makeups 0 -> 1), sters (null) cand recuperarea e rezolvata sau anulata din dashboard.
+   */
+  absence_date: string | null;
+  /**
+   * De cate ori s-a apasat "Trimite Notificare" pentru absenta curenta (max 3) - controleaza
+   * cooldown-ul de 48h intre trimiteri si dezactivarea butonului dupa a 3-a. Resetat la 0
+   * cand recuperarea e rezolvata/anulata din dashboard.
+   */
+  makeup_notification_count: number;
+  /** Data/ora ultimei notificari trimise catre parinte - baza pentru cooldown-ul de 48h. */
+  last_makeup_notification: string | null;
   /** Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`). */
   short_name: string | null;
   /**

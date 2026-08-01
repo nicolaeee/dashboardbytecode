@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/apiSecurity';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   const profile = await requireUser();
+  if (!checkRateLimit(`my-profile:${profile.id}`, RATE_LIMITS.READ.limit, RATE_LIMITS.READ.windowMs)) {
+    return NextResponse.json({ error: 'Prea multe cereri' }, { status: 429 });
+  }
   return NextResponse.json({
     fullName: profile.full_name || profile.email,
     role: profile.role,
