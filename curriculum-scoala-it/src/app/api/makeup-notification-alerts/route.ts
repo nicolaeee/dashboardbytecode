@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { formatPhonesForWebhook } from '@/lib/contactList';
-import { checkRateLimit, isSafeOptionalString, isSafeString, readJsonBody, RATE_LIMITS } from '@/lib/apiSecurity';
+import { cleanContactList } from '@/lib/contactList';
+import { checkRateLimit, isSafeString, readJsonBody, RATE_LIMITS } from '@/lib/apiSecurity';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +32,13 @@ function canSendMakeupNotification(count: number, lastSentAt: string | null): bo
  * facut, cu link-ul de calendar al profesorului. Foloseste clientul cu sesiunea profesorului
  * (nu service_role) la citirea/scrierea elevului - RLS-ul de pe tracker_students garanteaza
  * ca profesorul nu poate trimite notificari (sau citi date) pentru un elev care nu e al lui.
+ *
+ * Payload-ul catre Pabbly e construit STRICT server-side, din date reale de baza (nu din ce
+ * trimite clientul) - teacherName/teacherPhone/calendarLink vin din profilul profesorului
+ * autentificat (requireUser() face deja select('*') pe profiles), iar parentPhones/parentEmails
+ * sunt intotdeauna un singur string, separate prin virgula (nu array brut), gata de procesat
+ * in automatizari (inclusiv pentru email-uri) - cleanContactList(...).join(',') nu crapa
+ * niciodata, chiar daca elevul nu are inca niciun telefon/email de parinte.
  */
 export async function POST(request: Request) {
   const profile = await requireUser();
@@ -39,18 +46,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Prea multe cereri, încearcă din nou peste un minut.' }, { status: 429 });
   }
 
-  const body = (await readJsonBody(request)) as { studentId?: string; teacherName?: string; calendarLink?: string } | null;
-  if (
-    !body || !isSafeString(body.studentId, 100)
-    || !isSafeOptionalString(body.teacherName) || !isSafeOptionalString(body.calendarLink, 2000)
-  ) {
+  const body = (await readJsonBody(request)) as { studentId?: string } | null;
+  if (!body || !isSafeString(body.studentId, 100)) {
     return NextResponse.json({ ok: false, error: 'Date lipsa sau invalide' }, { status: 400 });
   }
 
   const supabase = await createClient();
   const { data: student, error: studentError } = await supabase
     .from('tracker_students')
-    .select('id, name, short_name, parent_phones, group_id, pending_makeups, makeup_notification_count, last_makeup_notification')
+    .select('id, name, short_name, parent_phones, parent_emails, group_id, pending_makeups, makeup_notification_count, last_makeup_notification')
     .eq('id', body.studentId)
     .single();
   if (studentError || !student) {
@@ -73,10 +77,12 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         studentName: student.short_name?.trim() || student.name,
-        parentPhones: formatPhonesForWebhook(student.parent_phones),
-        teacherName: body.teacherName ?? '',
         className: group?.group_name ?? '',
-        calendarLink: body.calendarLink ?? '',
+        parentPhones: cleanContactList(student.parent_phones ?? []).join(','),
+        parentEmails: cleanContactList(student.parent_emails ?? []).join(','),
+        teacherName: profile.full_name || profile.email,
+        teacherPhone: profile.phone ?? '',
+        calendarLink: profile.makeup_calendar_link ?? '',
         notificationStep,
       }),
     });

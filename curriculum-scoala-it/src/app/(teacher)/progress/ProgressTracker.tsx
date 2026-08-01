@@ -707,19 +707,16 @@ export default function ProgressTracker({
     if (markingMakeupIds.has(student.id) || !canSendMakeupNotification(student)) return;
     setMarkingMakeupIds((s) => new Set(s).add(student.id));
     try {
-      // studentId + teacherId/calendarLink - ruta reciteste ea insasi elevul (nume, telefoane
-      // parinte, contorul si cooldown-ul de notificari) direct din DB, prin clientul cu
-      // sesiunea profesorului (RLS ii blocheaza accesul la un elev care nu e al lui) - nu mai
-      // trimitem noi valorile "de incredere", ca sa nu poata fi falsificate dintr-un request
-      // manual (ex. consola browser-ului).
+      // Doar studentId - ruta reciteste ea insasi tot restul (elev, telefoane/email-uri de
+      // parinte, contorul si cooldown-ul de notificari, plus profilul profesorului pentru
+      // teacherName/teacherPhone/calendarLink) direct din DB, prin clientul cu sesiunea
+      // profesorului (RLS ii blocheaza accesul la un elev care nu e al lui) - nu mai trimitem
+      // noi valorile "de incredere", ca sa nu poata fi falsificate dintr-un request manual
+      // (ex. consola browser-ului).
       const res = await fetch('/api/makeup-notification-alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: student.id,
-          teacherName,
-          calendarLink: makeupCalendarLink ?? '',
-        }),
+        body: JSON.stringify({ studentId: student.id }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) return showToast('Eroare', 'error');
