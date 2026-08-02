@@ -370,6 +370,10 @@ export default function ProgressTracker({
   // setAttendanceStatus) - salvarea e blocata in acest caz, ca sa nu decaleze contorul de
   // lectii si sa nu genereze restante de recuperare false pentru o lectie care nu s-a tinut.
   const [allAbsentBlockNotice, setAllAbsentBlockNotice] = useState(false);
+  // Popup afisat cand butonul "+" (lectie noua) e blocat pentru ca ultima lectie a clasei nu
+  // e gata sa fie inchisa (vezi openNewLessonModal) - fie mai are elevi nemarcati, fie e 100%
+  // absenta. null = niciun blocaj activ.
+  const [newLessonBlockNotice, setNewLessonBlockNotice] = useState<'unmarked' | 'allAbsent' | null>(null);
   // Elevul pentru care s-a apasat "Trimite Notificare" si asteapta confirmarea "Ai sloturi
   // disponibile in calendar?" (Da/Nu) inainte de trimiterea efectiva catre Pabbly.
   const [makeupNotifyConfirm, setMakeupNotifyConfirm] = useState<TrackerStudent | null>(null);
@@ -1333,8 +1337,26 @@ export default function ProgressTracker({
     }
   }
 
+  // Butonul "+" (lectie noua) e blocat daca ultima lectie a clasei nu a fost inchisa corect -
+  // fie ii mai lipseste statusul vreunui elev, fie e 100% absenta (vezi cele doua popup-uri de
+  // mai jos). Fara prima lectie a clasei (groupLessons.length === 0) nu avem ce valida.
   function openNewLessonModal(groupId: string) {
     const group = groups.find((g) => g.id === groupId);
+    const groupLessons = lessons.filter((l) => l.group_id === groupId);
+    if (groupLessons.length > 0) {
+      const lastLesson = groupLessons.reduce((max, l) => (l.session_number > max.session_number ? l : max));
+      const statuses = getStudentsForGroup(groupId).map(
+        (s) => attendance.find((a) => a.lesson_id === lastLesson.id && a.student_id === s.id)?.status
+      );
+      if (statuses.some((st) => st === undefined)) {
+        setNewLessonBlockNotice('unmarked');
+        return;
+      }
+      if (statuses.length > 0 && statuses.every((st) => st === 'absent')) {
+        setNewLessonBlockNotice('allAbsent');
+        return;
+      }
+    }
     setNewLessonForm({ date: nextDateForDay(group?.day_of_week ?? null), time: group?.time_of_day || nowTime() });
     setModal({ type: 'newLesson', groupId });
   }
@@ -2430,6 +2452,29 @@ export default function ProgressTracker({
           </div>
         );
       })()}
+
+      {/* Blocaj pe butonul "+" (lectie noua) - vezi openNewLessonModal. */}
+      {newLessonBlockNotice && (
+        <ModalShell onClose={() => setNewLessonBlockNotice(null)}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">{newLessonBlockNotice === 'unmarked' ? '⚠️' : '🚫'}</div>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">
+              {newLessonBlockNotice === 'unmarked' ? 'Prezență incompletă' : 'Lecție cu 100% absenți'}
+            </h3>
+            <p className="text-sm text-gray-400 mb-6">
+              {newLessonBlockNotice === 'unmarked'
+                ? 'Nu poți crea o lecție nouă dacă nu ai completat statusul pentru toți elevii din lecția curentă. Trebuie să bifezi Prezent, Absent sau Recuperat pentru fiecare copil în parte.'
+                : 'Nu poți crea o lecție nouă dacă toți elevii sunt absenți. Dacă lași așa, această lecție se va număra ca fiind efectuată și va decala materia viitoare. Dacă nu a participat nimeni, înseamnă că ora nu s-a ținut. Te rog să ștergi lecția aceasta și să o adaugi din nou când se va ține efectiv!'}
+            </p>
+            <button
+              onClick={() => setNewLessonBlockNotice(null)}
+              className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold"
+            >
+              Am înțeles
+            </button>
+          </div>
+        </ModalShell>
+      )}
 
       {/* Blocaj "100% absenti" la marcarea prezentei - vezi setAttendanceStatus. */}
       {allAbsentBlockNotice && (
