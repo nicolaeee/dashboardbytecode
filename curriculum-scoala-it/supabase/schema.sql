@@ -283,6 +283,12 @@ create table public.tracker_students (
   absence_date date,
   makeup_notification_count int not null default 0,
   last_makeup_notification timestamptz,
+  -- Stare intermediara intre "recuperare neefectuata" si "recuperare efectuata": profesorul
+  -- a stabilit deja o data cu parintele (buton "📅 Programat" din Task-uri Urgente) - ascunde
+  -- "Trimite Notificare"/"Nu mai e nevoie" din card, ca sa nu se mai trimita alte reminder-uri
+  -- catre parinte dupa ce recuperarea e deja stabilita. Resetat la false odata cu restul
+  -- campurilor de recuperare cand alerta se inchide complet (vezi handleMakeupResolved).
+  is_scheduled boolean not null default false,
   -- Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`,
   -- numele complet folosit in registru/tracker).
   short_name    text,

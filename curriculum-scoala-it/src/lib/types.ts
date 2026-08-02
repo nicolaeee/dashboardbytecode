@@ -119,6 +119,9 @@ export type TrackerStudent = {
   makeup_notification_count: number;
   /** Data/ora ultimei notificari trimise catre parinte - baza pentru cooldown-ul de 48h. */
   last_makeup_notification: string | null;
+  /** true = profesorul a apasat "📅 Programat" - recuperarea e deja stabilita cu parintele.
+   * Ascunde "Trimite Notificare"/"Nu mai e nevoie" din card; resetat cand alerta se inchide. */
+  is_scheduled: boolean;
   /** Numele mic, folosit in notificarile catre parinti (spre deosebire de `name`). */
   short_name: string | null;
   /**

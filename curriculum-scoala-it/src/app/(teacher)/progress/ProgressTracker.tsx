@@ -944,14 +944,15 @@ export default function ProgressTracker({
   }
 
   // "✅ Recuperat" / "❌ Nu mai e nevoie" pe cardul de recuperare din Task-uri Urgente - ambele
-  // inchid complet alerta curenta (pending_makeups, absence_date si contorul/cooldown-ul de
-  // notificari, toate la 0/null); patchStudent e deja optimist, deci cardul dispare instant
-  // din dashboard. Singura diferenta intre butoane e mesajul aratat profesorului dupa succes.
+  // inchid complet alerta curenta (pending_makeups, absence_date, contorul/cooldown-ul de
+  // notificari SI is_scheduled, toate la 0/null/false); patchStudent e deja optimist, deci
+  // cardul dispare instant din dashboard. Singura diferenta intre butoane e mesajul aratat
+  // profesorului dupa succes.
   async function handleMakeupResolved(student: TrackerStudent, outcome: 'done' | 'dismiss') {
     if (markingMakeupIds.has(student.id)) return;
     setMarkingMakeupIds((s) => new Set(s).add(student.id));
     const ok = await patchStudent(student.id, {
-      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null,
+      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null, is_scheduled: false,
     });
     setMarkingMakeupIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
     if (!ok) return;
@@ -959,6 +960,28 @@ export default function ProgressTracker({
       setMakeupDoneNotice(true);
     } else {
       showToast('Alertă ștearsă');
+    }
+  }
+
+  // "📅 Programat" pe cardul de recuperare - profesorul confirma ca a stabilit deja o data cu
+  // parintele. Foloseste ACELASI webhook/ruta ca "Trimite Notificare" (doar action diferit -
+  // vezi /api/makeup-notification-alerts), care trimite o alerta dedicata catre admin, apoi
+  // seteaza is_scheduled=true - cardul isi ascunde "Trimite Notificare"/"Nu mai e nevoie".
+  async function handleMarkMakeupScheduled(student: TrackerStudent) {
+    if (markingMakeupIds.has(student.id) || student.is_scheduled) return;
+    setMarkingMakeupIds((s) => new Set(s).add(student.id));
+    try {
+      const res = await fetch('/api/makeup-notification-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: student.id, action: 'makeup_scheduled' }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) return showToast(json?.error ?? 'Eroare', 'error');
+      setStudents((ss) => ss.map((s) => (s.id === student.id ? { ...s, is_scheduled: true } : s)));
+      showToast('Recuperare marcată ca programată!');
+    } finally {
+      setMarkingMakeupIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
     }
   }
 
@@ -1540,13 +1563,23 @@ export default function ProgressTracker({
                           )}
                         </div>
                         <div className="flex gap-2 shrink-0 flex-wrap">
+                          {!s.is_scheduled && (
+                            <button
+                              onClick={() => handleOpenMakeupNotifyConfirm(s)}
+                              disabled={busy || !canNotify}
+                              title={!canNotify && notifyCount < 3 ? 'Poti retrimite dupa 48h de la ultima notificare' : undefined}
+                              className="bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              🔔 Trimite Notificare ({notifyCount}/3)
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleOpenMakeupNotifyConfirm(s)}
-                            disabled={busy || !canNotify}
-                            title={!canNotify && notifyCount < 3 ? 'Poti retrimite dupa 48h de la ultima notificare' : undefined}
-                            className="bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleMarkMakeupScheduled(s)}
+                            disabled={busy || s.is_scheduled}
+                            title={s.is_scheduled ? 'Recuperare deja programata' : undefined}
+                            className="bg-cyan-500 hover:bg-cyan-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
-                            🔔 Trimite Notificare ({notifyCount}/3)
+                            {s.is_scheduled ? '✅ Programat' : '📅 Programat'}
                           </button>
                           <button
                             onClick={() => handleMakeupResolved(s, 'done')}
@@ -1555,13 +1588,15 @@ export default function ProgressTracker({
                           >
                             ✅ Recuperat
                           </button>
-                          <button
-                            onClick={() => handleMakeupResolved(s, 'dismiss')}
-                            disabled={busy}
-                            className="bg-transparent hover:bg-red-500/10 border border-red-500/40 text-red-400 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                          >
-                            ❌ Nu mai e nevoie
-                          </button>
+                          {!s.is_scheduled && (
+                            <button
+                              onClick={() => handleMakeupResolved(s, 'dismiss')}
+                              disabled={busy}
+                              className="bg-transparent hover:bg-red-500/10 border border-red-500/40 text-red-400 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                              ❌ Nu mai e nevoie
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

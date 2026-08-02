@@ -17,7 +17,7 @@ export default async function ProgressTrackerPage() {
     supabase.from('tracker_groups').select('*').eq('teacher_id', profile.id).order('created_at'),
     isAdmin
       ? supabase.from('tracker_students').select('*').eq('teacher_id', profile.id).order('created_at')
-      : supabase.from('tracker_students').select('id,teacher_id,group_id,name,short_name,progress,lesson_offset,presence_count,absence_count,pending_diploma_milestone,last_diploma_issued_milestone,pending_makeups,absence_date,makeup_notification_count,last_makeup_notification,deleted_at,created_at').eq('teacher_id', profile.id).order('created_at'),
+      : supabase.from('tracker_students').select('id,teacher_id,group_id,name,short_name,progress,lesson_offset,presence_count,absence_count,pending_diploma_milestone,last_diploma_issued_milestone,pending_makeups,absence_date,makeup_notification_count,last_makeup_notification,is_scheduled,deleted_at,created_at').eq('teacher_id', profile.id).order('created_at'),
     supabase.from('tracker_lessons').select('*').eq('teacher_id', profile.id).order('session_number'),
     supabase.from('tracker_attendance').select('*').eq('teacher_id', profile.id),
     isAdmin
