@@ -156,7 +156,7 @@ export default function Registru({
               </button>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto touch-pan-x">
               <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="text-gray-400 text-xs uppercase tracking-wide">

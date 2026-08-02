@@ -4,7 +4,7 @@
 // link direct catre /roadmap.html care ar incarca pagina in afara aplicatiei React.
 export default function RoadmapPage() {
   return (
-    <div className="-mx-4 -my-6 h-[calc(100vh-3.5rem)] sm:-mx-5 sm:-my-7 lg:-mx-10 lg:-my-9 lg:h-screen">
+    <div className="-mx-4 -my-6 h-[calc(100dvh-3.5rem)] sm:-mx-5 sm:-my-7 lg:-mx-10 lg:-my-9 lg:h-[100dvh]">
       <iframe src="/roadmap.html" title="Roadmap Profesori" className="h-full w-full border-0" />
     </div>
   );

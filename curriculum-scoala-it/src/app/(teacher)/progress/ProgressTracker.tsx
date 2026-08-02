@@ -1517,8 +1517,8 @@ export default function ProgressTracker({
                     const busy = markingMakeupIds.has(s.id);
                     return (
                       <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3">
-                        <div className="flex flex-col gap-1.5">
-                          <p className="text-sm">
+                        <div className="flex flex-col gap-1.5 min-w-0">
+                          <p className="text-sm break-words whitespace-normal">
                             🚨 Recuperare necesară: <span className="font-semibold">{s.short_name?.trim() || s.name}</span>
                             {' - '}Clasa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>
                           </p>
@@ -1528,13 +1528,13 @@ export default function ProgressTracker({
                             </span>
                           )}
                         </div>
-                        <div className="flex gap-2 shrink-0 flex-wrap">
+                        <div className="flex flex-col sm:flex-row gap-2 mt-3 w-full justify-end">
                           {!s.is_scheduled && (
                             <button
                               onClick={() => handleOpenMakeupNotifyConfirm(s)}
                               disabled={busy || !canNotify}
                               title={!canNotify && notifyCount < 3 ? 'Poti retrimite dupa 48h de la ultima notificare' : undefined}
-                              className="bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full sm:w-auto bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               🔔 Trimite Notificare ({notifyCount}/3)
                             </button>
@@ -1543,14 +1543,14 @@ export default function ProgressTracker({
                             onClick={() => handleMarkMakeupScheduled(s)}
                             disabled={busy || s.is_scheduled}
                             title={s.is_scheduled ? 'Recuperare deja programata' : undefined}
-                            className="bg-cyan-500 hover:bg-cyan-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full sm:w-auto bg-cyan-500 hover:bg-cyan-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             {s.is_scheduled ? '✅ Programat' : '📅 Programat'}
                           </button>
                           <button
                             onClick={() => handleMakeupResolved(s, 'done')}
                             disabled={busy}
-                            className="bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             ✅ Recuperat
                           </button>
@@ -1558,7 +1558,7 @@ export default function ProgressTracker({
                             <button
                               onClick={() => handleMakeupResolved(s, 'dismiss')}
                               disabled={busy}
-                              className="bg-transparent hover:bg-red-500/10 border border-red-500/40 text-red-400 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                              className="w-full sm:w-auto bg-transparent hover:bg-red-500/10 border border-red-500/40 text-red-400 px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                               ❌ Nu mai e nevoie
                             </button>
@@ -1576,23 +1576,23 @@ export default function ProgressTracker({
                     const { module, lesson } = computeModuleLesson(s.pending_diploma_milestone ?? 0);
                     return (
                       <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
-                        <p className="text-sm">
+                        <p className="text-sm break-words whitespace-normal min-w-0">
                           🎓 Diplomă necesară: Elevul <span className="font-semibold">{s.short_name?.trim() || s.name}</span>
                           {' '}(Grupa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>)
                           {' '}a ajuns la <span className="font-semibold">M{module} / L{lesson}</span>
                         </p>
-                        <div className="flex gap-2 shrink-0 flex-wrap">
+                        <div className="flex flex-col sm:flex-row gap-2 mt-3 w-full justify-end">
                           <Link
                             href={`/diplome?studentId=${s.id}&teacherId=${viewedTeacherId}`}
                             title="Deschide generatorul de diplome, precompletat cu cursul si elevul - alege doar modulul"
-                            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors"
+                            className="block w-full sm:w-auto sm:inline-block bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors text-center"
                           >
                             🎓 Generează Diplomă
                           </Link>
                           <button
                             onClick={() => handleMarkDiplomaSent(s)}
                             disabled={markingDiplomaSentIds.has(s.id)}
-                            className="bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5"
+                            className="w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                           >
                             {markingDiplomaSentIds.has(s.id) ? (
                               <span className="tracker-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />

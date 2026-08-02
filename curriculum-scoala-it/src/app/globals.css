@@ -5,14 +5,15 @@
 :root { color-scheme: dark; }
 
 /* Plasa de siguranta: nicio componenta scapata de sub control (fixed width, flex fara wrap
-   etc.) nu trebuie sa poata produce scroll orizontal accidental pe body, pe mobil. */
-html, body {
+   etc.) nu trebuie sa poata produce scroll orizontal accidental pe mobil. Aplicata STRICT
+   doar pe <body>, nu si pe <html> - cele doua elemente devenind simultan containere de
+   scroll (overflow setat pe amandoua) e un bug cunoscut pe iOS Safari care poate bloca
+   scroll-ul vertical nativ al paginii (senzatia de "inghetare"). overflow-y: auto (nu
+   "hidden"/"visible") pastreaza scroll-ul vertical normal, neatins. */
+body {
   max-width: 100vw;
   overflow-x: hidden;
-  overflow-y: visible;
-}
-
-body {
+  overflow-y: auto;
   background: #0f0f11;
   color: #F5F7FA;
   -webkit-font-smoothing: antialiased;
