@@ -2542,6 +2542,8 @@ const HISTORY_STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: Rea
   absent: { label: 'Absent', icon: <XIcon size={14} strokeWidth={3} />, pill: 'bg-red-500/15 text-red-400 border border-red-500/30', dot: 'bg-red-500' },
   made_up: { label: 'Recuperat', icon: <RotateCcw size={13} strokeWidth={2.5} />, pill: 'bg-blue-500/15 text-blue-400 border border-blue-500/30', dot: 'bg-blue-500' },
 };
+// Nicio lectie nemarcata inca pentru elev (record null) nu e "Absent" - e doar nemarcata.
+const UNMARKED_HISTORY_CONFIG = { label: 'Nemarcat', icon: <span className="text-[10px] leading-none">–</span>, pill: 'bg-white/5 text-gray-400 border border-white/10', dot: 'bg-gray-500' };
 
 function StudentHistoryModal({
   student, group, history, onClose,
@@ -2553,7 +2555,7 @@ function StudentHistoryModal({
   const rewardEmoji = group ? getRewardEmoji(group.reward_type) : '⭐';
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const statusOf = (r: TrackerAttendance | null): AttendanceStatus => r?.status ?? 'absent';
+  const statusOf = (r: TrackerAttendance | null): AttendanceStatus | undefined => r?.status;
   const filteredHistory = history.filter(({ lesson }) => {
     if (startDate && lesson.lesson_date < startDate) return false;
     if (endDate && lesson.lesson_date > endDate) return false;
@@ -2659,9 +2661,9 @@ function StudentHistoryModal({
           ) : (
             sortedDesc.map(({ lesson, record }) => {
               const status = statusOf(record);
-              const cfg = HISTORY_STATUS_CONFIG[status];
+              const cfg = status ? HISTORY_STATUS_CONFIG[status] : UNMARKED_HISTORY_CONFIG;
               const starCount = record?.star_count ?? 0;
-              const starEligible = status !== 'absent';
+              const starEligible = status === 'present' || status === 'made_up';
               return (
                 <div key={lesson.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5">
                   <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
@@ -3267,9 +3269,12 @@ function AttendanceBoard({
           <div className="space-y-2">
             {[...students].sort((a, b) => b.progress - a.progress).map((s) => {
               const record = attendance.find((a) => a.lesson_id === selectedLesson.id && a.student_id === s.id);
-              const status: AttendanceStatus = record?.status ?? 'absent';
+              // Nemarcat inca (niciun rand in tracker_attendance) != 'absent' - ramane starea
+              // neutra pana cand profesorul apasa explicit un buton, ca sa nu sugereze vizual
+              // ca prezenta a fost deja marcata cand de fapt nu s-a intamplat nimic.
+              const status: AttendanceStatus | undefined = record?.status;
               const starCount = record?.star_count ?? 0;
-              const starDisabled = status === 'absent';
+              const starDisabled = status !== 'present' && status !== 'made_up';
               return (
                 <div key={s.id} className="flex flex-row items-center justify-between gap-2 px-3 py-2.5 border border-gray-700/60 rounded-2xl bg-gray-800/70">
                   <button
