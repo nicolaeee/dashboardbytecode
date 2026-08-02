@@ -12,10 +12,9 @@ const VALID_STATUSES = new Set(['acknowledged', 'completed']);
 
 /**
  * Proxy server-side catre Pabbly pentru task-urile "🚨 Task-uri Urgente" de diploma per elev
- * (la fiecare 16 prezente) - status: 'acknowledged' cand profesorul apasa "Am inteles" pe
- * popup-ul de celebrare, 'completed' cand apasa "Am trimis diploma" din dashboard.
- * NU confunda cu /api/diploma-alerts, care e ruta existenta pentru diploma_milestone la
- * nivel de GRUPA (folosita de pagina /diplome) - acesta e un sistem separat, per elev.
+ * (la fiecare 16 prezente individuale ale elevului, nu ale grupei) - status: 'acknowledged'
+ * cand profesorul apasa "Am inteles" pe popup-ul de celebrare, 'completed' cand apasa
+ * "Am trimis diploma" din dashboard.
  *
  * Audit securitate M-2: ruta primea anterior studentName/teacherName/teacherPhone/className/
  * parentPhones DIRECT din body, fara nicio verificare fata de DB. Acum clientul trimite doar

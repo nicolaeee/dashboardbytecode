@@ -12,7 +12,7 @@ type StudentRow = { id: string; group_id: string; name: string; progress: number
 /**
  * Grupele (+ elevii lor) disponibile pentru generarea manuala a diplomelor din /diplome.
  * Profesorul vede strict propriile grupe. Adminul poate cere oricare profesor prin
- * ?teacherId=<id> - foloseste service_role ca sa ocoleasca RLS, la fel ca /api/diploma-alerts.
+ * ?teacherId=<id> - foloseste service_role ca sa ocoleasca RLS.
  */
 export async function GET(request: Request) {
   const profile = await requireUser();

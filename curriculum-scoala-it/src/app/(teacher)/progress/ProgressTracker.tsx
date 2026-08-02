@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
-import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
-import { useDiplomaGroupAlerts, completedModuleFor } from '@/lib/useDiplomaGroupAlerts';
+import { COURSES } from '@/lib/diplomas';
 import { createClass, transferClassTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
@@ -64,8 +63,8 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 
 // Plafon de bun-simt pentru campurile istorice suprascrise manual (steluțe/prezențe/absențe) -
 // previne o valoare aberanta introdusa din greseala (ex. o cifra in plus la tastare), fara sa
-// limiteze vreun caz real de utilizare. Acelasi ordin de marime ca milestone-ul validat server-side
-// in /api/diploma-alerts si /api/diploma-milestone-alerts.
+// limiteze vreun caz real de utilizare. Acelasi ordin de marime ca milestone-ul validat
+// server-side in /api/diploma-milestone-alerts.
 const MAX_HISTORICAL_COUNT = 100_000;
 
 const LESSON_FORMAT_LABEL: Record<LessonKind, string> = { grup: 'Grup', individual: 'Indiv.' };
@@ -329,8 +328,7 @@ type ModalState =
   | { type: 'newLesson'; groupId: string }
   | { type: 'recordRecovery'; studentId: string; lessonId: string }
   | { type: 'studentHistory'; studentId: string }
-  | { type: 'editMakeupLink' }
-  | { type: 'generateGroupDiploma'; groupId: string };
+  | { type: 'editMakeupLink' };
 
 export default function ProgressTracker({
   teacherId, teacherName, teacherPhone, makeupCalendarLink: initialMakeupCalendarLink, isAdmin, teacherOptions,
@@ -384,13 +382,6 @@ export default function ProgressTracker({
   // Acelasi rol ca markingDiplomaSentIds, dar pentru cardul de recuperare (pending_makeups)
   // din Task-uri Urgente - previne dublu-click pe "Recuperare efectuata" / "Nu mai e nevoie".
   const [markingMakeupIds, setMarkingMakeupIds] = useState<Set<string>>(new Set());
-  // Grupele care au atins un nou multiplu de 16 lectii si asteapta diploma trimisa - centralizat
-  // aici din fostul widget plutitor DiplomaAlerts (vezi useDiplomaGroupAlerts), afisat acum in
-  // "🚨 Task-uri Urgente" alaturi de restanțele de diploma per elev si de recuperari.
-  const diplomaGroupAlerts = useDiplomaGroupAlerts(viewedTeacherId);
-  const [groupDiplomaFallbackCourse, setGroupDiplomaFallbackCourse] = useState<CourseId | null>(null);
-  const [groupDiplomaStudentId, setGroupDiplomaStudentId] = useState('');
-  const [groupDiplomaModule, setGroupDiplomaModule] = useState(1);
   // Evita redeschiderea popup-ului pentru acelasi elev+prag in aceeasi sesiune daca profesorul
   // l-a inchis fara sa apese "Am inteles" (starea din DB - pending_diploma_milestone - ramane
   // sursa de adevar pe termen lung, la urmatorul reload).
@@ -559,7 +550,7 @@ export default function ProgressTracker({
     () => students.filter((s) => !s.deleted_at && s.pending_makeups > 0),
     [students]
   );
-  const hasUrgentTasks = pendingDiplomaStudents.length > 0 || pendingMakeupStudents.length > 0 || diplomaGroupAlerts.pending.length > 0;
+  const hasUrgentTasks = pendingDiplomaStudents.length > 0 || pendingMakeupStudents.length > 0;
 
   const currentGroup = getGroupById(currentGroupId);
   const totalDataCount = groups.length + students.length;
@@ -716,7 +707,6 @@ export default function ProgressTracker({
       setModal({ type: null });
       showToast('Clasa a fost transferată cu succes!');
       await reloadViewedTeacherData();
-      diplomaGroupAlerts.refresh();
       router.refresh();
       return;
     }
@@ -887,44 +877,6 @@ export default function ProgressTracker({
     setMarkingDiplomaSentIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
   }
 
-  // "🎓 Genereaza diploma" pe cardul de grupa din Task-uri Urgente (fostul widget plutitor) -
-  // deschide modalul cu cursul grupei (sau selector manual daca grupa n-are curs setat),
-  // elevul (cu steluțele lui curente) si modulul, preselectate cu valori sensibile implicite.
-  function openGenerateGroupDiplomaModal(group: { id: string; course: CourseId | null; students: { id: string }[]; lessonCount: number }) {
-    setGroupDiplomaFallbackCourse(null);
-    setGroupDiplomaStudentId(group.students[0]?.id ?? '');
-    setGroupDiplomaModule(completedModuleFor(group.lessonCount));
-    setModal({ type: 'generateGroupDiploma', groupId: group.id });
-  }
-
-  // La "Genereaza diploma" din modal: deschide sablonul HTML curatat (fara feedback) intr-un
-  // tab nou, precompletat cu elevul/profesorul/modulul/steluțele curente, apoi marcheaza
-  // automat grupa ca "diploma trimisa" (acelasi flux ca fostul widget DiplomaAlerts).
-  function handleGenerateGroupDiploma() {
-    if (modal.type !== 'generateGroupDiploma') return;
-    const group = diplomaGroupAlerts.pending.find((g) => g.id === modal.groupId);
-    if (!group) return;
-    const courseId = group.course ?? groupDiplomaFallbackCourse;
-    if (!courseId) return;
-    const student = group.students.find((s) => s.id === groupDiplomaStudentId);
-    if (!student) return;
-    const url = diplomaTemplateUrl(courseId, groupDiplomaModule);
-    if (!url) return;
-    const course = getCourse(courseId);
-    const params = new URLSearchParams({
-      elev: student.name,
-      profesor: teacherName,
-      curs: `Modulul ${groupDiplomaModule} - ${course?.label ?? ''}`,
-      data: todayFormatted(),
-      stelute: String(starsForModule(student.progress)),
-      totalStelute: String(student.progress),
-    });
-    window.open(`${url}?${params.toString()}`, '_blank');
-    setModal({ type: null });
-    diplomaGroupAlerts.markSent(group).then((ok) => {
-      if (!ok) showToast('Diploma generată, dar marcarea ca „trimisă” a eșuat - va reapărea în Task-uri Urgente.', 'error');
-    });
-  }
 
   // "✅ Recuperat" / "❌ Nu mai e nevoie" pe cardul de recuperare din Task-uri Urgente - ambele
   // inchid complet alerta curenta (pending_makeups, absence_date, contorul/cooldown-ul de
@@ -1458,7 +1410,7 @@ export default function ProgressTracker({
             {hasUrgentTasks && (
               <button
                 onClick={goHome}
-                title={`${pendingDiplomaStudents.length + pendingMakeupStudents.length + diplomaGroupAlerts.pending.length} task-uri urgente - click pentru lista`}
+                title={`${pendingDiplomaStudents.length + pendingMakeupStudents.length} task-uri urgente - click pentru lista`}
                 aria-label="Task-uri urgente"
                 className="relative w-10 h-10 rounded-xl bg-black border border-[#C8F023]/40 flex items-center justify-center shrink-0 animate-pulse"
               >
@@ -1570,65 +1522,43 @@ export default function ProgressTracker({
                       </div>
                     );
                   })}
-                  {pendingDiplomaStudents.map((s) => (
-                    <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
-                      <p className="text-sm">
-                        <span className="font-semibold">{s.short_name?.trim() || s.name}</span>
-                        {' - '}Clasa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>
-                        {' '}așteaptă diploma pentru modulul de {s.pending_diploma_milestone} lecții.
-                      </p>
-                      <div className="flex gap-2 shrink-0">
-                        <Link
-                          href={`/diplome?studentId=${s.id}&teacherId=${viewedTeacherId}`}
-                          title="Deschide generatorul de diplome, precompletat cu cursul si elevul - alege doar modulul"
-                          className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors"
-                        >
-                          🎓 Generează Diplomă
-                        </Link>
-                        <button
-                          onClick={() => handleMarkDiplomaSent(s)}
-                          disabled={markingDiplomaSentIds.has(s.id)}
-                          className="bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5"
-                        >
-                          {markingDiplomaSentIds.has(s.id) ? (
-                            <span className="tracker-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                          ) : (
-                            '✅ Am trimis diploma'
-                          )}
-                        </button>
+                  {pendingDiplomaStudents.map((s) => {
+                    // Pragul (pending_diploma_milestone) e mereu un multiplu de 16 (vezi
+                    // checkDiplomaMilestone) - calculat STRICT din prezentele individuale ale
+                    // acestui elev, nu din numarul de lectii tinute la nivel de grupa (bug
+                    // reparat: elevi din aceeasi grupa pot avea prezente diferite din cauza
+                    // absentelor/recuperarilor, deci pragul lor de diploma nu coincide automat).
+                    const { module, lesson } = computeModuleLesson(s.pending_diploma_milestone ?? 0);
+                    return (
+                      <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
+                        <p className="text-sm">
+                          🎓 Diplomă necesară: Elevul <span className="font-semibold">{s.short_name?.trim() || s.name}</span>
+                          {' '}(Grupa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>)
+                          {' '}a ajuns la <span className="font-semibold">M{module} / L{lesson}</span>
+                        </p>
+                        <div className="flex gap-2 shrink-0">
+                          <Link
+                            href={`/diplome?studentId=${s.id}&teacherId=${viewedTeacherId}`}
+                            title="Deschide generatorul de diplome, precompletat cu cursul si elevul - alege doar modulul"
+                            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors"
+                          >
+                            🎓 Generează Diplomă
+                          </Link>
+                          <button
+                            onClick={() => handleMarkDiplomaSent(s)}
+                            disabled={markingDiplomaSentIds.has(s.id)}
+                            className="bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          >
+                            {markingDiplomaSentIds.has(s.id) ? (
+                              <span className="tracker-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                            ) : (
+                              '✅ Am trimis diploma'
+                            )}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {diplomaGroupAlerts.pending.map((g) => (
-                    <div key={g.id} className="flex flex-wrap items-center justify-between gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3">
-                      <p className="text-sm">
-                        🎓 Diplomă necesară: Grupa <span className="font-semibold">{g.group_name}</span>
-                        {' '}a ajuns la <span className="font-semibold">M{completedModuleFor(g.lessonCount)} / L16</span>
-                      </p>
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          onClick={() => openGenerateGroupDiplomaModal(g)}
-                          className="bg-blue-500 hover:bg-blue-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors"
-                        >
-                          🎓 Generează diplomă
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const ok = await diplomaGroupAlerts.markSent(g);
-                            if (!ok) showToast('Eroare la marcarea diplomei ca trimisă. Încearcă din nou.', 'error');
-                          }}
-                          disabled={diplomaGroupAlerts.busyId === g.id}
-                          className="bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5"
-                        >
-                          {diplomaGroupAlerts.busyId === g.id ? (
-                            <span className="tracker-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                          ) : (
-                            '✓ Marchează trimisă'
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2283,72 +2213,6 @@ export default function ProgressTracker({
           </form>
         </ModalShell>
       )}
-
-      {modal.type === 'generateGroupDiploma' && (() => {
-        const group = diplomaGroupAlerts.pending.find((g) => g.id === modal.groupId);
-        if (!group) return null;
-        const effectiveCourse = group.course ?? groupDiplomaFallbackCourse;
-        return (
-          <ModalShell onClose={() => setModal({ type: null })}>
-            <h3 className="text-xl font-bold mb-4 text-[#C8F023]">🎓 Generează Diplomă — {group.group_name}</h3>
-            {group.course ? (
-              <p className="text-sm text-gray-400 mb-4">
-                Curs: <span className="text-white font-semibold">{getCourse(group.course)?.label}</span> (dedus automat din grupă)
-              </p>
-            ) : (
-              <div className="mb-4">
-                <label className="block text-sm font-semibold mb-2">Curs (grupa nu are un curs setat)</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {COURSES.map((c) => (
-                    <button
-                      key={c.id} type="button" onClick={() => setGroupDiplomaFallbackCourse(c.id)}
-                      className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${groupDiplomaFallbackCourse === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Elev</label>
-              <select
-                value={groupDiplomaStudentId} onChange={(e) => setGroupDiplomaStudentId(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
-              >
-                {group.students.length === 0 && <option value="">Niciun elev în grupă</option>}
-                {group.students.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} — {starsForModule(s.progress)} din 16 steluțe</option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Modul</label>
-              <select
-                value={groupDiplomaModule} onChange={(e) => setGroupDiplomaModule(Number(e.target.value))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
-              >
-                {DIPLOMA_MODULES.map((m) => <option key={m} value={m}>Modulul {m}</option>)}
-              </select>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">
-              Se deschide șablonul de diplomă (curățat, fără feedback) într-un tab nou, precompletat cu numele elevului,
-              profesorul, modulul și steluțele curente. Grupa e marcată automat ca „diplomă trimisă”.
-            </p>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
-                Anuleaza
-              </button>
-              <button
-                type="button" onClick={handleGenerateGroupDiploma} disabled={!effectiveCourse || !groupDiplomaStudentId}
-                className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                Generează diploma
-              </button>
-            </div>
-          </ModalShell>
-        );
-      })()}
 
       {modal.type === 'recordRecovery' && (() => {
         const student = students.find((s) => s.id === modal.studentId);
