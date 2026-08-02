@@ -366,6 +366,10 @@ export default function ProgressTracker({
   const [diplomaMilestonePopup, setDiplomaMilestonePopup] = useState<{ studentId: string; milestone: number } | null>(null);
   // Popup de confirmare dupa "✅ Recuperare efectuata" pe cardul de recuperare din Task-uri Urgente.
   const [makeupDoneNotice, setMakeupDoneNotice] = useState(false);
+  // Popup afisat cand marcarea unui elev "Absent" ar lasa lectia cu 100% absenti (vezi
+  // setAttendanceStatus) - salvarea e blocata in acest caz, ca sa nu decaleze contorul de
+  // lectii si sa nu genereze restante de recuperare false pentru o lectie care nu s-a tinut.
+  const [allAbsentBlockNotice, setAllAbsentBlockNotice] = useState(false);
   // Elevul pentru care s-a apasat "Trimite Notificare" si asteapta confirmarea "Ai sloturi
   // disponibile in calendar?" (Da/Nu) inainte de trimiterea efectiva catre Pabbly.
   const [makeupNotifyConfirm, setMakeupNotifyConfirm] = useState<TrackerStudent | null>(null);
@@ -1239,6 +1243,25 @@ export default function ProgressTracker({
     if (!student) return;
     const group = getGroupById(student.group_id);
     if (!group) return;
+
+    // Blocam marcarea "Absent" daca ar lasa TOTI elevii activi ai clasei cu statusul Absent la
+    // aceasta lectie - inseamna ca lectia nu s-a tinut deloc (reprogramata), deci nu trebuie
+    // salvata (ar decala contorul L1/L2... si ar genera restante de recuperare false). Elevii
+    // inca nemarcati (fara rand in tracker_attendance) nu conteaza ca "Absent" aici - blocajul
+    // se declanseaza doar cand chiar absolut toti au deja statusul explicit Absent.
+    if (status === 'absent') {
+      const groupStudents = getStudentsForGroup(student.group_id);
+      const wouldBeAllAbsent = groupStudents.every((gs) => {
+        if (gs.id === studentId) return true;
+        const record = attendance.find((a) => a.lesson_id === lessonId && a.student_id === gs.id);
+        return record?.status === 'absent';
+      });
+      if (wouldBeAllAbsent) {
+        setAllAbsentBlockNotice(true);
+        return;
+      }
+    }
+
     const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
     const prevStarCount = current?.star_count ?? 0;
     const nextStarCount = status === 'absent' ? 0 : prevStarCount;
@@ -2407,6 +2430,28 @@ export default function ProgressTracker({
           </div>
         );
       })()}
+
+      {/* Blocaj "100% absenti" la marcarea prezentei - vezi setAttendanceStatus. */}
+      {allAbsentBlockNotice && (
+        <ModalShell onClose={() => setAllAbsentBlockNotice(false)}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">🚫</div>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Lecție cu 100% absenți</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Nu poți salva o lecție cu 100% absenți. Dacă lecția nu s-a ținut deloc și se
+              reprogramează, te rog să ștergi această lecție (folosind butonul de ștergere)
+              pentru a nu decala materia. Dacă măcar un elev a fost Prezent sau a făcut
+              Recuperare, poți salva.
+            </p>
+            <button
+              onClick={() => setAllAbsentBlockNotice(false)}
+              className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold"
+            >
+              Am înțeles
+            </button>
+          </div>
+        </ModalShell>
+      )}
 
       {/* Popup de confirmare dupa "✅ Recuperare efectuata" pe cardul din Task-uri Urgente. */}
       {makeupDoneNotice && (
