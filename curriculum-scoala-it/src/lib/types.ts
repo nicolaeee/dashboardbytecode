@@ -51,8 +51,11 @@ export type Tree = PlatformNode[];
 /** id-urile de continut deblocat pentru profesorul curent */
 export type AccessMap = { modules: Set<string>; lessons: Set<string> };
 
-/** Cursul grupei - leaga grupa de folderul de sabloane de diploma corespunzator. */
-export type CourseId = 'coblocks' | 'python' | 'roblox' | 'alfabetizare' | 'unity' | 'delighted';
+/** Cursul grupei - leaga grupa de folderul de sabloane de diploma corespunzator, pentru
+ * cursurile cunoscute (vezi COURSES din lib/diplomas.ts). `(string & {})` pastreaza
+ * autocomplete-ul pe literalii cunoscuti, dar accepta si un curs custom (text liber,
+ * introdus din "+ Alt curs..." la creare/editare clasa) - fara sablon de diploma asociat. */
+export type CourseId = 'coblocks' | 'python' | 'roblox' | 'alfabetizare' | 'unity' | (string & {});
 
 export type TrackerGroup = {
   id: string;

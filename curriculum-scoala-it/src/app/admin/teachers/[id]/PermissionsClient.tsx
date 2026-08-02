@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { ChevronDown, ChevronRight, Lock, LockOpen } from 'lucide-react';
-import { Badge, Button, Card } from '@/components/ui';
+import { Badge, Button, Card, Switch } from '@/components/ui';
 import { setLessonAccess, setModuleAccess } from '@/app/admin/actions';
 import type { Tree } from '@/lib/types';
 
@@ -164,21 +164,5 @@ export default function PermissionsClient({
         );
       })}
     </div>
-  );
-}
-
-function Switch({
-  checked, onChange, disabled, label,
-}: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string }) {
-  return (
-    <button
-      type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50
-        ${checked ? 'bg-brand-500' : 'bg-slate-150'}`}
-    >
-      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all
-        ${checked ? 'left-[22px]' : 'left-0.5'}`} />
-    </button>
   );
 }

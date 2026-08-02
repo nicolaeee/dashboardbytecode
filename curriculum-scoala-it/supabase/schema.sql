@@ -246,7 +246,11 @@ create table public.tracker_groups (
   day_of_week  text,   -- 'luni' .. 'duminica', null = nespecificat
   time_of_day  text,   -- 'HH:MM', optional
   diploma_milestone int not null default 0,  -- cel mai mare multiplu de 16 lectii deja notificat/trimis
-  course       text check (course in ('coblocks', 'python', 'roblox', 'alfabetizare', 'unity', 'delighted')),  -- leaga grupa de folderul de sabloane de diploma
+  -- Cursul grupei (leaga grupa de folderul de sabloane de diploma) - text liber, nu enum:
+  -- admin/profesorul poate alege dintr-o lista cunoscuta SAU introduce un curs custom din
+  -- "+ Alt curs..." (vezi CourseGrid, progress/ProgressTracker.tsx). Fara constrangere CHECK
+  -- (vezi supabase/migrations/loosen_tracker_group_course_constraint.sql).
+  course       text,
   meet_link    text,   -- link-ul Google Meet al clasei, editabil din antetul clasei in Tracker
   deleted_at   timestamptz,
   created_at   timestamptz not null default now()

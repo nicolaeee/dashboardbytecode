@@ -1,10 +1,15 @@
 import type { CourseId } from './types';
 
 /**
- * Cursurile pentru care exista sabloane de diploma in public/diplome/<folder>.
+ * Cursurile "cunoscute", pentru care exista sabloane de diploma in public/diplome/<folder>.
  * Fiecare curs are module numerotate 1-4, fisier: Diploma_modulul<N>_<fileSuffix>.html.
- * Adaugarea unui curs nou (ex: "Delighted") inseamna extinderea acestei liste DUPA ce
- * sabloanele lui exista in public/diplome/<folder nou> - altfel link-urile ar da 404.
+ * Adaugarea unui curs nou aici inseamna extinderea acestei liste DUPA ce sabloanele lui
+ * exista in public/diplome/<folder nou> - altfel link-urile ar da 404.
+ *
+ * O clasa poate avea si un curs CUSTOM (text liber, introdus din "+ Alt curs..." la
+ * creare/editare - vezi CourseGrid din ProgressTracker.tsx), care NU e in lista de mai jos -
+ * un astfel de curs nu are sablon de diploma (getCourse/diplomaTemplateUrl returneaza
+ * null/undefined pentru el), dar ramane valid ca eticheta/filtru pe clasa.
  */
 export const COURSES: { id: CourseId; label: string; folder: string; fileSuffix: string }[] = [
   { id: 'coblocks', label: 'Blocuri de cod', folder: 'CoBlocks', fileSuffix: 'blocuri' },
@@ -12,7 +17,6 @@ export const COURSES: { id: CourseId; label: string; folder: string; fileSuffix:
   { id: 'roblox', label: 'Roblox', folder: 'Roblox', fileSuffix: 'Roblox' },
   { id: 'alfabetizare', label: 'Alfabetizare', folder: 'Alfabetizare', fileSuffix: 'Alfabetizare' },
   { id: 'unity', label: 'Unity', folder: 'Unity', fileSuffix: 'Unity' },
-  { id: 'delighted', label: 'Delighted', folder: 'Delighted', fileSuffix: 'Delighted' },
 ];
 
 export const DIPLOMA_MODULES = [1, 2, 3, 4];

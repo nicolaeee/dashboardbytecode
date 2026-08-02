@@ -9,12 +9,6 @@ export default async function TeachersPage() {
   const { data: profiles } = await supabase
     .from('profiles').select('*').order('role').order('created_at');
 
-  const { data: perms } = await supabase.from('module_permissions').select('teacher_id');
-  const counts = (perms ?? []).reduce<Record<string, number>>((acc, r) => {
-    acc[r.teacher_id as string] = (acc[r.teacher_id as string] ?? 0) + 1;
-    return acc;
-  }, {});
-
   return (
     <div className="mx-auto max-w-5xl space-y-7">
       <header>
@@ -24,7 +18,7 @@ export default async function TeachersPage() {
           Creează conturi, deblochează module și promovează un profesor la administrator.
         </p>
       </header>
-      <TeachersClient profiles={(profiles ?? []) as Profile[]} moduleCounts={counts} meId={me.id} />
+      <TeachersClient profiles={(profiles ?? []) as Profile[]} meId={me.id} />
     </div>
   );
 }

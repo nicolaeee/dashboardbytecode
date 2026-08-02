@@ -6,17 +6,11 @@ import { Badge, Button, Card, Field, Input, Modal } from '@/components/ui';
 import { createTeacher, deleteTeacher, resetTeacherPassword, setUserActive, setUserLevel, setUserRole, updateTeacherProfile } from '@/app/admin/actions';
 import type { Profile, Role, TeacherLevel } from '@/lib/types';
 
-const LEVEL_TONES: Record<TeacherLevel, 'blue' | 'purple' | 'brand'> = {
-  Junior: 'blue',
-  Middle: 'purple',
-  Senior: 'brand',
-};
-
 export default function TeachersClient({
-  profiles, moduleCounts, meId,
-}: { profiles: Profile[]; moduleCounts: Record<string, number>; meId: string }) {
+  profiles, meId,
+}: { profiles: Profile[]; meId: string }) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', role: 'teacher' as Role, phone: '' });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', role: 'teacher' as Role, level: 'Junior' as TeacherLevel, phone: '' });
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -77,14 +71,14 @@ export default function TeachersClient({
       )}
 
       <div className="flex justify-end">
-        <Button onClick={() => { setForm({ full_name: '', email: '', password: '', role: 'teacher', phone: '' }); setAdding(true); }}>
+        <Button onClick={() => { setForm({ full_name: '', email: '', password: '', role: 'teacher', level: 'Junior', phone: '' }); setAdding(true); }}>
           <Plus size={16} /> Adaugă profesor
         </Button>
       </div>
 
       <Card className="divide-y divide-line">
         {profiles.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3.5">
+          <div key={p.id} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center">
             <button
               type="button" onClick={() => openEdit(p)} title="Editează profesorul"
               className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-opacity hover:opacity-80
@@ -93,22 +87,17 @@ export default function TeachersClient({
             </button>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">
-                {p.full_name || '(fără nume)'}{' '}
-                {p.id === meId && <span className="text-[12px] font-normal text-lock">— tu</span>}
+              <p className="truncate text-[15px] font-semibold text-ink">
+                {p.full_name || '(fără nume)'}
+                {p.id === meId && <span className="ml-1.5 text-[12px] font-normal text-lock">— tu</span>}
               </p>
               <p className="truncate text-[13px] text-lock">{p.email}</p>
             </div>
 
-            <div className="flex items-center gap-2">
-              {p.role === 'admin'
-                ? <Badge tone="brand">Administrator · acces total</Badge>
-                : <>
-                    <Badge tone={moduleCounts[p.id] ? 'ok' : 'lock'}>
-                      {moduleCounts[p.id] ?? 0} module deblocate
-                    </Badge>
-                    <Badge tone={LEVEL_TONES[p.level]}>{p.level}</Badge>
-                  </>}
+            {/* Nivelul e afisat DOAR in selectorul fuzionat Rol/Nivel de mai jos (nu si aici,
+                ca sa nu duplicam aceeasi informatie in doua locuri) - vezi RoleLevelSelect. */}
+            <div className="flex flex-wrap items-center gap-2">
+              {p.role === 'admin' && <Badge tone="brand">Administrator · acces total</Badge>}
               {!p.is_active && <Badge tone="lock">Dezactivat</Badge>}
             </div>
 
@@ -118,29 +107,13 @@ export default function TeachersClient({
                   <Button size="sm" variant="outline"><KeyRound size={14} /> Acces</Button>
                 </Link>
               )}
-              <select
-                value={p.role}
+              <RoleLevelSelect
+                compact
+                role={p.role} level={p.level}
                 disabled={pending || p.id === meId}
-                onChange={(e) => run(() => setUserRole(p.id, e.target.value as Role))}
-                className="glass h-8 rounded-xl border border-line px-2 text-[13px] text-ink disabled:opacity-50"
-                aria-label="Rol"
-              >
-                <option value="teacher" className="bg-night text-ink">Profesor</option>
-                <option value="admin" className="bg-night text-ink">Administrator</option>
-              </select>
-              {p.role === 'teacher' && (
-                <select
-                  value={p.level}
-                  disabled={pending}
-                  onChange={(e) => run(() => setUserLevel(p.id, e.target.value as TeacherLevel))}
-                  className="glass h-8 rounded-xl border border-line px-2 text-[13px] text-ink disabled:opacity-50"
-                  aria-label="Nivel"
-                >
-                  <option value="Junior" className="bg-night text-ink">Junior</option>
-                  <option value="Middle" className="bg-night text-ink">Middle</option>
-                  <option value="Senior" className="bg-night text-ink">Senior</option>
-                </select>
-              )}
+                onRoleChange={(role) => run(() => setUserRole(p.id, role))}
+                onLevelChange={(level) => run(() => setUserLevel(p.id, level))}
+              />
               <Button size="sm" variant="outline"
                 onClick={() => { setResetTarget(p); setNewPassword(''); setResetError(null); }}>
                 <Lock size={14} /> Resetează parola
@@ -186,14 +159,11 @@ export default function TeachersClient({
           <Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="minim 8 caractere" />
         </Field>
         <Field label="Rol">
-          <select
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-            className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-          >
-            <option value="teacher" className="bg-night text-ink">Profesor — vede doar ce deblochezi</option>
-            <option value="admin" className="bg-night text-ink">Administrator — acces total</option>
-          </select>
+          <RoleLevelSelect
+            role={form.role} level={form.level}
+            onRoleChange={(role) => setForm({ ...form, role })}
+            onLevelChange={(level) => setForm({ ...form, level })}
+          />
         </Field>
         <p className="text-xs text-lock">
           Contul nou nu are niciun modul deblocat. Deschide „Acces” după creare.
@@ -251,29 +221,13 @@ export default function TeachersClient({
           <Input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="+40712345678" />
         </Field>
         <Field label="Rol">
-          <select
-            value={editForm.role}
+          <RoleLevelSelect
+            role={editForm.role} level={editForm.level}
             disabled={editTarget?.id === meId}
-            onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Role })}
-            className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink disabled:opacity-50"
-          >
-            <option value="teacher" className="bg-night text-ink">Profesor</option>
-            <option value="admin" className="bg-night text-ink">Administrator</option>
-          </select>
+            onRoleChange={(role) => setEditForm({ ...editForm, role })}
+            onLevelChange={(level) => setEditForm({ ...editForm, level })}
+          />
         </Field>
-        {editForm.role === 'teacher' && (
-          <Field label="Nivel">
-            <select
-              value={editForm.level}
-              onChange={(e) => setEditForm({ ...editForm, level: e.target.value as TeacherLevel })}
-              className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-            >
-              <option value="Junior" className="bg-night text-ink">Junior</option>
-              <option value="Middle" className="bg-night text-ink">Middle</option>
-              <option value="Senior" className="bg-night text-ink">Senior</option>
-            </select>
-          </Field>
-        )}
         <Button
           type="button" variant="outline" size="sm"
           onClick={() => {
@@ -287,6 +241,53 @@ export default function TeachersClient({
           <p className="rounded-xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-3 py-2 text-[13px] text-[#FF6B6B]">{editError}</p>
         )}
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * Selector fuzionat Rol + Nivel - un singur control vizual (un chenar comun), nu doua
+ * dropdown-uri separate. Nivelul (Junior/Middle/Senior) apare instant in dreapta rolului
+ * DOAR cand rolul e "Profesor" - un admin nu are nivel, deci sub-selectorul dispare complet
+ * la schimbarea rolului pe "Administrator". Reutilizat identic in randul din lista, in
+ * modalul de creare si in modalul de editare, ca cele 3 locuri sa nu diveraga in timp.
+ */
+function RoleLevelSelect({
+  role, level, onRoleChange, onLevelChange, disabled, compact,
+}: {
+  role: Role; level: TeacherLevel;
+  onRoleChange: (role: Role) => void; onLevelChange: (level: TeacherLevel) => void;
+  disabled?: boolean; compact?: boolean;
+}) {
+  const sizeClasses = compact ? 'h-8 text-[13px]' : 'h-10 text-sm';
+  return (
+    <div className={`glass flex items-stretch rounded-xl border border-line ${disabled ? 'opacity-50' : ''} ${compact ? '' : 'w-full'}`}>
+      <select
+        value={role}
+        disabled={disabled}
+        onChange={(e) => onRoleChange(e.target.value as Role)}
+        className={`bg-transparent ${sizeClasses} rounded-l-xl px-3 text-ink focus:outline-none disabled:cursor-not-allowed ${role === 'admin' ? 'rounded-r-xl' : ''}`}
+        aria-label="Rol"
+      >
+        <option value="teacher" className="bg-night text-ink">Profesor</option>
+        <option value="admin" className="bg-night text-ink">Administrator</option>
+      </select>
+      {role === 'teacher' && (
+        <>
+          <span className="w-px shrink-0 bg-line" aria-hidden />
+          <select
+            value={level}
+            disabled={disabled}
+            onChange={(e) => onLevelChange(e.target.value as TeacherLevel)}
+            className={`bg-transparent ${sizeClasses} flex-1 rounded-r-xl px-3 text-ink focus:outline-none disabled:cursor-not-allowed`}
+            aria-label="Nivel"
+          >
+            <option value="Junior" className="bg-night text-ink">Junior</option>
+            <option value="Middle" className="bg-night text-ink">Middle</option>
+            <option value="Senior" className="bg-night text-ink">Senior</option>
+          </select>
+        </>
+      )}
     </div>
   );
 }

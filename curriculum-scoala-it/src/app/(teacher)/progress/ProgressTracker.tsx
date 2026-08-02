@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
@@ -199,13 +200,104 @@ function getBucharestHour(): number {
 
 const DAY_TO_JS_INDEX: Record<string, number> = { duminica: 0, luni: 1, marti: 2, miercuri: 3, joi: 4, vineri: 5, sambata: 6 };
 
-// Numele clasei se genereaza automat din Modul + Ziua + Ora, nu se mai scrie manual.
+// Baza numelui clasei se genereaza automat din Modul + Ziua + Ora, de fiecare data cand
+// oricare dintre cele trei se schimba (vezi useEffect-urile de langa createName/editClassName
+// mai jos) - campul ramane totusi editabil, ca adminul sa poata adauga ceva manual la final.
 function buildAutoClassName(moduleNum: number, dayId: string | null, time: string) {
   const parts = [`M${moduleNum}`];
   const dayLabel = DAYS.find((d) => d.id === dayId)?.label;
   if (dayLabel) parts.push(time ? `${dayLabel} la ${time}` : dayLabel);
   else if (time) parts.push(`la ${time}`);
   return parts.join(' ');
+}
+
+// Normalizeaza ce tasteaza utilizatorul intr-un input de ora spre formatul strict HH:mm
+// (24h, fara AM/PM) - pastreaza doar cifre, insereaza automat ":" dupa a doua cifra (DOAR
+// cand utilizatorul scrie inainte, nu si la stergere - altfel backspace ar ramane blocat
+// mereu inapoi la ":" reinserat) si taie la 5 caractere.
+function normalizeTimeTyping(next: string, previous: string): string {
+  let v = next.replace(/[^\d:]/g, '').slice(0, 5);
+  const isDeleting = next.length < previous.length;
+  if (!isDeleting && v.length === 2 && !v.includes(':')) v += ':';
+  return v;
+}
+const TIME_PATTERN = '^([01]\\d|2[0-3]):[0-5]\\d$';
+
+/** Input de ora in format STRICT 24h - text simplu cu masca, nu <input type="time"> nativ,
+ * ca sa nu depinda de locale-ul browserului (unele afiseaza AM/PM). Optional (poate fi gol). */
+function TimeInput({
+  value, onChange, className, placeholder = 'HH:MM',
+}: { value: string; onChange: (v: string) => void; className?: string; placeholder?: string }) {
+  return (
+    <input
+      type="text" inputMode="numeric" placeholder={placeholder} maxLength={5}
+      pattern={TIME_PATTERN} title="Ora in format 24h, ex: 09:00 sau 18:30"
+      value={value} onChange={(e) => onChange(normalizeTimeTyping(e.target.value, value))}
+      className={className}
+    />
+  );
+}
+
+/** true = id-ul e un curs "cunoscut" (din COURSES) sau lipseste - false = e un curs custom
+ * (text liber introdus din "+ Alt curs..."). Folosit ca sa stim in ce mod sa pornim
+ * selectorul (grid de butoane vs. input text) cand deschidem modalul de editare. */
+function isKnownCourseId(id: CourseId | null): boolean {
+  return id === null || COURSES.some((c) => c.id === id);
+}
+
+/**
+ * Selector de curs: grid de butoane pentru cursurile cunoscute (cu sablon de diploma) +
+ * "Nespecificat" + "+ Alt curs..." - ultimul comuta pe un input de text liber, pentru orice
+ * curs nou care inca nu are sablon de diploma configurat. Reutilizat identic la Creare si
+ * Editare Clasa, ca cele doua formulare sa nu diveraga in timp.
+ */
+function CourseGrid({
+  value, custom, onSelect, onEnterCustom, onExitCustom,
+}: {
+  value: CourseId | null; custom: boolean;
+  onSelect: (id: CourseId | null) => void; onEnterCustom: () => void; onExitCustom: () => void;
+}) {
+  if (custom) {
+    return (
+      <div className="flex gap-2">
+        <input
+          type="text" value={value ?? ''} onChange={(e) => onSelect(e.target.value)}
+          placeholder="Numele cursului nou" autoFocus
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-4 py-2.5 text-sm text-white"
+        />
+        <button
+          type="button" onClick={onExitCustom} title="Renunta la cursul custom, alege din lista"
+          className="bg-gray-700 hover:bg-gray-600 px-3 rounded-2xl text-xs font-semibold transition-colors"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      <button
+        type="button" onClick={() => onSelect(null)}
+        className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${value === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+      >
+        Nespecificat
+      </button>
+      {COURSES.map((c) => (
+        <button
+          key={c.id} type="button" onClick={() => onSelect(c.id)}
+          className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${value === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
+        >
+          {c.label}
+        </button>
+      ))}
+      <button
+        type="button" onClick={onEnterCustom}
+        className="py-2 rounded-2xl font-semibold text-xs transition-colors bg-gray-700 text-white border border-dashed border-gray-500 hover:border-gray-300"
+      >
+        + Alt curs...
+      </button>
+    </div>
+  );
 }
 
 // Urmatoarea data (azi sau in viitor) care cade pe ziua saptamanii configurata pentru clasa -
@@ -250,6 +342,10 @@ export default function ProgressTracker({
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  // Folosit DOAR ca semnal de invalidare a Router Cache-ului Next.js dupa o mutatie de
+  // clasa (creare/editare/transfer/stergere) - vezi comentariul de langa fiecare apel.
+  // NU reincarca aceasta pagina si nu atinge state-ul local optimist (deja corect).
+  const router = useRouter();
 
   // Profesorul ale carui date sunt afisate acum - implicit propriul cont; adminul il
   // poate schimba din dropdown-ul de mai jos, ceea ce reincarca totul pentru acel profesor.
@@ -304,11 +400,39 @@ export default function ProgressTracker({
   const [createForm, setCreateForm] = useState<{ module: number; count: number; reward: string; names: string[]; day: string | null; time: string; course: CourseId | null }>(
     { module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null }
   );
-  const autoClassName = buildAutoClassName(createForm.module, createForm.day, createForm.time);
+  // Numele clasei la creare - pornit din baza auto-generata (Modul + Ziua + Ora), dar ramas
+  // editabil manual; useEffect-ul de mai jos il regenereaza de fiecare data cand oricare din
+  // cele 3 componente se schimba (vezi buildAutoClassName).
+  const [createName, setCreateName] = useState(() => buildAutoClassName(1, 'luni', ''));
+  const [createCourseCustom, setCreateCourseCustom] = useState(false);
+  useEffect(() => {
+    setCreateName(buildAutoClassName(createForm.module, createForm.day, createForm.time));
+  }, [createForm.module, createForm.day, createForm.time]);
+
   const [editClassName, setEditClassName] = useState('');
   const [editClassDay, setEditClassDay] = useState<string | null>(null);
   const [editClassTime, setEditClassTime] = useState('');
   const [editClassCourse, setEditClassCourse] = useState<CourseId | null>(null);
+  const [editClassCourseCustom, setEditClassCourseCustom] = useState(false);
+  // Cheia modalului de editare curent deschis (groupId), sau null daca e inchis - folosita
+  // de useEffect-ul de mai jos ca sa deosebeasca "tocmai s-a deschis modalul" (nu regeneram
+  // numele, ca sa nu suprascriem un nume custom existent) de "ziua/ora chiar s-au schimbat
+  // cat timp modalul era deja deschis" (abia atunci regeneram).
+  const lastEditModalKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = modal.type === 'editClass' ? modal.groupId : null;
+    if (key !== lastEditModalKeyRef.current) {
+      lastEditModalKeyRef.current = key;
+      return;
+    }
+    if (key === null) return;
+    const group = getGroupById(key);
+    if (!group) return;
+    setEditClassName(buildAutoClassName(group.module_count || 1, editClassDay, editClassTime));
+    // getGroupById citeste `groups` curent la fiecare apel - nu trebuie in deps (ar re-declansa
+    // efectul la orice alta schimbare de stare din grupe, nu doar la zi/ora).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal, editClassDay, editClassTime]);
   // Doar admin: profesorul ales in dropdown-ul "Transfera clasa la alt profesor" din modalul
   // de editare - initializat mereu cu proprietarul curent al clasei, ca sa nu declansam un
   // transfer accidental daca adminul doar schimba numele/ziua/ora si salveaza.
@@ -537,8 +661,9 @@ export default function ProgressTracker({
 
   async function handleCreateClass(e: React.FormEvent) {
     e.preventDefault();
-    const name = autoClassName;
+    const name = createName.trim();
     const names = createForm.names.map((n) => n.trim()).filter(Boolean);
+    const course = createForm.course?.trim() || null;
     if (!name) return showToast('Introdu numele clasei', 'error');
     if (names.length === 0) return showToast('Adauga cel putin un elev', 'error');
     if (totalDataCount + names.length + 1 >= 999) return showToast('Limita de date atinsa (999)', 'error');
@@ -547,7 +672,7 @@ export default function ProgressTracker({
     const { data: group, error } = await supabase.from('tracker_groups')
       .insert({
         teacher_id: viewedTeacherId, group_name: name, module_count: createForm.module, reward_type: createForm.reward,
-        day_of_week: createForm.day, time_of_day: createForm.time || null, course: createForm.course,
+        day_of_week: createForm.day, time_of_day: createForm.time || null, course,
       })
       .select().single();
     if (error || !group) { setBusy(false); return showToast('Eroare la creare clasa', 'error'); }
@@ -563,16 +688,23 @@ export default function ProgressTracker({
 
     setModal({ type: null });
     setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null });
+    setCreateName(buildAutoClassName(1, 'luni', ''));
+    setCreateCourseCustom(false);
     showToast('Clasa creata cu succes!');
+    // Invalideaza Router Cache-ul Next.js, ca navigarea ulterioara catre alta pagina
+    // (Diplome, Registru) sau un back/forward in acest tab sa aduca mereu date proaspete,
+    // nu un instantaneu cache-uit de dinainte de creare - vezi comentariul de la `router`.
+    router.refresh();
   }
 
   async function handleEditClass(e: React.FormEvent, groupId: string) {
     e.preventDefault();
     const name = editClassName.trim();
     if (!name) return showToast('Introdu numele clasei', 'error');
+    const course = editClassCourse?.trim() || null;
     const group = getGroupById(groupId);
     setBusy(true);
-    const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null, course: editClassCourse });
+    const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null, course });
     if (!ok) { setBusy(false); return; }
 
     // Doar admin: daca a fost aleasa o alta valoare in dropdown-ul de transfer, cascadeaza
@@ -588,12 +720,17 @@ export default function ProgressTracker({
       showToast('Clasa a fost transferată cu succes!');
       await reloadViewedTeacherData();
       diplomaGroupAlerts.refresh();
+      router.refresh();
       return;
     }
 
     setBusy(false);
     setModal({ type: null });
     showToast('Clasa actualizata!');
+    // Numele/ziua/ora editate aici sunt citite prin group_id din orice alt ecran (Diplome,
+    // Registru) - nu sunt duplicate in alt tabel. Router.refresh() le tine proaspete si
+    // acolo, dincolo de acest tab, fara ca utilizatorul sa dea refresh manual.
+    router.refresh();
   }
 
   async function softDeleteClass(groupId: string) {
@@ -610,6 +747,7 @@ export default function ProgressTracker({
     setView('home');
     setCurrentGroupId(null);
     showToast('Clasa mutata in urna');
+    router.refresh();
   }
 
   async function restoreGroup(groupId: string) {
@@ -622,6 +760,7 @@ export default function ProgressTracker({
       setStudents((ss) => ss.map((s) => map.get(s.id) ?? s));
     }
     showToast('Clasa restaurata!');
+    router.refresh();
   }
 
   async function permanentDeleteGroup(groupId: string) {
@@ -632,6 +771,7 @@ export default function ProgressTracker({
     setGroups((gs) => gs.filter((g) => g.id !== groupId));
     setModal({ type: null });
     showToast('Clasa stearsa permanent');
+    router.refresh();
   }
 
   async function handleAddStudent(e: React.FormEvent) {
@@ -1512,7 +1652,9 @@ export default function ProgressTracker({
                           avgProgress={calcAvgProgress(group.id)}
                           onOpen={() => openClass(group.id)}
                           onEdit={() => {
-                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null); setEditClassTransferTeacherId(group.teacher_id);
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? '');
+                            setEditClassCourse(group.course ?? null); setEditClassCourseCustom(!isKnownCourseId(group.course ?? null));
+                            setEditClassTransferTeacherId(group.teacher_id);
                             setModal({ type: 'editClass', groupId: group.id });
                           }}
                         />
@@ -1531,7 +1673,9 @@ export default function ProgressTracker({
                           avgProgress={calcAvgProgress(group.id)}
                           onOpen={() => openClass(group.id)}
                           onEdit={() => {
-                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null); setEditClassTransferTeacherId(group.teacher_id);
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? '');
+                            setEditClassCourse(group.course ?? null); setEditClassCourseCustom(!isKnownCourseId(group.course ?? null));
+                            setEditClassTransferTeacherId(group.teacher_id);
                             setModal({ type: 'editClass', groupId: group.id });
                           }}
                         />
@@ -1579,7 +1723,12 @@ export default function ProgressTracker({
               recentGroups={[...activeGroups].slice(-5).reverse()}
               deletedCount={deletedGroups.length}
               onOpenClass={openClass}
-              onCreate={() => { setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null }); setModal({ type: 'createClass' }); setMenuOpen(false); }}
+              onCreate={() => {
+                setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null });
+                setCreateName(buildAutoClassName(1, 'luni', ''));
+                setCreateCourseCustom(false);
+                setModal({ type: 'createClass' }); setMenuOpen(false);
+              }}
               onTrash={() => { setModal({ type: 'trashGroups' }); setMenuOpen(false); }}
             />
           ) : currentGroup ? (
@@ -1643,13 +1792,6 @@ export default function ProgressTracker({
           <h3 className="text-xl font-bold mb-4 text-[#C8F023]">➕ Creaza Clasa Noua</h3>
           <form onSubmit={handleCreateClass}>
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Numele Clasei <span className="text-gray-500 font-normal">(generat automat)</span></label>
-              <input
-                type="text" value={autoClassName} readOnly
-                className="w-full bg-gray-800/60 border border-gray-700 rounded-2xl px-4 py-3 text-gray-300 cursor-not-allowed"
-              />
-            </div>
-            <div className="mb-4">
               <label className="block text-sm font-semibold mb-2">Modul</label>
               <div className="grid grid-cols-4 gap-2">
                 {[1, 2, 3, 4].map((m) => (
@@ -1676,9 +1818,18 @@ export default function ProgressTracker({
               </div>
             </div>
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2">Ora</label>
+              <label className="block text-sm font-semibold mb-2">Ora <span className="text-gray-500 font-normal">(format 24h)</span></label>
+              <TimeInput
+                value={createForm.time} onChange={(time) => setCreateForm((f) => ({ ...f, time }))}
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2">
+                Numele Clasei <span className="text-gray-500 font-normal">(actualizat automat din Modul + Ziua + Ora, dar poti scrie peste el)</span>
+              </label>
               <input
-                type="time" value={createForm.time} onChange={(e) => setCreateForm((f) => ({ ...f, time: e.target.value }))}
+                type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} required
                 className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
               />
             </div>
@@ -1697,22 +1848,12 @@ export default function ProgressTracker({
             </div>
             <div className="mb-4">
               <label className="block text-sm font-semibold mb-2">Aplicatia / Materia (pentru diplome)</label>
-              <div className="grid grid-cols-4 gap-2">
-                <button
-                  type="button" onClick={() => setCreateForm((f) => ({ ...f, course: null }))}
-                  className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.course === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
-                >
-                  Nespecificat
-                </button>
-                {COURSES.filter((c) => c.id !== 'delighted').map((c) => (
-                  <button
-                    key={c.id} type="button" onClick={() => setCreateForm((f) => ({ ...f, course: c.id }))}
-                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${createForm.course === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+              <CourseGrid
+                value={createForm.course} custom={createCourseCustom}
+                onSelect={(course) => setCreateForm((f) => ({ ...f, course }))}
+                onEnterCustom={() => { setCreateCourseCustom(true); setCreateForm((f) => ({ ...f, course: '' })); }}
+                onExitCustom={() => { setCreateCourseCustom(false); setCreateForm((f) => ({ ...f, course: null })); }}
+              />
             </div>
             <div className="mb-4">
               <label className="block text-sm font-semibold mb-2">Tipul de premiu</label>
@@ -1760,13 +1901,6 @@ export default function ProgressTracker({
             <h3 className="text-xl font-bold mb-4 text-[#C8F023]">⚙️ Editeaza Clasa</h3>
             <form onSubmit={(e) => handleEditClass(e, group.id)}>
               <div className="mb-4">
-                <label className="block text-sm font-semibold mb-2">Numele Clasei</label>
-                <input
-                  type="text" value={editClassName} onChange={(e) => setEditClassName(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
-                />
-              </div>
-              <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2">Ziua saptamanii</label>
                 <div className="grid grid-cols-4 gap-2">
                   <button
@@ -1786,30 +1920,29 @@ export default function ProgressTracker({
                 </div>
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-semibold mb-2">Ora (optional)</label>
-                <input
-                  type="time" value={editClassTime} onChange={(e) => setEditClassTime(e.target.value)}
+                <label className="block text-sm font-semibold mb-2">Ora <span className="text-gray-500 font-normal">(optional, format 24h)</span></label>
+                <TimeInput
+                  value={editClassTime} onChange={setEditClassTime}
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
               </div>
               <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">
+                  Numele Clasei <span className="text-gray-500 font-normal">(actualizat automat la schimbarea zilei/orei, dar poti scrie peste el)</span>
+                </label>
+                <input
+                  type="text" value={editClassName} onChange={(e) => setEditClassName(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+                />
+              </div>
+              <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2">Curs (pentru diplome)</label>
-                <div className="grid grid-cols-4 gap-2">
-                  <button
-                    type="button" onClick={() => setEditClassCourse(null)}
-                    className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${editClassCourse === null ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
-                  >
-                    Nespecificat
-                  </button>
-                  {COURSES.map((c) => (
-                    <button
-                      key={c.id} type="button" onClick={() => setEditClassCourse(c.id)}
-                      className={`py-2 rounded-2xl font-semibold text-xs transition-colors ${editClassCourse === c.id ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-white'}`}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
+                <CourseGrid
+                  value={editClassCourse} custom={editClassCourseCustom}
+                  onSelect={setEditClassCourse}
+                  onEnterCustom={() => { setEditClassCourseCustom(true); setEditClassCourse(''); }}
+                  onExitCustom={() => { setEditClassCourseCustom(false); setEditClassCourse(null); }}
+                />
               </div>
               {isAdmin && (
                 <div className="mb-4">

@@ -135,7 +135,7 @@ export async function moveNode(
 
 // ================================================================ PROFESORI
 export async function createTeacher(values: {
-  full_name: string; email: string; password: string; role: Role; phone?: string;
+  full_name: string; email: string; password: string; role: Role; phone?: string; level?: TeacherLevel;
 }): Promise<Result> {
   try {
     await adminGuard();
@@ -156,10 +156,14 @@ export async function createTeacher(values: {
     });
     if (error) throw new Error(error.message.includes('already') ? 'Există deja un cont cu acest email.' : error.message);
     // Profilul se creeaza automat prin trigger-ul handle_new_user() (vezi schema.sql), care nu
-    // stie de telefon - il completam separat, dupa ce randul chiar exista.
+    // stie de telefon/nivel - le completam separat, dupa ce randul chiar exista. Nivelul are
+    // sens doar pentru profesori (grila Junior/Middle/Senior) - il ignoram la un cont de admin.
     const phone = values.phone?.trim();
-    if (phone && data.user) {
-      await admin.from('profiles').update({ phone }).eq('id', data.user.id);
+    const updates: Record<string, string> = {};
+    if (phone) updates.phone = phone;
+    if (values.role === 'teacher' && values.level) updates.level = values.level;
+    if (Object.keys(updates).length > 0 && data.user) {
+      await admin.from('profiles').update(updates).eq('id', data.user.id);
     }
     refresh();
     return { ok: true };

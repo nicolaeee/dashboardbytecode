@@ -99,6 +99,22 @@ export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'bran
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${tones}`}>{children}</span>;
 }
 
+export function Switch({
+  checked, onChange, disabled, label,
+}: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string }) {
+  return (
+    <button
+      type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50
+        ${checked ? 'bg-brand-500' : 'bg-slate-150'}`}
+    >
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all
+        ${checked ? 'left-[22px]' : 'left-0.5'}`} />
+    </button>
+  );
+}
+
 export function EmptyState({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-dashed border-line bg-slate-25 px-4 py-6 text-center">
