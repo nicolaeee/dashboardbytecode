@@ -22,26 +22,35 @@ export default function PermissionsClient({
     });
 
   const applyModules = (ids: string[], granted: boolean) => {
+    // Pastram starea dinaintea update-ului optimist, ca sa o putem restaura exact daca
+    // server action-ul esueaza - altfel switch-ul ar ramane blocat in pozitia gresita
+    // pana la urmatorul reload de pagina.
+    let previous: Set<string> = modules;
     setModules((prev) => {
+      previous = prev;
       const next = new Set(prev);
       ids.forEach((id) => (granted ? next.add(id) : next.delete(id)));
       return next;
     });
     startTransition(async () => {
       const res = await setModuleAccess(teacherId, ids, granted);
-      if (!res.ok) setError(res.error);
+      if (!res.ok) { setError(res.error); setModules(previous); }
+      else setError(null);
     });
   };
 
   const applyLesson = (id: string, granted: boolean) => {
+    let previous: Set<string> = lessons;
     setLessons((prev) => {
+      previous = prev;
       const next = new Set(prev);
       granted ? next.add(id) : next.delete(id);
       return next;
     });
     startTransition(async () => {
       const res = await setLessonAccess(teacherId, [id], granted);
-      if (!res.ok) setError(res.error);
+      if (!res.ok) { setError(res.error); setLessons(previous); }
+      else setError(null);
     });
   };
 

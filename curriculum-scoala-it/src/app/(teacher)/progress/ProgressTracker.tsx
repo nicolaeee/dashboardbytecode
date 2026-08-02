@@ -61,6 +61,12 @@ const PROGRESS_COLORS = [
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
+// Plafon de bun-simt pentru campurile istorice suprascrise manual (steluțe/prezențe/absențe) -
+// previne o valoare aberanta introdusa din greseala (ex. o cifra in plus la tastare), fara sa
+// limiteze vreun caz real de utilizare. Acelasi ordin de marime ca milestone-ul validat server-side
+// in /api/diploma-alerts si /api/diploma-milestone-alerts.
+const MAX_HISTORICAL_COUNT = 100_000;
+
 const LESSON_FORMAT_LABEL: Record<LessonKind, string> = { grup: 'Grup', individual: 'Indiv.' };
 
 const DAYS = [
@@ -142,6 +148,14 @@ function numericInputValue(raw: string): number | '' {
 /** Valoarea trimisa la salvare pentru un input numeric care poate fi gol - '' devine 0. */
 function numOrZero(value: number | ''): number {
   return value === '' ? 0 : value;
+}
+
+/** Scroll-ul mouse-ului peste un input focusat schimba valoarea nativ in Chrome/Firefox -
+ * un profesor care doar deruleaza pagina peste un camp numeric ii poate modifica accidental
+ * valoarea fara sa observe. Blur la wheel dezactiveaza asta, fara sa afecteze tastatura sau
+ * sagetile din interiorul input-ului (spin buttons). */
+function blurOnWheel(e: React.WheelEvent<HTMLInputElement>) {
+  e.currentTarget.blur();
 }
 
 function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank: number })[] {
@@ -557,13 +571,15 @@ export default function ProgressTracker({
     const name = editClassName.trim();
     if (!name) return showToast('Introdu numele clasei', 'error');
     const group = getGroupById(groupId);
+    setBusy(true);
     const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null, course: editClassCourse });
-    if (!ok) return;
+    if (!ok) { setBusy(false); return; }
 
     // Doar admin: daca a fost aleasa o alta valoare in dropdown-ul de transfer, cascadeaza
     // teacher_id-ul pe grupa + elevi + lectii + prezenta (vezi transferClassTeacher).
     if (isAdmin && group && editClassTransferTeacherId && editClassTransferTeacherId !== group.teacher_id) {
       const result = await transferClassTeacher(groupId, editClassTransferTeacherId);
+      setBusy(false);
       if (!result.ok) {
         showToast(result.error, 'error');
         return;
@@ -575,6 +591,7 @@ export default function ProgressTracker({
       return;
     }
 
+    setBusy(false);
     setModal({ type: null });
     showToast('Clasa actualizata!');
   }
@@ -635,8 +652,10 @@ export default function ProgressTracker({
       patch.parent_emails = cleanContactList(addStudentEmails);
     }
 
+    setBusy(true);
     const { data, error } = await supabase.from('tracker_students')
       .insert(patch).select().single();
+    setBusy(false);
     if (error || !data) return showToast('Eroare', 'error');
     setStudents((ss) => [...ss, data as TrackerStudent]);
     setModal({ type: null });
@@ -779,7 +798,9 @@ export default function ProgressTracker({
     });
     window.open(`${url}?${params.toString()}`, '_blank');
     setModal({ type: null });
-    diplomaGroupAlerts.markSent(group);
+    diplomaGroupAlerts.markSent(group).then((ok) => {
+      if (!ok) showToast('Diploma generată, dar marcarea ca „trimisă” a eșuat - va reapărea în Task-uri Urgente.', 'error');
+    });
   }
 
   // "✅ Recuperat" / "❌ Nu mai e nevoie" pe cardul de recuperare din Task-uri Urgente - ambele
@@ -862,11 +883,13 @@ export default function ProgressTracker({
     // Suprascrierea manuala de Modul/Lectie devine noul punct de pornire: decalajul se
     // recalculeaza ca diferenta fata de lectiile deja inregistrate automat in aplicatie,
     // ca de acum incolo calculele viitoare sa continue exact de la M/L introdus manual.
-    const desiredTotal = totalLessonsFor(numOrZero(editStudentModule), numOrZero(editStudentLesson));
+    const clampedModule = Math.max(1, Math.round(numOrZero(editStudentModule)));
+    const clampedLesson = Math.min(16, Math.max(1, Math.round(numOrZero(editStudentLesson))));
+    const desiredTotal = totalLessonsFor(clampedModule, clampedLesson);
     const lessonOffset = desiredTotal - studentLessonCount(studentId);
-    const stars = Math.max(0, Math.round(numOrZero(editStudentStars)));
-    const presences = Math.max(0, Math.round(numOrZero(editStudentPresences)));
-    const absences = Math.max(0, Math.round(numOrZero(editStudentAbsences)));
+    const stars = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentStars))));
+    const presences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentPresences))));
+    const absences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAbsences))));
     const patch: Partial<TrackerStudent> = {
       name, lesson_offset: lessonOffset, progress: stars, short_name: editStudentShortName.trim() || null,
       presence_count: presences, absence_count: absences,
@@ -877,7 +900,9 @@ export default function ProgressTracker({
       patch.parent_phones = cleanContactList(editStudentPhones);
       patch.parent_emails = cleanContactList(editStudentEmails);
     }
+    setBusy(true);
     const ok = await patchStudent(studentId, patch);
+    setBusy(false);
     if (ok) { setModal({ type: null }); showToast('Elev actualizat!'); }
   }
 
@@ -945,8 +970,9 @@ export default function ProgressTracker({
   async function handleChildConnectionStatus(student: TrackerStudent, status: 'conectat' | 'neconectat') {
     setConnectedState((s) => ({ ...s, [student.id]: 'loading' }));
     const parentPhones = formatPhonesForWebhook(student.parent_phones);
+    let ok = false;
     try {
-      await fetch('/api/admin-alerts', {
+      const res = await fetch('/api/admin-alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -957,12 +983,14 @@ export default function ProgressTracker({
           parentPhones,
         }),
       });
+      ok = res.ok;
     } catch (error) {
       console.error('ADMIN ALERT REQUEST ERROR:', error);
     }
     setConnectedState((s) => ({ ...s, [student.id]: 'idle' }));
     setNotifyState((s) => ({ ...s, [student.id]: 'idle' }));
-    showToast('Alertă trimisă către admini!');
+    if (ok) showToast('Alertă trimisă către admini!');
+    else showToast('Alerta nu a putut fi trimisă către admini. Încearcă din nou.', 'error');
   }
 
   async function addModule() {
@@ -1441,7 +1469,10 @@ export default function ProgressTracker({
                           🎓 Generează diplomă
                         </button>
                         <button
-                          onClick={() => diplomaGroupAlerts.markSent(g)}
+                          onClick={async () => {
+                            const ok = await diplomaGroupAlerts.markSent(g);
+                            if (!ok) showToast('Eroare la marcarea diplomei ca trimisă. Încearcă din nou.', 'error');
+                          }}
                           disabled={diplomaGroupAlerts.busyId === g.id}
                           className="bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5"
                         >
@@ -1812,13 +1843,13 @@ export default function ProgressTracker({
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setModal({ type: 'confirmDeleteClass', groupId: group.id })} className="bg-red-500 hover:bg-red-600 px-4 py-3 rounded-2xl font-semibold transition-colors">
+                <button type="button" disabled={busy} onClick={() => setModal({ type: 'confirmDeleteClass', groupId: group.id })} className="bg-red-500 hover:bg-red-600 px-4 py-3 rounded-2xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   🗑️
                 </button>
-                <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                <button type="button" disabled={busy} onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   Anuleaza
                 </button>
-                <button type="submit" className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
+                <button type="submit" disabled={busy} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
                   ✅ Salveaza
                 </button>
               </div>
@@ -1858,10 +1889,10 @@ export default function ProgressTracker({
               </>
             )}
             <div className="flex gap-3">
-              <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+              <button type="button" disabled={busy} onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 ✖️ Anuleaza
               </button>
-              <button type="submit" className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
+              <button type="submit" disabled={busy} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
                 ✅ Adauga
               </button>
             </div>
@@ -1898,7 +1929,7 @@ export default function ProgressTracker({
                   <div className="flex-1">
                     <span className="block text-[11px] text-gray-500 mb-1">Modul</span>
                     <input
-                      type="number" min={1} value={editStudentModule}
+                      type="number" min={1} value={editStudentModule} onWheel={blurOnWheel}
                       onChange={(e) => setEditStudentModule(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
@@ -1907,7 +1938,7 @@ export default function ProgressTracker({
                   <div className="flex-1">
                     <span className="block text-[11px] text-gray-500 mb-1">Lecție</span>
                     <input
-                      type="number" min={1} max={16} value={editStudentLesson}
+                      type="number" min={1} max={16} value={editStudentLesson} onWheel={blurOnWheel}
                       onChange={(e) => setEditStudentLesson(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
@@ -1922,7 +1953,7 @@ export default function ProgressTracker({
                   Steluțe colectate <span className="text-gray-500 font-normal">— total istoric (ex: pentru elevi cu istoric dinainte de Tracker)</span>
                 </label>
                 <input
-                  type="number" min={0} value={editStudentStars}
+                  type="number" min={0} max={MAX_HISTORICAL_COUNT} value={editStudentStars} onWheel={blurOnWheel}
                   onChange={(e) => setEditStudentStars(numericInputValue(e.target.value))}
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
@@ -1938,7 +1969,7 @@ export default function ProgressTracker({
                   <div className="flex-1">
                     <span className="block text-[11px] text-gray-500 mb-1">Prezențe</span>
                     <input
-                      type="number" min={0} value={editStudentPresences}
+                      type="number" min={0} max={MAX_HISTORICAL_COUNT} value={editStudentPresences} onWheel={blurOnWheel}
                       onChange={(e) => setEditStudentPresences(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
@@ -1946,7 +1977,7 @@ export default function ProgressTracker({
                   <div className="flex-1">
                     <span className="block text-[11px] text-gray-500 mb-1">Absențe</span>
                     <input
-                      type="number" min={0} value={editStudentAbsences}
+                      type="number" min={0} max={MAX_HISTORICAL_COUNT} value={editStudentAbsences} onWheel={blurOnWheel}
                       onChange={(e) => setEditStudentAbsences(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
@@ -1971,16 +2002,16 @@ export default function ProgressTracker({
               <div className="flex gap-3">
                 <button
                   type="button"
-                  disabled={getStudentsForGroup(student.group_id).length <= 1}
+                  disabled={busy || getStudentsForGroup(student.group_id).length <= 1}
                   onClick={() => setModal({ type: 'confirmDeleteStudent', studentId: student.id })}
                   className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 rounded-2xl font-semibold transition-colors"
                 >
                   🗑️
                 </button>
-                <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                <button type="button" disabled={busy} onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   Anuleaza
                 </button>
-                <button type="submit" className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
+                <button type="submit" disabled={busy} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
                   ✅ Salveaza
                 </button>
               </div>

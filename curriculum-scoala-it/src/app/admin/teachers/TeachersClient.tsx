@@ -52,6 +52,15 @@ export default function TeachersClient({
       if (res.ok) setAdding(false);
     });
 
+  const submitCreate = () => {
+    const full_name = form.full_name.trim();
+    const email = form.email.trim();
+    if (!full_name) { setError('Introdu numele complet.'); return; }
+    if (!email) { setError('Introdu adresa de email.'); return; }
+    if (form.password.length < 8) { setError('Parola trebuie să aibă minim 8 caractere.'); return; }
+    run(() => createTeacher({ ...form, full_name, email }));
+  };
+
   const submitReset = () => {
     if (!resetTarget) return;
     if (newPassword.length < 8) { setResetError('Parola trebuie să aibă minim 8 caractere.'); return; }
@@ -158,7 +167,7 @@ export default function TeachersClient({
         footer={
           <>
             <Button variant="outline" onClick={() => setAdding(false)}>Renunță</Button>
-            <Button disabled={pending} onClick={() => run(() => createTeacher(form))}>
+            <Button disabled={pending} onClick={submitCreate}>
               {pending ? 'Se creează…' : 'Creează contul'}
             </Button>
           </>

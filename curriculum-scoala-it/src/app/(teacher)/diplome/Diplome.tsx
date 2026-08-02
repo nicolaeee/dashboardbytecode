@@ -254,6 +254,7 @@ export default function Diplome({
             <Field label="Steluțe colectate (0-16)">
               <input
                 type="number" min={0} max={16} value={manualStars}
+                onWheel={(e) => e.currentTarget.blur()}
                 onChange={(e) => setManualStars(Number(e.target.value))}
                 className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
               />

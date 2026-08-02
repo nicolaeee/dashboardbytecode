@@ -39,6 +39,17 @@ const TITLES: Record<EntityKind, string> = {
   platform: 'platformă', course: 'curs', module: 'modul', lesson: 'lecție',
 };
 
+// Campul care poarta numele/titlul fiecarui tip de nod - platforma foloseste "name",
+// restul folosesc "title" (vezi schema.sql). Folosit pentru validarea "nu poate fi gol".
+const NAME_FIELD: Record<EntityKind, string> = {
+  platform: 'name', course: 'title', module: 'title', lesson: 'title',
+};
+
+const EMPTY_NAME_ERROR: Record<EntityKind, string> = {
+  platform: 'Introdu numele platformei.', course: 'Introdu titlul cursului.',
+  module: 'Introdu titlul modulului.', lesson: 'Introdu titlul lecției.',
+};
+
 export default function CurriculumManager({ tree }: { tree: Tree }) {
   const router = useRouter();
   const [open, setOpen] = useState<Set<string>>(new Set(tree.slice(0, 1).map((p) => p.id)));
@@ -76,8 +87,15 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
 
   const submit = () => {
     if (!draft) return;
+    const nameField = NAME_FIELD[draft.kind];
+    const trimmedName = (draft.values[nameField] ?? '').trim();
+    if (!trimmedName) {
+      setError(EMPTY_NAME_ERROR[draft.kind]);
+      return;
+    }
+
     const key = PARENT_KEY[draft.kind];
-    const values = { ...draft.values };
+    const values = { ...draft.values, [nameField]: trimmedName };
     if (key && draft.parentId) values[key] = draft.parentId;
 
     startTransition(async () => {

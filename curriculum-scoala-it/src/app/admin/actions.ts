@@ -16,6 +16,12 @@ const PARENT_KEY: Record<EntityKind, string | null> = {
   module: 'course_id',
   lesson: 'module_id',
 };
+// Campul care poarta numele/titlul fiecarui tip de nod - platforma foloseste "name",
+// restul folosesc "title" (vezi schema.sql). Aparare in adancime: UI-ul (CurriculumManager)
+// valideaza deja acelasi lucru inainte de a apela saveNode.
+const NAME_FIELD: Record<EntityKind, string> = {
+  platform: 'name', course: 'title', module: 'title', lesson: 'title',
+};
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -50,18 +56,23 @@ export async function saveNode(
 ): Promise<Result> {
   try {
     const { supabase } = await adminGuard();
+    const nameField = NAME_FIELD[kind];
+    const trimmedName = values[nameField]?.trim() ?? '';
+    if (!trimmedName) return { ok: false, error: 'Numele/titlul nu poate fi gol.' };
+    const cleanValues = { ...values, [nameField]: trimmedName };
+
     const parentKey = PARENT_KEY[kind];
-    const parentId = parentKey ? values[parentKey] : null;
+    const parentId = parentKey ? cleanValues[parentKey] : null;
 
     if (id) {
       // La editare nu mutăm nodul sub alt părinte
-      const rest = { ...values };
+      const rest = { ...cleanValues };
       if (parentKey) delete rest[parentKey];
       const { error } = await supabase.from(TABLES[kind]).update(rest).eq('id', id);
       if (error) throw error;
     } else {
       const position = await nextPosition(supabase, kind, parentId);
-      const { error } = await supabase.from(TABLES[kind]).insert({ ...values, position });
+      const { error } = await supabase.from(TABLES[kind]).insert({ ...cleanValues, position });
       if (error) throw error;
     }
     refresh();
@@ -104,8 +115,17 @@ export async function moveNode(
     const j = direction === 'up' ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= list.length) return { ok: true };
 
-    await supabase.from(TABLES[kind]).update({ position: list[j].position }).eq('id', list[i].id);
-    await supabase.from(TABLES[kind]).update({ position: list[i].position }).eq('id', list[j].id);
+    const first = await supabase.from(TABLES[kind]).update({ position: list[j].position }).eq('id', list[i].id);
+    if (first.error) throw first.error;
+
+    const second = await supabase.from(TABLES[kind]).update({ position: list[i].position }).eq('id', list[j].id);
+    if (second.error) {
+      // Compensam: revenim nodul deja mutat la pozitia lui initiala, ca reordonarea
+      // esuata la jumatate sa nu lase doua noduri cu aceeasi pozitie in DB.
+      await supabase.from(TABLES[kind]).update({ position: list[i].position }).eq('id', list[i].id);
+      throw second.error;
+    }
+
     refresh();
     return { ok: true };
   } catch (e) {
@@ -119,12 +139,20 @@ export async function createTeacher(values: {
 }): Promise<Result> {
   try {
     await adminGuard();
+    // Validat deja in UI (TeachersClient), repetat aici ca aparare in adancime - server
+    // action-ul e apelabil direct, nu doar din formularul care il verifica.
+    const full_name = values.full_name.trim();
+    const email = values.email.trim();
+    if (!full_name) return { ok: false, error: 'Introdu numele complet.' };
+    if (!email) return { ok: false, error: 'Introdu adresa de email.' };
+    if (values.password.length < 8) return { ok: false, error: 'Parola trebuie să aibă minim 8 caractere.' };
+
     const admin = createAdminClient();
     const { data, error } = await admin.auth.admin.createUser({
-      email: values.email.trim(),
+      email,
       password: values.password,
       email_confirm: true,
-      user_metadata: { full_name: values.full_name, role: values.role },
+      user_metadata: { full_name, role: values.role },
     });
     if (error) throw new Error(error.message.includes('already') ? 'Există deja un cont cu acest email.' : error.message);
     // Profilul se creeaza automat prin trigger-ul handle_new_user() (vezi schema.sql), care nu
