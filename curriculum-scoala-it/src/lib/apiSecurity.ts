@@ -49,9 +49,16 @@ export const RATE_LIMITS = {
   WEBHOOK_WRITE: { limit: 20, windowMs: 60_000 },
   /** Rute de citire (GET), folosite la incarcarea paginilor. */
   READ: { limit: 60, windowMs: 60_000 },
-  /** Incercari de autentificare (signIn) - protectie de baza contra brute-force/credential
-   * stuffing pe /login, cheie pe email (nu exista inca un user.id la acest punct). */
+  /** Incercari de autentificare (signIn) - protectie contra brute-force pe UN cont anume.
+   * Cheie pe IP+email (nu doar email): audit R-3 - o cheie doar pe email ar fi permis unui
+   * atacator sa "blocheze" intentionat contul altcuiva (cunoscand doar emailul lui) trimitand
+   * opt parole gresite - cu IP in cheie, atacatorul isi consuma propriul bucket, fara sa
+   * afecteze incercarea reala a victimei de pe propriul IP. */
   AUTH_ATTEMPT: { limit: 8, windowMs: 5 * 60_000 },
+  /** Completeaza AUTH_ATTEMPT: limita doar pe IP (indiferent de email incercat), separat -
+   * opreste un atacator care ar incerca multe conturi diferite de pe aceeasi masina
+   * (credential stuffing / scanare), unde AUTH_ATTEMPT (per IP+email) singur nu ar prinde nimic. */
+  AUTH_ATTEMPT_IP: { limit: 20, windowMs: 5 * 60_000 },
   /** Server actions de admin (creare/editare/stergere conturi si curriculum) - risc redus
    * (necesita deja un cont de admin autentificat), dar apere in adancime contra unei sesiuni
    * de admin compromise/scriptate care ar rula actiuni in masa. */

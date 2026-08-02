@@ -341,7 +341,13 @@ export async function createClass(values: {
     const { data: students, error: studentsError } = await supabase.from('tracker_students')
       .insert(studentNames.map((name) => ({ teacher_id: values.teacherId, group_id: group.id, name, progress: 0 })))
       .select();
-    if (studentsError) throw studentsError;
+    if (studentsError) {
+      // Rollback (audit R-1): daca elevii nu s-au putut crea, nu lasam clasa goala, orfana,
+      // in DB - fara asta, adminul primea "eroare" dar clasa tot exista, invizibila pana la
+      // urmatorul refresh complet.
+      await supabase.from('tracker_groups').delete().eq('id', group.id);
+      throw studentsError;
+    }
 
     refresh();
     return { ok: true, group: group as TrackerGroup, students: (students ?? []) as TrackerStudent[] };
