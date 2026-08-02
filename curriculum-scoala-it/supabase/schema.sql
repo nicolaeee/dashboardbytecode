@@ -397,6 +397,46 @@ alter publication supabase_realtime add table public.tracker_students;
 alter publication supabase_realtime add table public.tracker_lessons;
 alter publication supabase_realtime add table public.tracker_attendance;
 
+-- Transfer clasa intre profesori (Panoul Admin -> Editeaza Clasa). teacher_id e
+-- denormalizat pe tracker_students/tracker_lessons/tracker_attendance (nu doar derivat
+-- prin group_id), deci un transfer trebuie sa actualizeze toate 4 tabelele impreuna,
+-- intr-o singura tranzactie - vezi supabase/migrations/add_transfer_class_teacher.sql.
+create or replace function public.transfer_class_teacher(p_group_id uuid, p_new_teacher_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_teacher_id uuid;
+begin
+  if not public.is_admin() then
+    raise exception 'Doar administratorii pot transfera o clasă.';
+  end if;
+
+  if not exists (select 1 from public.profiles where id = p_new_teacher_id) then
+    raise exception 'Profesorul ales nu există.';
+  end if;
+
+  select teacher_id into v_old_teacher_id from public.tracker_groups where id = p_group_id;
+  if v_old_teacher_id is null then
+    raise exception 'Clasa nu a fost găsită.';
+  end if;
+
+  if v_old_teacher_id = p_new_teacher_id then
+    return;
+  end if;
+
+  update public.tracker_groups set teacher_id = p_new_teacher_id where id = p_group_id;
+  update public.tracker_students set teacher_id = p_new_teacher_id where group_id = p_group_id;
+  update public.tracker_lessons set teacher_id = p_new_teacher_id where group_id = p_group_id;
+  update public.tracker_attendance set teacher_id = p_new_teacher_id
+    where lesson_id in (select id from public.tracker_lessons where group_id = p_group_id);
+end;
+$$;
+
+grant execute on function public.transfer_class_teacher(uuid, uuid) to authenticated;
+
 -- ----------------------------------------------------------------------------
 -- 10. ARHIVARE AUTOMATA CLASE INACTIVE (6 luni fara nicio lectie/prezenta noua)
 --    Necesita extensia "pg_cron" (Supabase -> Database -> Extensions, daca

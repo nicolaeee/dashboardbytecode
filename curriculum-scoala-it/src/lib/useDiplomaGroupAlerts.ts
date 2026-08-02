@@ -16,27 +16,30 @@ export function completedModuleFor(lessonCount: number) {
 
 /**
  * Grupele care au atins un nou multiplu de 16 lectii tinute si asteapta diploma trimisa -
- * date din /api/diploma-alerts (server: adminul foloseste acolo clientul cu service_role, ca
- * sa vada TOATE grupele scolii indiferent de profesor). Actualizat printr-un poll la 45s +
- * Realtime best-effort pe tracker_lessons/tracker_groups.
+ * date din /api/diploma-alerts, STRICT pentru profesorul dat prin `teacherId` (acelasi
+ * profesor vizualizat curent din dropdown-ul "🚨 Task-uri Urgente" - vezi selectedTeacherId
+ * / viewedTeacherId in ProgressTracker.tsx). Un admin poate cere datele oricarui profesor,
+ * dar niciodata ale tuturor deodata - izolare stricta per profesor. Actualizat printr-un
+ * poll la 45s + Realtime best-effort pe tracker_lessons/tracker_groups, si de fiecare data
+ * cand se schimba profesorul vizualizat.
  *
  * Extras din DiplomaAlerts.tsx (widget-ul plutitor original) ca sa fie reutilizabil si din
  * "🚨 Task-uri Urgente" (ProgressTracker.tsx), fara sa duplicam fetch-ul/poll-ul/subscriptia.
  */
-export function useDiplomaGroupAlerts() {
+export function useDiplomaGroupAlerts(teacherId: string) {
   const [pending, setPending] = useState<DiplomaGroupAlert[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/diploma-alerts', { cache: 'no-store' });
+      const res = await fetch(`/api/diploma-alerts?teacherId=${encodeURIComponent(teacherId)}`, { cache: 'no-store' });
       if (!res.ok) return;
       const { groups } = (await res.json()) as { groups: DiplomaGroupAlert[] };
       setPending(groups);
     } catch {
       // eroare de retea - incercam din nou la urmatorul refresh programat
     }
-  }, []);
+  }, [teacherId]);
 
   useEffect(() => {
     refresh();
@@ -74,5 +77,5 @@ export function useDiplomaGroupAlerts() {
     }
   }, []);
 
-  return { pending, markSent, busyId };
+  return { pending, markSent, busyId, refresh };
 }

@@ -20,7 +20,7 @@ type DiplomaGroup = DiplomaGroupAlert;
  * si acest widget). Lasat aici pentru referinta / eventuala reactivare ca widget separat.
  */
 export default function DiplomaAlerts({ profile }: { profile: Profile }) {
-  const { pending, markSent, busyId } = useDiplomaGroupAlerts();
+  const { pending, markSent, busyId } = useDiplomaGroupAlerts(profile.id);
   const [open, setOpen] = useState(false);
   const [generatingFor, setGeneratingFor] = useState<DiplomaGroup | null>(null);
   const [fallbackCourse, setFallbackCourse] = useState<CourseId | null>(null);

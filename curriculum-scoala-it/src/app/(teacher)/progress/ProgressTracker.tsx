@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
 import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
 import { useDiplomaGroupAlerts, completedModuleFor } from '@/lib/useDiplomaGroupAlerts';
+import { transferClassTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, formatPhonesForWebhook, toEditableList } from '@/lib/contactList';
 
@@ -276,7 +277,7 @@ export default function ProgressTracker({
   // Grupele care au atins un nou multiplu de 16 lectii si asteapta diploma trimisa - centralizat
   // aici din fostul widget plutitor DiplomaAlerts (vezi useDiplomaGroupAlerts), afisat acum in
   // "🚨 Task-uri Urgente" alaturi de restanțele de diploma per elev si de recuperari.
-  const diplomaGroupAlerts = useDiplomaGroupAlerts();
+  const diplomaGroupAlerts = useDiplomaGroupAlerts(viewedTeacherId);
   const [groupDiplomaFallbackCourse, setGroupDiplomaFallbackCourse] = useState<CourseId | null>(null);
   const [groupDiplomaStudentId, setGroupDiplomaStudentId] = useState('');
   const [groupDiplomaModule, setGroupDiplomaModule] = useState(1);
@@ -294,6 +295,10 @@ export default function ProgressTracker({
   const [editClassDay, setEditClassDay] = useState<string | null>(null);
   const [editClassTime, setEditClassTime] = useState('');
   const [editClassCourse, setEditClassCourse] = useState<CourseId | null>(null);
+  // Doar admin: profesorul ales in dropdown-ul "Transfera clasa la alt profesor" din modalul
+  // de editare - initializat mereu cu proprietarul curent al clasei, ca sa nu declansam un
+  // transfer accidental daca adminul doar schimba numele/ziua/ora si salveaza.
+  const [editClassTransferTeacherId, setEditClassTransferTeacherId] = useState('');
   const [addStudentName, setAddStudentName] = useState('');
   const [addStudentShortName, setAddStudentShortName] = useState('');
   // Telefoane/email-uri parinte - GDPR: completate/editate doar de admin (vezi isAdmin mai jos).
@@ -364,6 +369,30 @@ export default function ProgressTracker({
     })();
     return () => { cancelled = true; };
   }, [viewedTeacherId, teacherId, initialGroups, initialStudents, initialLessons, initialAttendance, initialMakeupCalendarLink, supabase]);
+
+  // Reincarca manual datele profesorului vizualizat curent - acelasi fetch ca in efectul de
+  // schimbare a profesorului de mai sus, dar apelabil oricand (ex. dupa un transfer de clasa
+  // la alt profesor, cand grupa transferata trebuie sa dispara instant din vederea curenta).
+  async function reloadViewedTeacherData() {
+    if (viewedTeacherId === teacherId) {
+      setGroups(initialGroups); setStudents(initialStudents);
+      setLessons(initialLessons); setAttendance(initialAttendance);
+      setMakeupCalendarLink(initialMakeupCalendarLink);
+      return;
+    }
+    const [{ data: g }, { data: s }, { data: l }, { data: a }, { data: p }] = await Promise.all([
+      supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
+      supabase.from('tracker_students').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
+      supabase.from('tracker_lessons').select('*').eq('teacher_id', viewedTeacherId).order('session_number'),
+      supabase.from('tracker_attendance').select('*').eq('teacher_id', viewedTeacherId),
+      supabase.from('profiles').select('makeup_calendar_link').eq('id', viewedTeacherId).single(),
+    ]);
+    setGroups((g ?? []) as TrackerGroup[]);
+    setStudents((s ?? []) as TrackerStudent[]);
+    setLessons((l ?? []) as TrackerLesson[]);
+    setAttendance((a ?? []) as TrackerAttendance[]);
+    setMakeupCalendarLink(p?.makeup_calendar_link ?? null);
+  }
 
   // ---- selectori ----
   // Recalculate doar cand `groups`/`students` chiar se schimba, nu la fiecare re-render al
@@ -527,8 +556,27 @@ export default function ProgressTracker({
     e.preventDefault();
     const name = editClassName.trim();
     if (!name) return showToast('Introdu numele clasei', 'error');
+    const group = getGroupById(groupId);
     const ok = await patchGroup(groupId, { group_name: name, day_of_week: editClassDay, time_of_day: editClassTime || null, course: editClassCourse });
-    if (ok) { setModal({ type: null }); showToast('Clasa actualizata!'); }
+    if (!ok) return;
+
+    // Doar admin: daca a fost aleasa o alta valoare in dropdown-ul de transfer, cascadeaza
+    // teacher_id-ul pe grupa + elevi + lectii + prezenta (vezi transferClassTeacher).
+    if (isAdmin && group && editClassTransferTeacherId && editClassTransferTeacherId !== group.teacher_id) {
+      const result = await transferClassTeacher(groupId, editClassTransferTeacherId);
+      if (!result.ok) {
+        showToast(result.error, 'error');
+        return;
+      }
+      setModal({ type: null });
+      showToast('Clasa a fost transferată cu succes!');
+      await reloadViewedTeacherData();
+      diplomaGroupAlerts.refresh();
+      return;
+    }
+
+    setModal({ type: null });
+    showToast('Clasa actualizata!');
   }
 
   async function softDeleteClass(groupId: string) {
@@ -1433,7 +1481,7 @@ export default function ProgressTracker({
                           avgProgress={calcAvgProgress(group.id)}
                           onOpen={() => openClass(group.id)}
                           onEdit={() => {
-                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null);
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null); setEditClassTransferTeacherId(group.teacher_id);
                             setModal({ type: 'editClass', groupId: group.id });
                           }}
                         />
@@ -1452,7 +1500,7 @@ export default function ProgressTracker({
                           avgProgress={calcAvgProgress(group.id)}
                           onOpen={() => openClass(group.id)}
                           onEdit={() => {
-                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null);
+                            setEditClassName(group.group_name); setEditClassDay(group.day_of_week); setEditClassTime(group.time_of_day ?? ''); setEditClassCourse(group.course ?? null); setEditClassTransferTeacherId(group.teacher_id);
                             setModal({ type: 'editClass', groupId: group.id });
                           }}
                         />
@@ -1732,6 +1780,20 @@ export default function ProgressTracker({
                   ))}
                 </div>
               </div>
+              {isAdmin && (
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold mb-2">Transferă clasa la alt profesor</label>
+                  <select
+                    value={editClassTransferTeacherId}
+                    onChange={(e) => setEditClassTransferTeacherId(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                  >
+                    {teacherOptions.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2">Elevi</label>
                 <div className="space-y-2 max-h-40 overflow-y-auto">

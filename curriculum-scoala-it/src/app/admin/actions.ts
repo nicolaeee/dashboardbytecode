@@ -238,6 +238,28 @@ export async function deleteTeacher(userId: string): Promise<Result> {
   }
 }
 
+// ================================================================ PROGRESS TRACKER
+/**
+ * Transfera o clasa (tracker_groups) la alt profesor - cascadeaza pe teacher_id-ul
+ * denormalizat din tracker_students/tracker_lessons/tracker_attendance printr-o
+ * functie SQL (vezi supabase/migrations/add_transfer_class_teacher.sql), ca cele 4
+ * update-uri sa reuseasca/esueze impreuna intr-o singura tranzactie.
+ */
+export async function transferClassTeacher(groupId: string, newTeacherId: string): Promise<Result> {
+  try {
+    const { supabase } = await adminGuard();
+    const { error } = await supabase.rpc('transfer_class_teacher', {
+      p_group_id: groupId,
+      p_new_teacher_id: newTeacherId,
+    });
+    if (error) throw error;
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ================================================================ PERMISIUNI
 export async function setModuleAccess(
   teacherId: string, moduleIds: string[], granted: boolean

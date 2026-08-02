@@ -17,26 +17,33 @@ type GroupRow = {
 type StudentRow = { id: string; group_id: string; name: string; progress: number };
 
 /**
- * Grupele carora trebuie sa li se trimita diploma (au atins un nou multiplu de 16 lectii).
- * Adminul foloseste clientul cu service_role (ocoleste RLS) ca sa vada TOATE grupele din
- * scoala, indiferent de profesor - nu doar propriile lui grupe personale din tracker.
- * Profesorul ramane restrictionat explicit la propriile grupe (teacher_id = el insusi).
+ * Grupele carora trebuie sa li se trimita diploma (au atins un nou multiplu de 16 lectii),
+ * STRICT pentru profesorul vizualizat curent (teacherId din query - acelasi tipar ca
+ * /api/diploma-groups). Adminul foloseste clientul cu service_role (ocoleste RLS) doar ca
+ * sa poata citi datele oricarui profesor ales din dropdown-ul "🚨 Task-uri Urgente" - NU ca
+ * sa vada toate grupele scolii deodata (izolare stricta pe profesor, vezi selectedTeacherId
+ * din ProgressTracker.tsx). Profesorul obisnuit ramane restrictionat explicit la propriile
+ * grupe (teacher_id = el insusi), indiferent de ce ar trimite in query string.
  * Include cursul grupei + rosterul de elevi (nume + progres), necesare pentru modalul de
  * generare a diplomei (filtrare curs + alegere elev + steluțele lui curente).
  */
-export async function GET() {
+export async function GET(request: Request) {
   const profile = await requireUser();
   const isAdmin = profile.role === 'admin';
   if (!checkRateLimit(`diploma-alerts-get:${profile.id}`, RATE_LIMITS.READ.limit, RATE_LIMITS.READ.windowMs)) {
     return NextResponse.json({ groups: [] }, { status: 429 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const requestedTeacherId = searchParams.get('teacherId');
+  const targetTeacherId = isAdmin && requestedTeacherId ? requestedTeacherId : profile.id;
+
   const supabase = isAdmin ? createAdminClient() : await createClient();
-  let query = supabase
+  const query = supabase
     .from('tracker_groups')
     .select('id, group_name, diploma_milestone, course, deleted_at, tracker_lessons(count)')
+    .eq('teacher_id', targetTeacherId)
     .is('deleted_at', null);
-  if (!isAdmin) query = query.eq('teacher_id', profile.id);
 
   const { data, error } = await query;
   if (error || !data) return NextResponse.json({ groups: [] });
