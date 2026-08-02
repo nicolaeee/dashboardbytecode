@@ -7,9 +7,9 @@ import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
 import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
 import { useDiplomaGroupAlerts, completedModuleFor } from '@/lib/useDiplomaGroupAlerts';
-import { transferClassTeacher } from '@/app/admin/actions';
+import { createClass, transferClassTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
-import { MAX_CONTACTS, asContactList, cleanContactList, formatPhonesForWebhook, toEditableList } from '@/lib/contactList';
+import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -133,8 +133,8 @@ function norm(s: string) {
   return s.normalize('NFD').replace(DIACRITICS_RE, '').toLowerCase();
 }
 
-// MAX_CONTACTS, asContactList, cleanContactList, formatPhonesForWebhook, toEditableList
-// sunt importate din @/lib/contactList (partajate cu rutele API care retrimit notificari).
+// MAX_CONTACTS, asContactList, cleanContactList, toEditableList sunt importate din
+// @/lib/contactList (partajate cu rutele API care retrimit notificari).
 
 /**
  * Valoarea unui input numeric controlat, care poate fi golit complet (fara sa forteze un 0
@@ -659,6 +659,10 @@ export default function ProgressTracker({
     await patchLesson(lessonId, { homework_note: note.trim() || null });
   }
 
+  // Crearea claselor e rezervata adminului (server action createClass, admin/actions.ts,
+  // reverifica rolul pe server - butonul e ascuns pentru profesori, dar validarea reala e
+  // acolo, nu aici). Clasa e atribuita profesorului curent vizualizat (viewedTeacherId din
+  // dropdown-ul de profesori), exact ca inainte.
   async function handleCreateClass(e: React.FormEvent) {
     e.preventDefault();
     const name = createName.trim();
@@ -669,22 +673,15 @@ export default function ProgressTracker({
     if (totalDataCount + names.length + 1 >= 999) return showToast('Limita de date atinsa (999)', 'error');
 
     setBusy(true);
-    const { data: group, error } = await supabase.from('tracker_groups')
-      .insert({
-        teacher_id: viewedTeacherId, group_name: name, module_count: createForm.module, reward_type: createForm.reward,
-        day_of_week: createForm.day, time_of_day: createForm.time || null, course,
-      })
-      .select().single();
-    if (error || !group) { setBusy(false); return showToast('Eroare la creare clasa', 'error'); }
-
-    const { data: newStudents, error: sErr } = await supabase.from('tracker_students')
-      .insert(names.map((n) => ({ teacher_id: viewedTeacherId, group_id: group.id, name: n, progress: 0 })))
-      .select();
+    const result = await createClass({
+      teacherId: viewedTeacherId, groupName: name, moduleCount: createForm.module, rewardType: createForm.reward,
+      dayOfWeek: createForm.day, timeOfDay: createForm.time || null, course, studentNames: names,
+    });
     setBusy(false);
+    if (!result.ok) return showToast(result.error, 'error');
 
-    setGroups((gs) => [...gs, group as TrackerGroup]);
-    if (newStudents) setStudents((ss) => [...ss, ...(newStudents as TrackerStudent[])]);
-    if (sErr) showToast('Eroare la creare elevi', 'error');
+    setGroups((gs) => [...gs, result.group]);
+    setStudents((ss) => [...ss, ...result.students]);
 
     setModal({ type: null });
     setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null });
@@ -840,33 +837,19 @@ export default function ProgressTracker({
 
   // Trimite catre admini (prin ruta noastra /api/diploma-milestone-alerts, proxy server-side
   // catre Pabbly) un eveniment de task de diploma - 'acknowledged' la "Am inteles" pe popup,
-  // 'completed' la "Am trimis diploma" din dashboard.
+  // 'completed' la "Am trimis diploma" din dashboard. Trimitem doar studentId + milestone +
+  // status - ruta reciteste ea insasi numele elevului, clasa si telefonul profesorului direct
+  // din DB (audit securitate M-2: nu mai trimitem "de incredere" date pe care clientul le-ar
+  // putea falsifica dintr-un request manual; teacherPhone ramane mereu proaspat, citit din
+  // profilul autentificat la fiecare cerere, nu dintr-un prop care putea ramane invechit).
   async function sendDiplomaMilestoneAlert(
     student: TrackerStudent, milestone: number, status: 'acknowledged' | 'completed'
   ) {
-    // Cautam telefonul profesorului logat DIRECT din baza de date, chiar acum - nu ne bazam
-    // doar pe prop-ul teacherPhone (incarcat o singura data la randarea initiala a paginii,
-    // care ar ramane invechit daca telefonul e salvat din Panoul de Profesori intr-un alt tab
-    // sau dupa ce acest tab a fost deja deschis).
-    const { data: teacherRow, error: teacherLookupError } = await supabase
-      .from('profiles').select('phone').eq('id', teacherId).single();
-    if (teacherLookupError) console.error('TEACHER PHONE LOOKUP ERROR:', teacherLookupError);
-    const resolvedTeacherPhone = teacherRow?.phone?.trim() || teacherPhone?.trim() || '';
-    console.log('[diploma-milestone-alert] teacherId:', teacherId, 'resolvedTeacherPhone:', resolvedTeacherPhone || '(gol)');
     try {
       await fetch('/api/diploma-milestone-alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentName: student.short_name?.trim() || student.name,
-          teacherName,
-          teacherPhone: resolvedTeacherPhone || 'Lipsă număr',
-          className: getGroupById(student.group_id)?.group_name ?? '',
-          milestone,
-          status,
-          moduleName: '',
-          parentPhones: formatPhonesForWebhook(student.parent_phones),
-        }),
+        body: JSON.stringify({ studentId: student.id, milestone, status }),
       });
     } catch (error) {
       console.error('DIPLOMA MILESTONE ALERT ERROR:', error);
@@ -1086,38 +1069,26 @@ export default function ProgressTracker({
     showToast('Elev sters permanent');
   }
 
-  const NOTIFY_WEBHOOK_URL = 'https://connect.pabbly.com/webhook-listener/webhook/IjU3NjIwNTY5MDYzMzA0MzM1MjZiNTUzMyI_3D_pc/IjU3NjcwNTY5MDYzZTA0MzI1MjZhNTUzMjUxMzUi_pc';
-
-  // Trimite catre Pabbly (Green API) un WhatsApp cu link-ul de conectare al clasei.
-  // Necesita cel putin un telefon de parinte, editabil doar de admin - vezi PARTEA 1 (GDPR).
+  // Trimite catre Pabbly (Green API) un WhatsApp cu link-ul de conectare al clasei - proxy
+  // server-side prin /api/connection-link-alerts (audit H-1: webhook-ul nu mai e apelat direct
+  // din browser, unde URL-ul era vizibil in bundle si putea fi folosit ca relay deschis de
+  // oricine, chiar neautentificat). Payload-ul trimis catre Pabbly ramane neschimbat - doar
+  // constructia lui s-a mutat server-side. Necesita cel putin un telefon de parinte, editabil
+  // doar de admin - vezi PARTEA 1 (GDPR).
   async function handleSendNotification(student: TrackerStudent) {
     const phones = cleanContactList(student.parent_phones);
     if (phones.length === 0) {
       showToast('Adminul nu a adăugat încă un număr pentru acest elev!', 'error');
       return;
     }
-    // Pregatit pentru iteratorul din Pabbly: un singur string, telefoanele separate prin
-    // virgula, fiecare cu sufixul Green API adaugat daca lipseste.
-    const formattedPhones = phones.map((p) => (p.endsWith('@c.us') ? p : `${p}@c.us`)).join(', ');
-    // cleanContactList trece prin asContactList - apara si aici de elevi vechi cu
-    // parent_emails null/undefined.
-    const formattedEmails = cleanContactList(student.parent_emails).join(', ');
 
     setNotifyState((s) => ({ ...s, [student.id]: 'loading' }));
     try {
-      // "no-cors" face raspunsul opac (nu-i putem citi statusul din JS) - e modul cerut
-      // explicit ca sa evitam erorile de CORS in consola. Din aceasi cauza, nu tratam un
-      // eventual reject al fetch-ului ca esec real: e un simplu "trimite si uita".
-      await fetch(NOTIFY_WEBHOOK_URL, {
+      // Fire-and-forget, la fel ca inainte - nu blocam UI-ul de raspunsul webhook-ului extern.
+      await fetch('/api/connection-link-alerts', {
         method: 'POST',
-        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nume_copil: student.short_name?.trim() || student.name,
-          telefon: formattedPhones,
-          email: formattedEmails,
-          link_conectare: getGroupById(student.group_id)?.meet_link ?? '',
-        }),
+        body: JSON.stringify({ studentId: student.id }),
       });
     } catch {
       // ignorat intentionat - vezi comentariul de mai sus
@@ -1132,19 +1103,15 @@ export default function ProgressTracker({
   // / "Nu s-a conectat", vizibile atat pentru admin cat si pentru profesor.
   async function handleChildConnectionStatus(student: TrackerStudent, status: 'conectat' | 'neconectat') {
     setConnectedState((s) => ({ ...s, [student.id]: 'loading' }));
-    const parentPhones = formatPhonesForWebhook(student.parent_phones);
     let ok = false;
     try {
+      // Trimitem doar studentId + status - ruta reciteste ea insasi numele elevului, clasa
+      // si telefoanele de parinte direct din DB (audit securitate M-2: nu mai trimitem
+      // "de incredere" date pe care clientul le-ar putea falsifica dintr-un request manual).
       const res = await fetch('/api/admin-alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentName: student.short_name?.trim() || student.name,
-          teacherName,
-          className: getGroupById(student.group_id)?.group_name ?? '',
-          status,
-          parentPhones,
-        }),
+        body: JSON.stringify({ studentId: student.id, status }),
       });
       ok = res.ok;
     } catch (error) {
@@ -1523,9 +1490,11 @@ export default function ProgressTracker({
                   link={makeupCalendarLink}
                   onOpen={() => { setMakeupLinkDraft(makeupCalendarLink ?? ''); setModal({ type: 'editMakeupLink' }); }}
                 />
-                <button onClick={() => setModal({ type: 'createClass' })} className="tracker-btn-primary px-4 py-2 rounded-2xl font-semibold text-sm shrink-0">
-                  ➕ Adauga Clasa
-                </button>
+                {isAdmin && (
+                  <button onClick={() => setModal({ type: 'createClass' })} className="tracker-btn-primary px-4 py-2 rounded-2xl font-semibold text-sm shrink-0">
+                    ➕ Adauga Clasa
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1758,6 +1727,7 @@ export default function ProgressTracker({
               recentGroups={[...activeGroups].slice(-5).reverse()}
               deletedCount={deletedGroups.length}
               onOpenClass={openClass}
+              isAdmin={isAdmin}
               onCreate={() => {
                 setCreateForm({ module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null });
                 setCreateName(buildAutoClassName(1, 'luni', ''));
@@ -3007,10 +2977,10 @@ function GroupCard({
 }
 
 function HomeMenu({
-  recentGroups, deletedCount, onOpenClass, onCreate, onTrash,
+  recentGroups, deletedCount, onOpenClass, onCreate, onTrash, isAdmin,
 }: {
   recentGroups: TrackerGroup[]; deletedCount: number;
-  onOpenClass: (id: string) => void; onCreate: () => void; onTrash: () => void;
+  onOpenClass: (id: string) => void; onCreate: () => void; onTrash: () => void; isAdmin: boolean;
 }) {
   return (
     <>
@@ -3028,9 +2998,11 @@ function HomeMenu({
         </div>
       )}
       <div className="space-y-3">
-        <button onClick={onCreate} className="w-full tracker-btn-primary py-3 rounded-2xl font-semibold">
-          ➕ Adauga Clasa Noua
-        </button>
+        {isAdmin && (
+          <button onClick={onCreate} className="w-full tracker-btn-primary py-3 rounded-2xl font-semibold">
+            ➕ Adauga Clasa Noua
+          </button>
+        )}
         <button onClick={onTrash} className="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-2xl font-semibold transition-colors flex items-center justify-center gap-2">
           🗑️ Urna
           {deletedCount > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{deletedCount}</span>}

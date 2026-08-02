@@ -616,9 +616,9 @@
         // ar afisa gresit "Junior" si pentru conturile de admin.
         (function () {
             var LEVEL_META = {
-                Junior: { slug: 'junior', message: 'Continuă să acumulezi experiență - fiecare lecție te apropie de nivelul Middle! 🌱' },
-                Middle: { slug: 'middle', message: 'Ești pe val! Mai sunt câțiva pași solizi până la Senior. 🚀' },
-                Senior: { slug: 'senior', message: 'Mulțumim pentru leadership și mentorat - ești un exemplu pentru echipă! 🏆' },
+                Junior: { slug: 'junior', label: 'Junior', message: 'Continuă să acumulezi experiență - fiecare lecție te apropie de nivelul Middle! 🌱' },
+                Middle: { slug: 'middle', label: 'Middle', message: 'Ești pe val! Mai sunt câțiva pași solizi până la Senior. 🚀' },
+                Senior: { slug: 'senior', label: 'Senior', message: 'Mulțumim pentru leadership și mentorat - ești un exemplu pentru echipă! 🏆' },
             };
 
             fetch('/api/my-profile')
@@ -638,7 +638,7 @@
 
                     if (!data.level) return;
                     var meta = LEVEL_META[data.level] || LEVEL_META.Junior;
-                    banner.innerHTML = 'Nivelul tău curent: <strong>' + data.level + '</strong>' +
+                    banner.innerHTML = 'Nivelul tău curent: <strong>' + meta.label + '</strong>' +
                         '<span class="sub">' + meta.message + '</span>';
                     banner.style.display = 'block';
                     var card = document.getElementById('card-' + meta.slug);

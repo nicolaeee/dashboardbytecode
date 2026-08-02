@@ -363,8 +363,18 @@ alter table public.tracker_attendance enable row level security;
 -- lesson_id / student_id) apartine tot profesorului care scrie randul - altfel un profesor
 -- ar putea "agata" un rand de-al lui de o grupa/lectie/elev straina printr-un request direct
 -- catre REST-ul Supabase (ex. din consola), ocolind UI-ul aplicatiei.
-create policy "profesorul isi gestioneaza grupele" on public.tracker_groups
-  for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+-- Crearea claselor e rezervata exclusiv adminului (vezi createClass, admin/actions.ts) -
+-- profesorul isi vede/edita/sterge propriile grupe, dar NU are politica de INSERT (doar
+-- politica adminului, mai jos, acopera crearea). Trei politici separate, nu una "for all",
+-- exact ca sa excludem INSERT din ce poate face profesorul.
+create policy "profesorul vede propriile grupe" on public.tracker_groups
+  for select to authenticated using (teacher_id = auth.uid());
+
+create policy "profesorul edita propriile grupe" on public.tracker_groups
+  for update to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+
+create policy "profesorul sterge propriile grupe" on public.tracker_groups
+  for delete to authenticated using (teacher_id = auth.uid());
 
 create policy "profesorul isi gestioneaza elevii" on public.tracker_students
   for all to authenticated using (teacher_id = auth.uid())

@@ -399,6 +399,7 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                       src={toEmbedUrl(draft.values.video_url)!} title="Previzualizare video"
                       className="h-full w-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                      sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
                       allowFullScreen
                     />
                   </div>

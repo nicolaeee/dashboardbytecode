@@ -49,6 +49,13 @@ export const RATE_LIMITS = {
   WEBHOOK_WRITE: { limit: 20, windowMs: 60_000 },
   /** Rute de citire (GET), folosite la incarcarea paginilor. */
   READ: { limit: 60, windowMs: 60_000 },
+  /** Incercari de autentificare (signIn) - protectie de baza contra brute-force/credential
+   * stuffing pe /login, cheie pe email (nu exista inca un user.id la acest punct). */
+  AUTH_ATTEMPT: { limit: 8, windowMs: 5 * 60_000 },
+  /** Server actions de admin (creare/editare/stergere conturi si curriculum) - risc redus
+   * (necesita deja un cont de admin autentificat), dar apere in adancime contra unei sesiuni
+   * de admin compromise/scriptate care ar rula actiuni in masa. */
+  ADMIN_WRITE: { limit: 40, windowMs: 60_000 },
 } as const;
 
 const MAX_BODY_BYTES = 20_000; // 20KB - generos pentru payload-urile JSON mici din aceasta aplicatie

@@ -2,7 +2,8 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { EntityKind, Role, TeacherLevel } from '@/lib/types';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/apiSecurity';
+import type { EntityKind, Role, TeacherLevel, TrackerGroup, TrackerStudent } from '@/lib/types';
 
 const TABLES: Record<EntityKind, string> = {
   platform: 'platforms',
@@ -26,12 +27,15 @@ const NAME_FIELD: Record<EntityKind, string> = {
 type Result = { ok: true } | { ok: false; error: string };
 
 /** Nicio scriere fără verificarea rolului pe server (RLS este a doua barieră). */
-async function adminGuard() {
+async function adminGuard(deniedMessage?: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Sesiune expirată. Autentifică-te din nou.');
   const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (data?.role !== 'admin') throw new Error('Doar administratorii pot face această operațiune.');
+  if (data?.role !== 'admin') throw new Error(deniedMessage ?? 'Doar administratorii pot face această operațiune.');
+  if (!checkRateLimit(`admin-write:${user.id}`, RATE_LIMITS.ADMIN_WRITE.limit, RATE_LIMITS.ADMIN_WRITE.windowMs)) {
+    throw new Error('Prea multe operațiuni într-un timp scurt. Așteaptă un minut și încearcă din nou.');
+  }
   return { supabase, userId: user.id };
 }
 
@@ -287,6 +291,60 @@ export async function transferClassTeacher(groupId: string, newTeacherId: string
     if (error) throw error;
     refresh();
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Creaza o clasa noua (+ elevii initiali) - REZERVAT ADMINULUI. Profesorii nu mai pot crea
+ * clase deloc (nici din UI, nici printr-un request direct) - butonul "+ Adauga Clasa" e ascuns
+ * complet pentru ei in ProgressTracker.tsx, iar aici verificarea de rol e reverificata pe
+ * server, cu mesajul cerut explicit. `teacherId` e profesorul caruia i se atribuie clasa
+ * (selectedTeacherId/viewedTeacherId din dropdown-ul de profesori al adminului).
+ *
+ * IMPORTANT: aceasta verificare de rol NU e singura bariera - politica RLS de INSERT pe
+ * tracker_groups trebuie restransa si ea la admin (vezi
+ * supabase/migrations/restrict_tracker_groups_insert_to_admin.sql), altfel un profesor ar
+ * putea in continuare crea o clasa printr-un apel direct catre Supabase din consola
+ * browser-ului, ocolind complet acest server action.
+ */
+export async function createClass(values: {
+  teacherId: string;
+  groupName: string;
+  moduleCount: number;
+  rewardType: string;
+  dayOfWeek: string | null;
+  timeOfDay: string | null;
+  course: string | null;
+  studentNames: string[];
+}): Promise<{ ok: true; group: TrackerGroup; students: TrackerStudent[] } | { ok: false; error: string }> {
+  try {
+    const { supabase } = await adminGuard('Doar administratorii au permisiunea de a crea clase.');
+    const groupName = values.groupName.trim();
+    const studentNames = values.studentNames.map((n) => n.trim()).filter(Boolean);
+    if (!groupName) return { ok: false, error: 'Introdu numele clasei.' };
+    if (studentNames.length === 0) return { ok: false, error: 'Adaugă cel puțin un elev.' };
+
+    const { data: teacherProfile } = await supabase.from('profiles').select('id').eq('id', values.teacherId).single();
+    if (!teacherProfile) return { ok: false, error: 'Profesorul ales nu există.' };
+
+    const { data: group, error } = await supabase.from('tracker_groups')
+      .insert({
+        teacher_id: values.teacherId, group_name: groupName, module_count: values.moduleCount,
+        reward_type: values.rewardType, day_of_week: values.dayOfWeek, time_of_day: values.timeOfDay,
+        course: values.course,
+      })
+      .select().single();
+    if (error || !group) throw error ?? new Error('Eroare la crearea clasei.');
+
+    const { data: students, error: studentsError } = await supabase.from('tracker_students')
+      .insert(studentNames.map((name) => ({ teacher_id: values.teacherId, group_id: group.id, name, progress: 0 })))
+      .select();
+    if (studentsError) throw studentsError;
+
+    refresh();
+    return { ok: true, group: group as TrackerGroup, students: (students ?? []) as TrackerStudent[] };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

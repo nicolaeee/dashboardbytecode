@@ -26,6 +26,19 @@ function canSendMakeupNotification(count: number, lastSentAt: string | null): bo
   return hoursSinceLast >= COOLDOWN_HOURS;
 }
 
+/**
+ * "Ore de liniste" (20:00-8:00, ora Bucuresti) - era verificat DOAR client-side
+ * (handleOpenMakeupNotifyConfirm din ProgressTracker.tsx), deci ocolibil printr-un request
+ * direct catre aceasta ruta. Acelasi calcul (Intl, hourCycle: 'h23'), reverificat aici.
+ */
+function isBucharestQuietHours(): boolean {
+  const hour = parseInt(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Bucharest', hour: 'numeric', hourCycle: 'h23' }).format(new Date()),
+    10
+  );
+  return hour >= 20 || hour < 8;
+}
+
 type MakeupAction = 'notify_parent' | 'makeup_scheduled';
 
 /**
@@ -75,6 +88,9 @@ export async function POST(request: Request) {
   }
   if (!student.pending_makeups || student.pending_makeups <= 0) {
     return NextResponse.json({ ok: false, error: 'Nu există o recuperare în așteptare pentru acest elev' }, { status: 400 });
+  }
+  if (action === 'notify_parent' && isBucharestQuietHours()) {
+    return NextResponse.json({ ok: false, error: 'Nu e posibil la ora asta să trimiți notificări. Revino mâine de la 8:00 dimineața.' }, { status: 400 });
   }
   const currentCount = student.makeup_notification_count ?? 0;
   if (action === 'notify_parent' && !canSendMakeupNotification(currentCount, student.last_makeup_notification)) {

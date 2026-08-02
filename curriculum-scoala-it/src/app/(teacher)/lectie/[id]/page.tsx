@@ -61,6 +61,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
                 <iframe
                   src={embed} title={`Video: ${lesson.title}`} className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                  sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
                   allowFullScreen
                 />
               </div>
