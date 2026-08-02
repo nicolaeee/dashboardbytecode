@@ -4,6 +4,14 @@
 
 :root { color-scheme: dark; }
 
+/* Plasa de siguranta: nicio componenta scapata de sub control (fixed width, flex fara wrap
+   etc.) nu trebuie sa poata produce scroll orizontal accidental pe body, pe mobil. */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
 body {
   background: #0f0f11;
   color: #F5F7FA;

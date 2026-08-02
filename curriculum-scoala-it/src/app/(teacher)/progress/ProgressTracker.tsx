@@ -1430,9 +1430,9 @@ export default function ProgressTracker({
   return (
     <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white flex flex-col overflow-x-hidden">
       <header className="glass sticky top-0 z-40 px-4 py-4 border-b border-white/10">
-        <div className="flex items-center justify-between max-w-6xl mx-auto gap-3">
+        <div className="flex items-center justify-between max-w-6xl mx-auto gap-3 flex-wrap gap-y-2">
           <h1 className="text-xl md:text-2xl font-bold shrink-0">🚀 Progress Tracker</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap gap-y-2">
             {isAdmin && (
               <select
                 value={viewedTeacherId}
@@ -1581,7 +1581,7 @@ export default function ProgressTracker({
                           {' '}(Grupa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>)
                           {' '}a ajuns la <span className="font-semibold">M{module} / L{lesson}</span>
                         </p>
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex gap-2 shrink-0 flex-wrap">
                           <Link
                             href={`/diplome?studentId=${s.id}&teacherId=${viewedTeacherId}`}
                             title="Deschide generatorul de diplome, precompletat cu cursul si elevul - alege doar modulul"
@@ -2216,8 +2216,8 @@ export default function ProgressTracker({
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-2">Ora</label>
-                  <input
-                    type="time" value={newLessonForm.time} onChange={(e) => setNewLessonForm((f) => ({ ...f, time: e.target.value }))}
+                  <TimeInput
+                    value={newLessonForm.time} onChange={(v) => setNewLessonForm((f) => ({ ...f, time: v }))}
                     className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                   />
                 </div>
@@ -2279,8 +2279,8 @@ export default function ProgressTracker({
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-2">Ora</label>
-                  <input
-                    type="time" value={recoveryForm.time} onChange={(e) => setRecoveryForm((f) => ({ ...f, time: e.target.value }))}
+                  <TimeInput
+                    value={recoveryForm.time} onChange={(v) => setRecoveryForm((f) => ({ ...f, time: v }))}
                     className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                   />
                 </div>
@@ -3055,7 +3055,7 @@ function MeetLinkControl({
           type="text" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancelEdit(); }}
           placeholder="https://meet.google.com/xxx-xxxx-xxx"
-          className="flex-1 min-w-[200px] bg-transparent text-sm placeholder:text-gray-500 focus:outline-none"
+          className="flex-1 min-w-0 sm:min-w-[200px] bg-transparent text-sm placeholder:text-gray-500 focus:outline-none"
         />
         <button
           onClick={save} disabled={saving} title="Salveaza"

@@ -74,22 +74,61 @@
             color: #e0e0e0;
         }
 
-        .bonus-banner {
-            background: rgba(200, 240, 35, 0.1);
-            border: 1px solid var(--brand-color);
+        .bonus-card {
+            background: rgba(200, 240, 35, 0.06);
+            border: 1px solid var(--glass-border);
             border-radius: 16px;
-            padding: 20px;
+            padding: 24px;
             margin: 0 auto 30px auto;
             max-width: 1300px;
+        }
+        .bonus-card > h4 {
+            color: var(--brand-color);
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin-bottom: 18px;
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 8px;
         }
-
-        .bonus-banner-icon { font-size: 2.5rem; }
-        .bonus-banner-text h4 { color: var(--brand-color); font-size: 1.1rem; margin-bottom: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        .bonus-banner-text p { font-size: 0.95rem; color: #e0e0e0; margin: 0; line-height: 1.5; }
-        @media (max-width: 768px) { .bonus-banner { flex-direction: column; text-align: center; } }
+        .bonus-tiers {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 22px;
+        }
+        .bonus-tier {
+            flex: 1;
+            min-width: 220px;
+            border-radius: 12px;
+            padding: 16px 18px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .bonus-tier.tier-gold { background: rgba(250, 204, 21, 0.1); border: 1px solid rgba(250, 204, 21, 0.4); }
+        .bonus-tier.tier-silver { background: rgba(192, 192, 192, 0.1); border: 1px solid rgba(192, 192, 192, 0.4); }
+        .bonus-tier-icon { font-size: 1.8rem; line-height: 1; }
+        .bonus-tier-text > strong { display: block; font-size: 1rem; margin-bottom: 4px; }
+        .tier-gold .bonus-tier-text > strong { color: #facc15; }
+        .tier-silver .bonus-tier-text > strong { color: #d1d5db; }
+        .bonus-tier-text span { font-size: 0.9rem; color: var(--text-muted); }
+        .bonus-conditions h5 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .bonus-conditions ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+        .bonus-conditions li { font-size: 0.9rem; color: var(--text-muted); padding-left: 20px; position: relative; }
+        .bonus-conditions li::before { content: "•"; color: var(--brand-color); position: absolute; left: 4px; }
+        .bonus-conditions li strong { color: var(--text-main); }
+        .bonus-conditions .level-sublist { margin-top: 8px; padding-left: 18px; gap: 5px; }
+        .bonus-conditions .level-sublist li::before { content: "–"; }
+        @media (max-width: 768px) { .bonus-tiers { flex-direction: column; } }
 
         .roadmap-container {
             display: flex;
@@ -349,12 +388,37 @@
 
     <div class="my-level-banner" id="my-level-banner"></div>
 
-    <div class="bonus-banner">
-        <div class="bonus-banner-icon">🏆</div>
-        <div class="bonus-banner-text">
-            <h4>Bonus de Excelență (100 RON)</h4>
-            <p>Dacă pe un interval de 4 luni <strong>rata de abandon este 0%</strong>, se acordă un premiu de 100 RON.<br>
-            <em>Condiții de eligibilitate:</em> Profesorul trebuie să gestioneze <strong>minim 20 de elevi activi</strong> în acel interval. (Notă: Abandonul din motive medicale, financiare sau situații excepționale confirmate de management cu părinții nu se contorizează ca abandon al profesorului și nu anulează bonusul).</p>
+    <div class="bonus-card">
+        <h4>💰 Structura Bonusului (evaluare la fiecare 4 luni)</h4>
+        <div class="bonus-tiers">
+            <div class="bonus-tier tier-gold">
+                <div class="bonus-tier-icon">🥇</div>
+                <div class="bonus-tier-text">
+                    <strong>Bonus Integral (100 RON)</strong>
+                    <span>Se acordă dacă rata de retenție a elevilor tăi este între <strong>95% și 100%</strong>.</span>
+                </div>
+            </div>
+            <div class="bonus-tier tier-silver">
+                <div class="bonus-tier-icon">🥈</div>
+                <div class="bonus-tier-text">
+                    <strong>Bonus Parțial (50 RON)</strong>
+                    <span>Se acordă dacă rata de retenție a elevilor tăi este între <strong>90% și 94%</strong>.</span>
+                </div>
+            </div>
+        </div>
+        <div class="bonus-conditions">
+            <h5>📋 Condiții de Eligibilitate (trebuie îndeplinite cumulativ)</h5>
+            <ul>
+                <li><strong>Volum de elevi:</strong> Să gestionezi un minim de <strong>20 de elevi activi</strong> pe parcursul celor 4 luni evaluate.</li>
+                <li>
+                    <strong>Finalizarea cerințelor de nivel:</strong> Să ai bifate toate obiectivele din roadmap corespunzătoare nivelului tău curent de încadrare. Acestea se aplică astfel:
+                    <ul class="level-sublist">
+                        <li><strong>Nivel Junior:</strong> Îndeplinirea tuturor cerințelor de Junior.</li>
+                        <li><strong>Nivel Middle:</strong> Îndeplinirea cerințelor de Junior + cerințele de Middle.</li>
+                        <li><strong>Nivel Senior:</strong> Îndeplinirea cerințelor de Junior + Middle + cerințele de Senior.</li>
+                    </ul>
+                </li>
+            </ul>
         </div>
     </div>
     <div class="tutorial-section">
