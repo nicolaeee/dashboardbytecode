@@ -3386,12 +3386,17 @@ function AttendanceBoard({
                       onClick={() => !starDisabled && onCycleStar(s.id, selectedLesson.id)}
                       disabled={starDisabled}
                       title={starDisabled ? 'Elevul trebuie sa fie prezent sau sa fi recuperat lectia' : `Tema facuta x${starCount} - click pentru a schimba`}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${starDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'}`}
+                      className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${starDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'}`}
                     >
                       <Star
                         size={18} strokeWidth={2}
                         className={starCount > 0 && !starDisabled ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-gray-500'}
                       />
+                      {starCount > 1 && !starDisabled && (
+                        <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-400 px-0.5 text-[9px] font-bold leading-none text-black">
+                          {starCount}
+                        </span>
+                      )}
                     </button>
                     <button
                       onClick={() => onSetStatus(s.id, selectedLesson.id, 'present')} title="Prezent"
@@ -3488,10 +3493,12 @@ function StudentCard({
         <div className="tracker-progress-bar h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundImage: studentColor, backgroundSize: '200% 100%' }} />
       </div>
 
-      <div className="grid grid-cols-8 gap-1 mb-4">
+      <div className="grid w-full grid-cols-8 gap-1 mb-4">
         {Array.from({ length: 16 }, (_, i) => (
-          <div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-sm sm:text-lg ${i < progressInLevel ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
-            {rewardEmoji}
+          <div key={i} className="flex items-center justify-center">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${i < progressInLevel ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
+              {rewardEmoji}
+            </div>
           </div>
         ))}
       </div>
