@@ -14,10 +14,15 @@ const NOTIFY_WEBHOOK_URL = 'https://connect.pabbly.com/webhook-listener/webhook/
  * mai trebuie sa fie vizibil in bundle-ul JS, unde putea fi extras si folosit ca relay deschis
  * de oricine, chiar neautentificat, pentru a trimite date arbitrare catre Pabbly).
  *
- * Payload-ul catre Pabbly ramane STRICT identic cu cel trimis anterior din client (aceleasi
- * chei: nume_copil, telefon, email, link_conectare, in acelasi format) - doar sursa datelor
- * s-a mutat server-side, citite direct din DB prin clientul cu sesiunea profesorului (RLS
- * blocheaza accesul la un elev care nu e al lui).
+ * Payload-ul catre Pabbly pastreaza cheile trimise anterior din client (nume_copil, telefon,
+ * email, link_conectare, in acelasi format) - doar sursa datelor s-a mutat server-side, citite
+ * direct din DB prin clientul cu sesiunea profesorului (RLS blocheaza accesul la un elev care
+ * nu e al lui).
+ *
+ * nume_copil ramane DOAR prenumele/numele scurt (short_name, cu fallback pe numele complet) -
+ * folosit de automatizare in textul mesajului trimis parintelui, exact ca inainte. studentFullName
+ * e un camp NOU, cu numele complet al elevului - destinat exclusiv logurilor interne ale
+ * adminului, ca sa poata identifica precis copilul (nu se afiseaza in mesajul catre parinte).
  */
 export async function POST(request: Request) {
   const profile = await requireUser();
@@ -56,6 +61,7 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nume_copil: student.short_name?.trim() || student.name,
+        studentFullName: student.name,
         telefon: formattedPhones,
         email: formattedEmails,
         link_conectare: group?.meet_link ?? '',

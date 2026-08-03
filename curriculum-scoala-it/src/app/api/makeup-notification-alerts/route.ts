@@ -61,6 +61,11 @@ type MakeupAction = 'notify_parent' | 'makeup_scheduled';
  * Cooldown-ul de 48h/max 3 se aplica DOAR pentru notify_parent (evita spam-ul repetat catre
  * parinte) - "Programat" e o singura confirmare, nu o notificare repetabila, deci nu
  * consuma/verifica acel contor.
+ *
+ * studentName ramane DOAR prenumele/numele scurt (short_name, cu fallback pe numele complet) -
+ * folosit de automatizare in textul mesajului WhatsApp trimis parintelui la notify_parent.
+ * studentFullName e un camp NOU, cu numele complet, destinat exclusiv identificarii elevului in
+ * logurile interne ale adminului (relevant mai ales la makeup_scheduled, care ajunge la admin).
  */
 export async function POST(request: Request) {
   const profile = await requireUser();
@@ -114,6 +119,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         action,
         studentName: student.short_name?.trim() || student.name,
+        studentFullName: student.name,
         className: group?.group_name ?? '',
         parentPhones: cleanContactList(student.parent_phones ?? []).join(','),
         parentEmails: cleanContactList(student.parent_emails ?? []).join(','),

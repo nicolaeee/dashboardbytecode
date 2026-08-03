@@ -31,7 +31,7 @@ describe('/api/admin-alerts (audit M-2: date recitite din DB, nu din client)', (
     expect(json).toEqual({ ok: true });
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toEqual({
-      studentName: 'Ionuț',
+      studentName: 'Ion Popescu',
       teacherName: 'Ana Popescu',
       className: 'M1 Luni la 18:00',
       status: 'conectat',

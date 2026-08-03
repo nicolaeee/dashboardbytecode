@@ -55,6 +55,7 @@ describe('/api/makeup-notification-alerts (cooldown, ore de liniste, "Programat"
     expect(JSON.parse(init.body as string)).toEqual({
       action: 'notify_parent',
       studentName: 'Ionuț',
+      studentFullName: 'Ion Popescu',
       className: 'M1 Luni la 18:00',
       parentPhones: '0712345678',
       parentEmails: 'parinte@test.ro',

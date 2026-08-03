@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: student, error: studentError } = await supabase
     .from('tracker_students')
-    .select('id, name, short_name, parent_phones, group_id')
+    .select('id, name, parent_phones, group_id')
     .eq('id', studentId)
     .single();
   if (studentError || !student) {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        studentName: student.short_name?.trim() || student.name,
+        studentName: student.name,
         teacherName: profile.full_name || profile.email,
         teacherPhone: profile.phone?.trim() || 'Lipsă număr',
         className: group?.group_name ?? '',

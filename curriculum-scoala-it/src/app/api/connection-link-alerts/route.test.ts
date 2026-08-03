@@ -37,6 +37,7 @@ describe('/api/connection-link-alerts (audit H-1: webhook mutat server-side)', (
     expect(url).toContain('connect.pabbly.com');
     expect(JSON.parse(init.body as string)).toEqual({
       nume_copil: 'Ionuț',
+      studentFullName: 'Ion Popescu',
       telefon: '0712345678@c.us',
       email: 'parinte@test.ro',
       link_conectare: 'https://meet.google.com/xyz',
