@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar } from 'lucide-react';
+import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar, Star } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
@@ -3231,7 +3231,6 @@ function AttendanceBoard({
   onSaveLessonHomework: (lessonId: string, note: string) => void | Promise<void>;
   onOpenHistory: (studentId: string) => void;
 }) {
-  const rewardEmoji = getRewardEmoji(group.reward_type);
   const sortedLessons = [...lessons].sort((a, b) => a.session_number - b.session_number);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(sortedLessons.length > 0 ? sortedLessons[sortedLessons.length - 1].id : null);
   const [lessonMenuOpen, setLessonMenuOpen] = useState(false);
@@ -3383,12 +3382,16 @@ function AttendanceBoard({
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
+                      type="button"
                       onClick={() => !starDisabled && onCycleStar(s.id, selectedLesson.id)}
                       disabled={starDisabled}
                       title={starDisabled ? 'Elevul trebuie sa fie prezent sau sa fi recuperat lectia' : `Tema facuta x${starCount} - click pentru a schimba`}
-                      className={`h-8 min-w-8 px-1.5 rounded-full flex items-center justify-center gap-0.5 text-sm font-bold transition-colors ${starDisabled ? 'bg-gray-900 text-gray-700 opacity-40 cursor-not-allowed' : starCount > 0 ? 'bg-[#C8F023] text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${starDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'}`}
                     >
-                      {rewardEmoji}{starCount > 1 && <span className="text-[11px] font-bold">×{starCount}</span>}
+                      <Star
+                        size={18} strokeWidth={2}
+                        className={starCount > 0 && !starDisabled ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-gray-500'}
+                      />
                     </button>
                     <button
                       onClick={() => onSetStatus(s.id, selectedLesson.id, 'present')} title="Prezent"
