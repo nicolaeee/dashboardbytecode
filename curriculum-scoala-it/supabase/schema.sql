@@ -310,9 +310,17 @@ create table public.tracker_lessons (
   teacher_id     uuid not null references public.profiles(id) on delete cascade,
   group_id       uuid not null references public.tracker_groups(id) on delete cascade,
   session_number int  not null,
+  -- Pozitia REALA in materie (M{x}/L{y}) - separata de session_number (contorul cronologic
+  -- al sedintelor fizice, care nu se inghata niciodata). Ramane identica cu a lectiei anterioare
+  -- daca aceea a fost 100% absenta - vezi createLesson in ProgressTracker.tsx.
+  curriculum_index int not null,
   lesson_date    date not null default current_date,
   lesson_time    text,   -- 'HH:MM', optional
   format         text not null default 'grup' check (format in ('grup', 'individual')),
+  -- false = "Neefectuata" (absolut toti elevii activi ai grupei marcati Absent la aceasta
+  -- lectie) - recalculat automat la fiecare marcare de prezenta (vezi setAttendanceStatus in
+  -- ProgressTracker.tsx). Exclusa din contorul de ore predate din Payslip-ul din /registru.
+  is_taught      boolean not null default true,
   homework_note  text,   -- notita libera de tema pentru aceasta lectie, editabila din Tracker
   created_at     timestamptz not null default now(),
   unique (group_id, session_number)

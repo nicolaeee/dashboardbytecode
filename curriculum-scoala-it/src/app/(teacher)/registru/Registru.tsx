@@ -61,6 +61,9 @@ export default function Registru({
   const table = useMemo(() => {
     const rows = MONTHS.map(() => ({ grup: 0, individual: 0, recuperare: 0 }));
     for (const l of lessons) {
+      // Lectie "Neefectuata" (0 prezenti, toti elevii absenti) - nu conteaza ca ora
+      // predata/achitata, vezi is_taught in ProgressTracker.tsx (setAttendanceStatus).
+      if (!l.is_taught) continue;
       const d = new Date(l.lesson_date);
       if (d.getFullYear() !== year) continue;
       if (l.format === 'individual') rows[d.getMonth()].individual += 1;
@@ -86,6 +89,8 @@ export default function Registru({
     if (selectedMonth === null) return [];
     const entries: RegistryEntry[] = [];
     for (const l of lessons) {
+      // Lectie "Neefectuata" (0 prezenti) - exclusa si din detaliul lunar, la fel ca din total.
+      if (!l.is_taught) continue;
       const d = new Date(l.lesson_date);
       if (d.getFullYear() === year && d.getMonth() === selectedMonth) {
         entries.push({ date: l.lesson_date, time: l.lesson_time, kind: l.format, sessionNumber: l.session_number });

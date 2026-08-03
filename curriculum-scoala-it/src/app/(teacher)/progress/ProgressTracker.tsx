@@ -366,14 +366,12 @@ export default function ProgressTracker({
   const [diplomaMilestonePopup, setDiplomaMilestonePopup] = useState<{ studentId: string; milestone: number } | null>(null);
   // Popup de confirmare dupa "✅ Recuperare efectuata" pe cardul de recuperare din Task-uri Urgente.
   const [makeupDoneNotice, setMakeupDoneNotice] = useState(false);
-  // Popup afisat cand marcarea unui elev "Absent" ar lasa lectia cu 100% absenti (vezi
-  // setAttendanceStatus) - salvarea e blocata in acest caz, ca sa nu decaleze contorul de
-  // lectii si sa nu genereze restante de recuperare false pentru o lectie care nu s-a tinut.
-  const [allAbsentBlockNotice, setAllAbsentBlockNotice] = useState(false);
-  // Popup afisat cand butonul "+" (lectie noua) e blocat pentru ca ultima lectie a clasei nu
-  // e gata sa fie inchisa (vezi openNewLessonModal) - fie mai are elevi nemarcati, fie e 100%
-  // absenta. null = niciun blocaj activ.
-  const [newLessonBlockNotice, setNewLessonBlockNotice] = useState<'unmarked' | 'allAbsent' | null>(null);
+  // Popup afisat cand butonul "+" (lectie noua) e blocat pentru ca ultima lectie a clasei mai
+  // are elevi nemarcati (vezi openNewLessonModal). O lectie 100% absenta NU mai blocheaza nimic
+  // - se salveaza normal, iar indexul de materie ramane inghetat automat (vezi computeModuleLesson
+  // - se bazeaza pe nr. de prezente/recuperari, nu pe session_number, deci un elev absent nu
+  // avanseaza niciodata in materie). null = niciun blocaj activ.
+  const [newLessonBlockNotice, setNewLessonBlockNotice] = useState<'unmarked' | null>(null);
   // Elevul pentru care s-a apasat "Trimite Notificare" si asteapta confirmarea "Ai sloturi
   // disponibile in calendar?" (Da/Nu) inainte de trimiterea efectiva catre Pabbly.
   const [makeupNotifyConfirm, setMakeupNotifyConfirm] = useState<TrackerStudent | null>(null);
@@ -1194,33 +1192,53 @@ export default function ProgressTracker({
     await applyStarDelta(studentId, delta, group);
   }
 
-  // Creeaza o lectie noua (sedinta) pentru o grupa - numerotata secvential. Tipul se deduce
-  // AUTOMAT din numarul de elevi (1 = individuala, >1 = grup) - fara alegere manuala, si
-  // alimenteaza direct Payslip-ul din /registru (pe luna extrasa din data lectiei).
+  // Creeaza o lectie noua (sedinta) pentru o grupa. Tipul se deduce AUTOMAT din numarul de
+  // elevi (1 = individuala, >1 = grup) - fara alegere manuala.
+  //
+  // Doua numere DISTINCTE, cu roluri diferite:
+  // - session_number: contor STRICT crescator si unic per grupa (constraint in DB) - a cata
+  //   sedinta FIZICA e aceasta, in ordine cronologica. Nu se inghata NICIODATA - alimenteaza
+  //   sortarea/dropdown-ul de lectii si Payslip-ul din /registru (fiecare sedinta tinuta conteaza
+  //   acolo, indiferent de prezenta).
+  // - curriculum_index: pozitia REALA in materie (afisata ca M{x}/L{y}) - ramane INGHETATA,
+  //   identica cu a ultimei lectii, daca aceea a fost 100% absenta (nimeni nu a participat, deci
+  //   nu s-a predat nimic nou); altfel avanseaza cu 1, exact ca inainte.
   async function createLesson(groupId: string, lessonDate: string, lessonTime: string) {
     const group = getGroupById(groupId);
     if (!group) return undefined;
     const groupLessons = lessons.filter((l) => l.group_id === groupId);
-    // Daca e prima lectie fizica a clasei, nu repornim de la L1: continuam de la cel mai mare
+    // Daca e prima lectie fizica a clasei, nu repornim de la 1: continuam de la cel mai mare
     // istoric manual (lesson_offset) setat pe elevii clasei din Editeaza Elev - altfel o clasa
     // ai carei elevi au deja 7 lectii in spate ar afisa gresit "L1" la prima sedinta noua.
-    // De la a doua lectie incolo, baseline-ul e deja "copt" in session_number-urile existente
-    // (folosim maximul lor, nu numarul de lectii, ca sa ramana corect si dupa o eventuala
-    // stergere de lectie care lasa goluri in secventa).
-    const nextNumber = groupLessons.length === 0
+    const nextSessionNumber = groupLessons.length === 0
       ? Math.max(0, ...getStudentsForGroup(groupId).map((s) => s.lesson_offset)) + 1
       : Math.max(...groupLessons.map((l) => l.session_number)) + 1;
+
+    let nextCurriculumIndex: number;
+    if (groupLessons.length === 0) {
+      nextCurriculumIndex = nextSessionNumber;
+    } else {
+      // Ultima lectie FIZICA (dupa session_number, nu dupa curriculum_index, care poate avea
+      // duplicate) - baza pentru decizia de inghetare. is_taught e mentinut la zi de
+      // setAttendanceStatus la fiecare marcare de prezenta, deci reflecta mereu situatia reala.
+      const lastLesson = groupLessons.reduce((max, l) => (l.session_number > max.session_number ? l : max));
+      nextCurriculumIndex = lastLesson.is_taught
+        ? lastLesson.curriculum_index + 1
+        : lastLesson.curriculum_index;
+    }
+
     const activeCount = getStudentsForGroup(groupId).length;
     const format = activeCount <= 1 ? 'individual' : 'grup';
     const { data, error } = await supabase.from('tracker_lessons')
       .insert({
-        teacher_id: group.teacher_id, group_id: groupId, session_number: nextNumber,
+        teacher_id: group.teacher_id, group_id: groupId, session_number: nextSessionNumber,
+        curriculum_index: nextCurriculumIndex,
         lesson_date: lessonDate, lesson_time: lessonTime || null, format,
       })
       .select().single();
     if (error || !data) { showToast('Eroare la crearea lectiei', 'error'); return undefined; }
     setLessons((ls) => [...ls, data as TrackerLesson]);
-    showToast(`Lectia ${nextNumber} creata!`);
+    showToast(`Lectia ${nextCurriculumIndex} creata!`);
     return data as TrackerLesson;
   }
 
@@ -1248,24 +1266,12 @@ export default function ProgressTracker({
     const group = getGroupById(student.group_id);
     if (!group) return;
 
-    // Blocam marcarea "Absent" daca ar lasa TOTI elevii activi ai clasei cu statusul Absent la
-    // aceasta lectie - inseamna ca lectia nu s-a tinut deloc (reprogramata), deci nu trebuie
-    // salvata (ar decala contorul L1/L2... si ar genera restante de recuperare false). Elevii
-    // inca nemarcati (fara rand in tracker_attendance) nu conteaza ca "Absent" aici - blocajul
-    // se declanseaza doar cand chiar absolut toti au deja statusul explicit Absent.
-    if (status === 'absent') {
-      const groupStudents = getStudentsForGroup(student.group_id);
-      const wouldBeAllAbsent = groupStudents.every((gs) => {
-        if (gs.id === studentId) return true;
-        const record = attendance.find((a) => a.lesson_id === lessonId && a.student_id === gs.id);
-        return record?.status === 'absent';
-      });
-      if (wouldBeAllAbsent) {
-        setAllAbsentBlockNotice(true);
-        return;
-      }
-    }
-
+    // O lectie poate fi salvata chiar daca marcheaza 100% dintre elevi Absenti - nu blocam in
+    // acest caz (vezi regula de business: se inregistreaza absentele normal). Indexul de materie
+    // nu avanseaza totusi pentru ei, pentru ca M/L per elev (computeModuleLesson) se calculeaza
+    // strict din numarul de prezente/recuperari (status 'present'/'made_up'), niciodata din
+    // 'absent' - deci un elev 100% absent la aceasta lectie ramane automat la acelasi index,
+    // fara sa mai fie nevoie de vreo verificare speciala aici.
     const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
     const prevStarCount = current?.star_count ?? 0;
     const nextStarCount = status === 'absent' ? 0 : prevStarCount;
@@ -1306,6 +1312,19 @@ export default function ProgressTracker({
     }
     setAttendance((as) => [...as.filter((a) => !(a.lesson_id === lessonId && a.student_id === studentId)), data as TrackerAttendance]);
 
+    // Lectia e "neefectuata" (is_taught = false) DOAR daca absolut toti elevii activi ai
+    // grupei ajung sa aiba statusul explicit Absent la aceasta lectie - se recalculeaza la
+    // fiecare marcare (nu doar la "absent"), ca sa revina automat la "efectuata" daca
+    // profesorul corecteaza ulterior un elev pe Prezent/Recuperat. Alimenteaza badge-ul
+    // "Neefectuată" din Progress Tracker si excluderea din Payslip-ul din /registru.
+    const groupStudents = getStudentsForGroup(student.group_id);
+    const allAbsentNow = groupStudents.length > 0 && groupStudents.every((gs) => {
+      if (gs.id === studentId) return status === 'absent';
+      return attendance.find((a) => a.lesson_id === lessonId && a.student_id === gs.id)?.status === 'absent';
+    });
+    const lesson = lessons.find((l) => l.id === lessonId);
+    if (lesson && lesson.is_taught === allAbsentNow) await patchLesson(lessonId, { is_taught: !allAbsentNow });
+
     if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group);
     if (willBeCounted && !wasCounted) checkDiplomaMilestone(studentId, newTotalPresences);
 
@@ -1337,9 +1356,12 @@ export default function ProgressTracker({
     }
   }
 
-  // Butonul "+" (lectie noua) e blocat daca ultima lectie a clasei nu a fost inchisa corect -
-  // fie ii mai lipseste statusul vreunui elev, fie e 100% absenta (vezi cele doua popup-uri de
-  // mai jos). Fara prima lectie a clasei (groupLessons.length === 0) nu avem ce valida.
+  // Butonul "+" (lectie noua) e blocat STRICT daca ultima lectie a clasei mai are elevi
+  // nemarcati (niciun status ales inca) - profesorul trebuie sa inchida complet lectia
+  // curenta inainte sa treaca la urmatoarea. O lectie 100% absenta NU mai blocheaza acest
+  // buton - se poate crea normal lectia urmatoare; indexul de materie ramane inghetat automat
+  // pentru elevii absenti (vezi comentariul din setAttendanceStatus). Fara prima lectie a
+  // clasei (groupLessons.length === 0) nu avem ce valida.
   function openNewLessonModal(groupId: string) {
     const group = groups.find((g) => g.id === groupId);
     const groupLessons = lessons.filter((l) => l.group_id === groupId);
@@ -1350,10 +1372,6 @@ export default function ProgressTracker({
       );
       if (statuses.some((st) => st === undefined)) {
         setNewLessonBlockNotice('unmarked');
-        return;
-      }
-      if (statuses.length > 0 && statuses.every((st) => st === 'absent')) {
-        setNewLessonBlockNotice('allAbsent');
         return;
       }
     }
@@ -2453,43 +2471,19 @@ export default function ProgressTracker({
         );
       })()}
 
-      {/* Blocaj pe butonul "+" (lectie noua) - vezi openNewLessonModal. */}
+      {/* Blocaj pe butonul "+" (lectie noua) - vezi openNewLessonModal. Singurul motiv posibil
+          ramas: mai lipseste statusul vreunui elev la lectia curenta (100% absenti nu mai
+          blocheaza nimic - vezi setAttendanceStatus). */}
       {newLessonBlockNotice && (
         <ModalShell onClose={() => setNewLessonBlockNotice(null)}>
           <div className="text-center">
-            <div className="text-5xl mb-4">{newLessonBlockNotice === 'unmarked' ? '⚠️' : '🚫'}</div>
-            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">
-              {newLessonBlockNotice === 'unmarked' ? 'Prezență incompletă' : 'Lecție cu 100% absenți'}
-            </h3>
+            <div className="text-5xl mb-4">⚠️</div>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Prezență incompletă</h3>
             <p className="text-sm text-gray-400 mb-6">
-              {newLessonBlockNotice === 'unmarked'
-                ? 'Nu poți crea o lecție nouă dacă nu ai completat statusul pentru toți elevii din lecția curentă. Trebuie să bifezi Prezent, Absent sau Recuperat pentru fiecare copil în parte.'
-                : 'Nu poți crea o lecție nouă dacă toți elevii sunt absenți. Dacă lași așa, această lecție se va număra ca fiind efectuată și va decala materia viitoare. Dacă nu a participat nimeni, înseamnă că ora nu s-a ținut. Te rog să ștergi lecția aceasta și să o adaugi din nou când se va ține efectiv!'}
+              Nu poți crea o lecție nouă dacă nu ai completat statusul pentru toți elevii din lecția curentă. Trebuie să bifezi Prezent, Absent sau Recuperat pentru fiecare copil în parte.
             </p>
             <button
               onClick={() => setNewLessonBlockNotice(null)}
-              className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold"
-            >
-              Am înțeles
-            </button>
-          </div>
-        </ModalShell>
-      )}
-
-      {/* Blocaj "100% absenti" la marcarea prezentei - vezi setAttendanceStatus. */}
-      {allAbsentBlockNotice && (
-        <ModalShell onClose={() => setAllAbsentBlockNotice(false)}>
-          <div className="text-center">
-            <div className="text-5xl mb-4">🚫</div>
-            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Lecție cu 100% absenți</h3>
-            <p className="text-sm text-gray-400 mb-6">
-              Nu poți salva o lecție cu 100% absenți. Dacă lecția nu s-a ținut deloc și se
-              reprogramează, te rog să ștergi această lecție (folosind butonul de ștergere)
-              pentru a nu decala materia. Dacă măcar un elev a fost Prezent sau a făcut
-              Recuperare, poți salva.
-            </p>
-            <button
-              onClick={() => setAllAbsentBlockNotice(false)}
               className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold"
             >
               Am înțeles
@@ -3307,9 +3301,14 @@ function AttendanceBoard({
                   aria-expanded={lessonMenuOpen}
                   className="flex items-center gap-1 bg-transparent font-bold text-base md:text-lg cursor-pointer focus:outline-none"
                 >
-                  {formatModuleLesson(selectedLesson.session_number)}
+                  {formatModuleLesson(selectedLesson.curriculum_index)}
                   <ChevronDown size={16} className={`text-gray-500 transition-transform ${lessonMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
+                {!selectedLesson.is_taught && (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-red-500/15 border border-red-500/40 px-2 py-0.5 text-[10px] font-bold text-red-400 align-middle">
+                    Neefectuată
+                  </span>
+                )}
 
                 {lessonMenuOpen && (
                   <>
@@ -3323,12 +3322,17 @@ function AttendanceBoard({
                           className={`flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm transition-colors ${l.id === selectedLesson.id ? 'bg-gray-800 text-[#C8F023]' : 'text-white hover:bg-gray-800'}`}
                         >
                           <span className="min-w-0 flex-1 truncate">
-                            {formatModuleLesson(l.session_number)} - {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {formatModuleLesson(l.curriculum_index)} - {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                             {l.lesson_time ? `, ${l.lesson_time}` : ''}
                           </span>
                           <span className="shrink-0 rounded-md border border-[#C8F023]/40 bg-black px-1.5 py-0.5 text-[10px] font-semibold text-[#C8F023]">
                             {LESSON_FORMAT_LABEL[l.format]}
                           </span>
+                          {!l.is_taught && (
+                            <span className="shrink-0 rounded-md border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
+                              Neefectuată
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>

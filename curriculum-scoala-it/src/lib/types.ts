@@ -143,9 +143,18 @@ export type TrackerLesson = {
   teacher_id: string;
   group_id: string;
   session_number: number;
+  /** Pozitia REALA in materie (M{x}/L{y}) - separata de session_number (contorul cronologic,
+   * strict crescator, al sedintelor fizice). Ramane identica cu a lectiei anterioare daca
+   * aceea a fost 100% absenta (vezi createLesson in ProgressTracker.tsx). */
+  curriculum_index: number;
   lesson_date: string;
   lesson_time: string | null;
   format: LessonKind;
+  /** false = "Neefectuată" - absolut toti elevii activi ai grupei au fost marcati Absenti la
+   * aceasta lectie (recalculat automat la fiecare marcare de prezenta, vezi setAttendanceStatus
+   * in ProgressTracker.tsx). Exclusa din contorul de ore predate din Payslip-ul din /registru,
+   * dar prezentele elevilor raman salvate normal (alertele de recuperare functioneaza la fel). */
+  is_taught: boolean;
   /** Notita libera de tema pentru aceasta lectie (nu per elev), editabila din Tracker. */
   homework_note: string | null;
   created_at: string;
