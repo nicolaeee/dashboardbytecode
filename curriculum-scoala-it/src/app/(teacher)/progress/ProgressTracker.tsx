@@ -1033,21 +1033,29 @@ export default function ProgressTracker({
   // oricine, chiar neautentificat). Payload-ul trimis catre Pabbly ramane neschimbat - doar
   // constructia lui s-a mutat server-side. Necesita cel putin un telefon de parinte, editabil
   // doar de admin - vezi PARTEA 1 (GDPR).
+  //
+  // Validarea telefonului NU se mai face aici, pe baza starii locale - un profesor nu primeste
+  // deloc parent_phones in payload-ul initial al paginii (GDPR, vezi progress/page.tsx), deci
+  // `student.parent_phones` e mereu gol pentru el, chiar daca adminul a completat un numar real.
+  // Ruta server (route.ts) citeste direct din DB cu sesiunea profesorului - RLS pe
+  // tracker_students e la nivel de RAND ("teacher_id = auth.uid()"), nu de coloana, deci
+  // intoarce corect telefonul real pentru elevii profesorului. Validarea reala (telefon
+  // lipsa / elev negasit) se afiseaza din raspunsul rutei; un eventual esec al webhook-ului
+  // extern (502) ramane fire-and-forget, ca sa nu blocam UI-ul de un hiccup temporar Pabbly.
   async function handleSendNotification(student: TrackerStudent) {
-    const phones = cleanContactList(student.parent_phones);
-    if (phones.length === 0) {
-      showToast('Adminul nu a adăugat încă un număr pentru acest elev!', 'error');
-      return;
-    }
-
     setNotifyState((s) => ({ ...s, [student.id]: 'loading' }));
     try {
-      // Fire-and-forget, la fel ca inainte - nu blocam UI-ul de raspunsul webhook-ului extern.
-      await fetch('/api/connection-link-alerts', {
+      const res = await fetch('/api/connection-link-alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: student.id }),
       });
+      if (res.status === 400 || res.status === 404) {
+        const json = await res.json().catch(() => null);
+        setNotifyState((s) => ({ ...s, [student.id]: 'idle' }));
+        showToast(json?.error ?? 'Eroare', 'error');
+        return;
+      }
     } catch {
       // ignorat intentionat - vezi comentariul de mai sus
     }
@@ -1200,9 +1208,14 @@ export default function ProgressTracker({
   //   sedinta FIZICA e aceasta, in ordine cronologica. Nu se inghata NICIODATA - alimenteaza
   //   sortarea/dropdown-ul de lectii si Payslip-ul din /registru (fiecare sedinta tinuta conteaza
   //   acolo, indiferent de prezenta).
-  // - curriculum_index: pozitia REALA in materie (afisata ca M{x}/L{y}) - ramane INGHETATA,
-  //   identica cu a ultimei lectii, daca aceea a fost 100% absenta (nimeni nu a participat, deci
-  //   nu s-a predat nimic nou); altfel avanseaza cu 1, exact ca inainte.
+  // - curriculum_index: pozitia REALA in materie (afisata ca M{x}/L{y}) - NU se calculeaza din
+  //   ultima lectie fizica (session_number), ci din cea mai AVANSATA lectie marcata "Efectuata"
+  //   (is_taught = true, adica cu minim un Prezent/Recuperat) din TOT istoricul grupei - vezi
+  //   is_taught, recalculat dinamic in setAttendanceStatus la fiecare marcare, inclusiv la
+  //   editarea unei lectii trecute. Asta garanteaza ca daca profesorul repara retroactiv o
+  //   lectie mai veche (ex. o marcheaza "Recuperat" dupa ce initial fusese 100% absenta),
+  //   lectia noua propusa avanseaza corect, chiar daca intre timp mai exista incercari esuate
+  //   ulterioare (tot "Neefectuate", inghetate la acelasi index).
   async function createLesson(groupId: string, lessonDate: string, lessonTime: string) {
     const group = getGroupById(groupId);
     if (!group) return undefined;
@@ -1218,13 +1231,16 @@ export default function ProgressTracker({
     if (groupLessons.length === 0) {
       nextCurriculumIndex = nextSessionNumber;
     } else {
-      // Ultima lectie FIZICA (dupa session_number, nu dupa curriculum_index, care poate avea
-      // duplicate) - baza pentru decizia de inghetare. is_taught e mentinut la zi de
-      // setAttendanceStatus la fiecare marcare de prezenta, deci reflecta mereu situatia reala.
-      const lastLesson = groupLessons.reduce((max, l) => (l.session_number > max.session_number ? l : max));
-      nextCurriculumIndex = lastLesson.is_taught
-        ? lastLesson.curriculum_index + 1
-        : lastLesson.curriculum_index;
+      const taughtLessons = groupLessons.filter((l) => l.is_taught);
+      if (taughtLessons.length === 0) {
+        // Nicio lectie efectuata inca vreodata (toate incercarile de pana acum au fost 100%
+        // absente) - indexul ramane la baza initiala, identica pentru toate lectiile de pana
+        // acum (lantul nu a avansat niciodata).
+        nextCurriculumIndex = groupLessons[0].curriculum_index;
+      } else {
+        const mostAdvancedTaught = taughtLessons.reduce((max, l) => (l.curriculum_index > max.curriculum_index ? l : max));
+        nextCurriculumIndex = mostAdvancedTaught.curriculum_index + 1;
+      }
     }
 
     const activeCount = getStudentsForGroup(groupId).length;
@@ -1312,18 +1328,20 @@ export default function ProgressTracker({
     }
     setAttendance((as) => [...as.filter((a) => !(a.lesson_id === lessonId && a.student_id === studentId)), data as TrackerAttendance]);
 
-    // Lectia e "neefectuata" (is_taught = false) DOAR daca absolut toti elevii activi ai
-    // grupei ajung sa aiba statusul explicit Absent la aceasta lectie - se recalculeaza la
-    // fiecare marcare (nu doar la "absent"), ca sa revina automat la "efectuata" daca
-    // profesorul corecteaza ulterior un elev pe Prezent/Recuperat. Alimenteaza badge-ul
-    // "Neefectuată" din Progress Tracker si excluderea din Payslip-ul din /registru.
+    // Lectia e "Efectuata" (is_taught = true) daca EXISTA minim un elev Prezent SAU Recuperat -
+    // cele doua statusuri sunt echivalente pentru avansarea materiei. Recalculat la FIECARE
+    // marcare (nu doar la "absent"), inclusiv cand profesorul editeaza o lectie din trecut -
+    // asta garanteaza ca schimbarea unui elev din Absent in Recuperat, chiar si retroactiv,
+    // deblocheaza imediat indexul (vezi createLesson, care scaneaza toate lectiile "Efectuate"
+    // din istoric, nu doar ultima). Alimenteaza badge-ul "Neefectuată" din Progress Tracker si
+    // excluderea din Payslip-ul din /registru.
     const groupStudents = getStudentsForGroup(student.group_id);
-    const allAbsentNow = groupStudents.length > 0 && groupStudents.every((gs) => {
-      if (gs.id === studentId) return status === 'absent';
-      return attendance.find((a) => a.lesson_id === lessonId && a.student_id === gs.id)?.status === 'absent';
+    const hasAnyPresentOrMadeUp = groupStudents.some((gs) => {
+      const st = gs.id === studentId ? status : attendance.find((a) => a.lesson_id === lessonId && a.student_id === gs.id)?.status;
+      return st === 'present' || st === 'made_up';
     });
     const lesson = lessons.find((l) => l.id === lessonId);
-    if (lesson && lesson.is_taught === allAbsentNow) await patchLesson(lessonId, { is_taught: !allAbsentNow });
+    if (lesson && lesson.is_taught !== hasAnyPresentOrMadeUp) await patchLesson(lessonId, { is_taught: hasAnyPresentOrMadeUp });
 
     if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group);
     if (willBeCounted && !wasCounted) checkDiplomaMilestone(studentId, newTotalPresences);
