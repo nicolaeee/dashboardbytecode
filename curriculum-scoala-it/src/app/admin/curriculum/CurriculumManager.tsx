@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import NextLink from 'next/link';
 import {
   ChevronDown, ChevronRight, Pencil, Plus, Trash2, ArrowUp, ArrowDown, PlayCircle,
-  ExternalLink, Video, Eye,
+  Video, Eye,
 } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Textarea } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
@@ -26,8 +26,8 @@ const EMPTY: Record<EntityKind, Record<string, string>> = {
   course: { title: '', description: '' },
   module: { title: '', description: '' },
   lesson: {
-    title: '', objective: '', video_url: '', teacher_project_url: '',
-    student_project_url: '', notes: '', homework: '', homework_url: '',
+    title: '', objective: '', video_url: '',
+    notes: '', homework: '', homework_url: '',
   },
 };
 
@@ -76,7 +76,6 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
         kind, id, parentId,
         values: {
           title: l.title, objective: l.objective ?? '', video_url: l.video_url ?? '',
-          teacher_project_url: l.teacher_project_url ?? '', student_project_url: l.student_project_url ?? '',
           notes: l.notes ?? '', homework: l.homework ?? '', homework_url: l.homework_url ?? '',
         },
       });
@@ -358,14 +357,6 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
             <Field label="Video explicativ" hint="Link YouTube sau Vimeo — se afișează integrat în pagină.">
               <Input value={draft.values.video_url} onChange={(e) => set('video_url', e.target.value)} placeholder="https://youtube.com/watch?v=…" />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Proiect profesor">
-                <Input value={draft.values.teacher_project_url} onChange={(e) => set('teacher_project_url', e.target.value)} placeholder="https://…" />
-              </Field>
-              <Field label="Proiect copil">
-                <Input value={draft.values.student_project_url} onChange={(e) => set('student_project_url', e.target.value)} placeholder="https://…" />
-              </Field>
-            </div>
             <Field label="Observații importante">
               <Textarea rows={3} value={draft.values.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Instrucțiuni pentru clasă, capcane frecvente…" />
             </Field>
@@ -408,11 +399,6 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                     {draft.values.video_url ? 'Link video invalid.' : 'Fără link video încă.'}
                   </div>
                 )}
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <PreviewProjectLink href={draft.values.teacher_project_url} label="Proiect profesor" primary />
-                <PreviewProjectLink href={draft.values.student_project_url} label="Proiect copil" />
               </div>
             </div>
           </>
@@ -463,24 +449,5 @@ function IconBtn({
     >
       {children}
     </button>
-  );
-}
-
-function PreviewProjectLink({ href, label, primary }: { href: string; label: string; primary?: boolean }) {
-  if (!href) {
-    return (
-      <span className="inline-flex h-10 cursor-not-allowed items-center gap-2 rounded-xl border border-dashed border-line px-4 text-sm text-lock">
-        {label} · lipsă
-      </span>
-    );
-  }
-  return (
-    <a
-      href={href} target="_blank" rel="noopener noreferrer"
-      className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition
-        ${primary ? 'bg-brand-500 text-black shadow-glow-sm hover:bg-brand-600 hover:shadow-glow' : 'glass border border-line text-ink hover:border-brand-300 hover:text-brand-500 hover:shadow-glow-sm'}`}
-    >
-      {label} <ExternalLink size={14} />
-    </a>
   );
 }

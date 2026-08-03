@@ -32,8 +32,6 @@ export type Lesson = {
   title: string;
   objective: string;
   video_url: string;
-  teacher_project_url: string;
-  student_project_url: string;
   notes: string;
   homework: string;
   homework_url: string;

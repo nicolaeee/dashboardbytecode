@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Paperclip, Target, Video } from 'lucide-react';
+import { ArrowLeft, Paperclip, Target, Video } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { canAccessLesson, getLessonContext, toEmbedUrl } from '@/lib/queries';
 import { Card } from '@/components/ui';
@@ -25,18 +25,11 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
         <ArrowLeft size={15} /> Curriculum
       </Link>
 
-      {/* Antet: titlul lecției + linkurile rapide, sus-dreapta */}
-      <header className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="tag" style={{ color: platform.accent }}>{platform.name}</p>
-          <h1 className="mt-1 font-display text-3xl font-semibold leading-tight">{lesson.title}</h1>
-          <p className="mt-1.5 text-sm text-ink/55">{course.title} · {mod.title}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <QuickLink href={lesson.teacher_project_url} label="Proiect profesor" primary />
-          <QuickLink href={lesson.student_project_url} label="Proiect copil" />
-        </div>
+      {/* Antet: titlul lecției */}
+      <header className="mt-4">
+        <p className="tag" style={{ color: platform.accent }}>{platform.name}</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold leading-tight">{lesson.title}</h1>
+        <p className="mt-1.5 text-sm text-ink/55">{course.title} · {mod.title}</p>
       </header>
 
       <div className="mt-7 space-y-6">
@@ -97,26 +90,5 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
     </div>
-  );
-}
-
-function QuickLink({ href, label, primary }: { href: string; label: string; primary?: boolean }) {
-  if (!href) {
-    return (
-      <span className="inline-flex h-14 cursor-not-allowed items-center gap-2 rounded-2xl border border-dashed border-line px-6 text-base text-lock">
-        {label} · lipsă
-      </span>
-    );
-  }
-  return (
-    <a
-      href={href} target="_blank" rel="noopener noreferrer"
-      className={`inline-flex h-14 items-center gap-2.5 rounded-2xl px-6 text-base font-semibold transition
-        ${primary
-          ? 'bg-brand-500 text-black shadow-glow hover:bg-brand-600'
-          : 'glass border-2 border-brand-500/60 text-brand-500 hover:bg-brand-500/10 hover:border-brand-500 hover:shadow-glow-sm'}`}
-    >
-      {label} <ExternalLink size={16} />
-    </a>
   );
 }
