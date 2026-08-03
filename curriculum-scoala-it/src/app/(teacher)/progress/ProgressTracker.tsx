@@ -3487,7 +3487,7 @@ function StudentCard({
 
       <div className="grid grid-cols-8 gap-1 mb-4">
         {Array.from({ length: 16 }, (_, i) => (
-          <div key={i} className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${i < progressInLevel ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
+          <div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-sm sm:text-lg ${i < progressInLevel ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
             {rewardEmoji}
           </div>
         ))}

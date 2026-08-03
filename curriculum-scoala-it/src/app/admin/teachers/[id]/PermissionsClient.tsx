@@ -77,11 +77,11 @@ export default function PermissionsClient({
 
         return (
           <Card key={platform.id} className="overflow-hidden">
-            <div className="flex items-center gap-3 border-l-4 px-4 py-3" style={{ borderColor: platform.accent }}>
-              <button onClick={() => toggleOpen(platform.id)} className="text-lock hover:text-ink" aria-label="Extinde">
+            <div className="flex flex-wrap items-center gap-3 border-l-4 px-4 py-3" style={{ borderColor: platform.accent }}>
+              <button onClick={() => toggleOpen(platform.id)} className="text-lock hover:text-ink shrink-0" aria-label="Extinde">
                 {open.has(platform.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
               </button>
-              <h2 className="flex-1 font-display text-lg font-semibold">{platform.name}</h2>
+              <h2 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{platform.name}</h2>
               <Button size="sm" variant="outline" disabled={pending || platformModules.length === 0}
                 onClick={() => applyModules(platformModules, !allOn)}>
                 {allOn ? 'Blochează tot' : 'Deblochează tot'}
@@ -97,8 +97,8 @@ export default function PermissionsClient({
                   return (
                     <div key={course.id} className="rail">
                       <span className="rail-dot" style={{ background: platform.accent }} />
-                      <div className="flex items-center gap-2">
-                        <p className="flex-1 font-medium">{course.title}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="min-w-0 flex-1 truncate font-medium">{course.title}</p>
                         <Button size="sm" variant="ghost" disabled={pending || courseModules.length === 0}
                           onClick={() => applyModules(courseModules, !courseAllOn)}>
                           {courseAllOn ? 'Blochează cursul' : 'Deblochează cursul'}
