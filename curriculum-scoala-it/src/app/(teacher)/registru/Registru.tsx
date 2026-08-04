@@ -13,7 +13,11 @@ const ENTRY_CONFIG = {
 } as const;
 
 type TeacherOption = { id: string; label: string };
-type RegistryEntry = { date: string; time: string | null; kind: keyof typeof ENTRY_CONFIG; sessionNumber?: number };
+type StudentOption = { id: string; name: string };
+// groupStudentNames prezent DOAR pentru o recuperare de grup (recovery_group_id nenul pe randul
+// din tracker_attendance) - randurile grupate sunt condensate intr-o SINGURA intrare in registru,
+// desi reprezinta mai multe randuri din tracker_attendance (vezi dedup-ul din monthEntries).
+type RegistryEntry = { date: string; time: string | null; kind: keyof typeof ENTRY_CONFIG; sessionNumber?: number; groupStudentNames?: string[] };
 
 // Index Luni=0 .. Duminica=6 (spre deosebire de Date.getDay(), unde Duminica=0).
 function mondayIndexedDay(d: Date) { return (d.getDay() + 6) % 7; }
@@ -25,15 +29,16 @@ function weekOfMonth(d: Date) {
 }
 
 export default function Registru({
-  viewerId, isAdmin, teacherOptions, initialLessons, initialAttendance,
+  viewerId, isAdmin, teacherOptions, initialLessons, initialAttendance, initialStudents,
 }: {
   viewerId: string; isAdmin: boolean; teacherOptions: TeacherOption[];
-  initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
+  initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[]; initialStudents: StudentOption[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [selectedTeacherId, setSelectedTeacherId] = useState(viewerId);
   const [lessons, setLessons] = useState<TrackerLesson[]>(initialLessons);
   const [attendance, setAttendance] = useState<TrackerAttendance[]>(initialAttendance);
+  const [students, setStudents] = useState<StudentOption[]>(initialStudents);
   const [loading, setLoading] = useState(false);
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
@@ -42,21 +47,50 @@ export default function Registru({
   // Tracker-ului - nicio inregistrare manuala aici. Adminul poate schimba profesorul vizat.
   useEffect(() => {
     setSelectedMonth(null);
-    if (selectedTeacherId === viewerId) { setLessons(initialLessons); setAttendance(initialAttendance); return; }
+    if (selectedTeacherId === viewerId) {
+      setLessons(initialLessons); setAttendance(initialAttendance); setStudents(initialStudents); return;
+    }
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [{ data: l }, { data: a }] = await Promise.all([
+      const [{ data: l }, { data: a }, { data: s }] = await Promise.all([
         supabase.from('tracker_lessons').select('*').eq('teacher_id', selectedTeacherId),
         supabase.from('tracker_attendance').select('*').eq('teacher_id', selectedTeacherId).eq('status', 'made_up'),
+        supabase.from('tracker_students').select('id, name').eq('teacher_id', selectedTeacherId),
       ]);
       if (cancelled) return;
       setLessons((l ?? []) as TrackerLesson[]);
       setAttendance((a ?? []) as TrackerAttendance[]);
+      setStudents((s ?? []) as StudentOption[]);
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [selectedTeacherId, viewerId, initialLessons, initialAttendance, supabase]);
+  }, [selectedTeacherId, viewerId, initialLessons, initialAttendance, initialStudents, supabase]);
+
+  // O recuperare de grup (recovery_group_id nenul, mai multi elevi pe aceeasi sesiune reala -
+  // vezi popup-ul "Este o recuperare de grup?" din ProgressTracker.tsx) conteaza ca O SINGURA
+  // ora predata/platita, indiferent de cati elevi participa (1-3 de obicei) - randurile grupate
+  // se dedup dupa recovery_group_id inainte de a fi numarate. Recuperarile individuale
+  // (recovery_group_id null) raman neschimbate: fiecare rand conteaza separat, ca inainte.
+  const recoveryUnits = useMemo(() => {
+    const seenGroups = new Set<string>();
+    const units: { date: string; time: string | null; studentNames: string[] }[] = [];
+    for (const a of attendance) {
+      if (a.status !== 'made_up' || !a.recovery_date) continue;
+      if (a.recovery_group_id) {
+        if (seenGroups.has(a.recovery_group_id)) continue;
+        seenGroups.add(a.recovery_group_id);
+        const groupNames = attendance
+          .filter((x) => x.recovery_group_id === a.recovery_group_id)
+          .map((x) => students.find((s) => s.id === x.student_id)?.name ?? '?');
+        units.push({ date: a.recovery_date, time: a.recovery_time, studentNames: groupNames });
+      } else {
+        const name = students.find((s) => s.id === a.student_id)?.name ?? '?';
+        units.push({ date: a.recovery_date, time: a.recovery_time, studentNames: [name] });
+      }
+    }
+    return units;
+  }, [attendance, students]);
 
   const table = useMemo(() => {
     const rows = MONTHS.map(() => ({ grup: 0, individual: 0, recuperare: 0 }));
@@ -69,14 +103,13 @@ export default function Registru({
       if (l.format === 'individual') rows[d.getMonth()].individual += 1;
       else rows[d.getMonth()].grup += 1;
     }
-    for (const a of attendance) {
-      if (a.status !== 'made_up' || !a.recovery_date) continue;
-      const d = new Date(a.recovery_date);
+    for (const u of recoveryUnits) {
+      const d = new Date(u.date);
       if (d.getFullYear() !== year) continue;
       rows[d.getMonth()].recuperare += 1;
     }
     return rows;
-  }, [lessons, attendance, year]);
+  }, [lessons, recoveryUnits, year]);
 
   const totals = useMemo(() => {
     const t = { grup: 0, individual: 0, recuperare: 0 };
@@ -96,16 +129,21 @@ export default function Registru({
         entries.push({ date: l.lesson_date, time: l.lesson_time, kind: l.format, sessionNumber: l.session_number });
       }
     }
-    for (const a of attendance) {
-      if (a.status !== 'made_up' || !a.recovery_date) continue;
-      const d = new Date(a.recovery_date);
+    for (const u of recoveryUnits) {
+      const d = new Date(u.date);
       if (d.getFullYear() === year && d.getMonth() === selectedMonth) {
-        entries.push({ date: a.recovery_date, time: a.recovery_time, kind: 'recuperare' });
+        // Un singur elev = recuperare individuala normala (fara nume in eticheta, ca inainte);
+        // 2+ = recuperare de grup, condensata intr-o singura intrare "o ora", cu numele tuturor
+        // participantilor afisate explicit (vezi recoveryUnits mai sus).
+        entries.push({
+          date: u.date, time: u.time, kind: 'recuperare',
+          groupStudentNames: u.studentNames.length > 1 ? u.studentNames : undefined,
+        });
       }
     }
     entries.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''));
     return entries;
-  }, [lessons, attendance, year, selectedMonth]);
+  }, [lessons, recoveryUnits, year, selectedMonth]);
 
   const monthWeeks = useMemo(() => {
     const map = new Map<number, RegistryEntry[]>();
@@ -250,7 +288,16 @@ export default function Registru({
                                 return (
                                   <div key={ei} className="flex items-center gap-2 text-sm">
                                     <span>{cfg.icon}</span>
-                                    <span className="flex-1">{cfg.label}{entry.sessionNumber ? ` #${entry.sessionNumber}` : ''}</span>
+                                    <span className="flex-1">
+                                      {cfg.label}{entry.sessionNumber ? ` #${entry.sessionNumber}` : ''}
+                                      {/* Recuperare de grup: o singura ora, dar afisam explicit cine a participat
+                                          (vezi recovery_group_id) - transparenta pentru profesor/admin in registru. */}
+                                      {entry.groupStudentNames && (
+                                        <span className="block text-xs text-blue-400 font-normal mt-0.5">
+                                          grup · {entry.groupStudentNames.join(', ')}
+                                        </span>
+                                      )}
+                                    </span>
                                     <span className="text-gray-400 font-mono text-xs">
                                       {new Date(entry.date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                       {entry.time ? ` - ${entry.time}` : ''}

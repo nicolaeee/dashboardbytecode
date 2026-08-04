@@ -168,8 +168,9 @@ export type AttendanceStatus = 'present' | 'absent' | 'made_up';
  * prezenta se bifeaza mereu, steluta doar daca a facut tema (se poate adauga retroactiv).
  * star_count e un multiplicator 0-3 (nu doar bifa facuta/nefacuta) - profesorul cicleaza
  * valoarea din click pe iconita. recovery_date/recovery_time = data/ora reala a sedintei
- * 1-la-1 de recuperare (cand status = 'made_up'), diferita de data lectiei ratate initial -
- * alimenteaza Payslip-ul.
+ * de recuperare (cand status = 'made_up'), diferita de data lectiei ratate initial -
+ * alimenteaza Payslip-ul. recovery_group_id leaga mai multi elevi in ACEEASI sesiune de
+ * recuperare de grup - vezi comentariul din schema.sql si Registru.tsx.
  */
 export type TrackerAttendance = {
   id: string;
@@ -180,6 +181,9 @@ export type TrackerAttendance = {
   star_count: number;
   recovery_date: string | null;
   recovery_time: string | null;
+  /** null = recuperare individuala; setat = recuperare de grup, impartita cu alti elevi care
+   * au acelasi id - impreuna conteaza ca O SINGURA ora in Payslip (vezi Registru.tsx). */
+  recovery_group_id: string | null;
   updated_at: string;
 };
 

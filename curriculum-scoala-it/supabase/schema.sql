@@ -341,6 +341,12 @@ create table public.tracker_attendance (
   star_count     int  not null default 0,
   recovery_date  date,
   recovery_time  text,   -- 'HH:MM', optional
+  -- Recuperare de grup: null = recuperare individuala (1-la-1), fiecare rand conteaza separat
+  -- in Payslip. Cand e setat (acelasi uuid pe toate randurile participantilor, generat
+  -- client-side la confirmarea popup-ului "Este o recuperare de grup?" din ProgressTracker.tsx),
+  -- TOATE randurile cu acelasi id conteaza impreuna ca O SINGURA ora predata/platita in
+  -- /registru (vezi Registru.tsx), desi fiecare elev isi recupereaza propria lectie ratata.
+  recovery_group_id uuid,
   updated_at     timestamptz not null default now(),
   unique (lesson_id, student_id)
 );
@@ -353,6 +359,7 @@ create index on public.tracker_lessons (teacher_id);
 create index on public.tracker_attendance (lesson_id);
 create index on public.tracker_attendance (student_id);
 create index on public.tracker_attendance (teacher_id);
+create index on public.tracker_attendance (recovery_group_id);
 -- Cel mai frecvent filtru din aplicatie: randurile ACTIVE ale profesorului curent
 -- (teacher_id = ... and deleted_at is null) - vezi progress/page.tsx, diploma-groups etc.
 create index on public.tracker_groups (teacher_id, deleted_at);

@@ -327,6 +327,12 @@ type ModalState =
   | { type: 'confirmDeleteLesson'; lessonId: string }
   | { type: 'newLesson'; groupId: string }
   | { type: 'recordRecovery'; studentId: string; lessonId: string }
+  // Popup "Este o recuperare de grup?" - aparut automat dupa ce profesorul confirma o
+  // recuperare pentru un elev si mai exista alti elevi din aceeasi clasa marcati "Recuperat"
+  // cu aceeasi data (vezi findGroupRecoveryCandidates). studentIds = elevul curent + candidatii.
+  | { type: 'groupRecoveryConfirm'; date: string; studentIds: string[] }
+  // Selectorul afisat dupa "Da" - profesorul bifeaza exact cine a participat la sesiune.
+  | { type: 'groupRecoveryPicker'; date: string; studentIds: string[] }
   | { type: 'studentHistory'; studentId: string }
   | { type: 'editMakeupLink' };
 
@@ -1293,6 +1299,12 @@ export default function ProgressTracker({
     const nextStarCount = status === 'absent' ? 0 : prevStarCount;
     const nextRecoveryDate = status === 'made_up' ? (recoveryDate ?? current?.recovery_date ?? nowDate()) : null;
     const nextRecoveryTime = status === 'made_up' ? (recoveryTime ?? current?.recovery_time ?? null) : null;
+    // O recuperare de grup (recovery_group_id) ramane valabila doar cat timp statusul e tot
+    // 'made_up' SI data nu s-a schimbat - altfel randul nu mai apartine aceleiasi sesiuni reale
+    // (vezi popup-ul "Este o recuperare de grup?" din handleSubmitRecovery), deci se rupe din
+    // grup si redevine o recuperare individuala pana e regrupat explicit.
+    const dateChanged = (current?.recovery_date ?? null) !== nextRecoveryDate;
+    const nextRecoveryGroupId = status === 'made_up' && !dateChanged ? (current?.recovery_group_id ?? null) : null;
     // Calculat ACUM (inainte de orice setAttendance) - altfel am citi starea veche din
     // closure dupa upsert, pentru ca setAttendance nu actualizeaza sincron variabila locala.
     const wasCounted = current?.status === 'present' || current?.status === 'made_up';
@@ -1302,13 +1314,13 @@ export default function ProgressTracker({
     const previousAttendance = attendance;
     if (current) {
       setAttendance((as) => as.map((a) => (a.id === current.id
-        ? { ...a, status, star_count: nextStarCount, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime } : a)));
+        ? { ...a, status, star_count: nextStarCount, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime, recovery_group_id: nextRecoveryGroupId } : a)));
     } else {
       const tempId = nextLocalId();
       setAttendance((as) => [...as, {
         id: tempId, teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId,
         status, star_count: nextStarCount, recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
-        updated_at: new Date().toISOString(),
+        recovery_group_id: nextRecoveryGroupId, updated_at: new Date().toISOString(),
       }]);
     }
 
@@ -1316,7 +1328,7 @@ export default function ProgressTracker({
       .upsert(
         {
           teacher_id: group.teacher_id, lesson_id: lessonId, student_id: studentId, status, star_count: nextStarCount,
-          recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime,
+          recovery_date: nextRecoveryDate, recovery_time: nextRecoveryTime, recovery_group_id: nextRecoveryGroupId,
         },
         { onConflict: 'lesson_id,student_id' }
       )
@@ -1435,12 +1447,61 @@ export default function ProgressTracker({
     if (created) setModal({ type: null });
   }
 
+  // Alti elevi din ACEEASI clasa, deja marcati "Recuperat" pentru ACEEASI data de recuperare
+  // (indiferent de lectia lor ratata initial, care poate fi diferita per elev) - semnul ca ar
+  // putea fi vorba de o singura sesiune reala de recuperare cu mai multi elevi impreuna, nu de
+  // recuperari 1-la-1 separate intamplator programate in aceeasi zi. Ignora elevii deja
+  // regrupati impreuna cu "studentId" (evita re-declansarea popup-ului pentru un grup deja
+  // confirmat). Foloseste `attendance`-ul din inchiderea acestui render (starea DINAINTE de
+  // recuperarea tocmai salvata) - suficient, pentru ca oricum excludem studentId din rezultat.
+  function findGroupRecoveryCandidates(studentId: string, date: string): string[] {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return [];
+    const current = attendance.find((a) => a.student_id === studentId && a.status === 'made_up' && a.recovery_date === date);
+    const seen = new Set<string>();
+    const candidates: string[] = [];
+    for (const a of attendance) {
+      if (a.student_id === studentId || a.status !== 'made_up' || a.recovery_date !== date) continue;
+      if (current?.recovery_group_id && a.recovery_group_id === current.recovery_group_id) continue;
+      if (seen.has(a.student_id)) continue;
+      const candidateStudent = students.find((s) => s.id === a.student_id);
+      if (!candidateStudent || candidateStudent.group_id !== student.group_id) continue;
+      seen.add(a.student_id);
+      candidates.push(a.student_id);
+    }
+    return candidates;
+  }
+
   async function handleSubmitRecovery(e: React.FormEvent, studentId: string, lessonId: string) {
     e.preventDefault();
     setBusy(true);
     await setAttendanceStatus(studentId, lessonId, 'made_up', recoveryForm.date, recoveryForm.time);
     setBusy(false);
+    const others = findGroupRecoveryCandidates(studentId, recoveryForm.date);
+    if (others.length > 0) {
+      setModal({ type: 'groupRecoveryConfirm', date: recoveryForm.date, studentIds: [studentId, ...others] });
+    } else {
+      setModal({ type: null });
+    }
+  }
+
+  // Aplica gruparea aleasa de profesor din selectorul "Recuperare de grup": genereaza un id
+  // comun (client-side, nu avem nevoie de un tabel separat - legatura traieste direct pe
+  // randurile din tracker_attendance) si il scrie pe TOATE randurile elevilor bifati, pentru
+  // data de recuperare curenta. Elevii nebifati raman recuperari individuale, contorizate
+  // separat, exact ca inainte (vezi tabelul din Registru.tsx).
+  async function handleConfirmGroupRecovery(date: string, selectedStudentIds: string[]) {
+    if (selectedStudentIds.length < 2) { setModal({ type: null }); return; }
+    setBusy(true);
+    const groupId = crypto.randomUUID();
+    const rows = attendance.filter((a) => selectedStudentIds.includes(a.student_id) && a.status === 'made_up' && a.recovery_date === date);
+    const ids = rows.map((r) => r.id);
+    const { error } = await supabase.from('tracker_attendance').update({ recovery_group_id: groupId }).in('id', ids);
+    setBusy(false);
+    if (error) return showToast('Eroare', 'error');
+    setAttendance((as) => as.map((a) => (ids.includes(a.id) ? { ...a, recovery_group_id: groupId } : a)));
     setModal({ type: null });
+    showToast(`Recuperare de grup salvata (${selectedStudentIds.length} elevi)`);
   }
 
 
@@ -2334,6 +2395,52 @@ export default function ProgressTracker({
         );
       })()}
 
+      {modal.type === 'groupRecoveryConfirm' && (() => {
+        const names = modal.studentIds.map((sid) => students.find((s) => s.id === sid)?.name ?? '?').join(', ');
+        return (
+          <ModalShell onClose={() => setModal({ type: null })}>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">🔄 Recuperare de grup?</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Ai marcat mai mulți elevi ca <span className="text-white font-semibold">Recuperat</span> pentru
+              data de <span className="text-white font-semibold">{new Date(modal.date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>:{' '}
+              <span className="text-white font-semibold">{names}</span>. A fost o singură sesiune de recuperare
+              cu mai mulți elevi împreună?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button" onClick={() => setModal({ type: null })}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors"
+              >
+                ❌ Nu, separat
+              </button>
+              <button
+                type="button"
+                onClick={() => setModal({ type: 'groupRecoveryPicker', date: modal.date, studentIds: modal.studentIds })}
+                className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold"
+              >
+                ✅ Da, grup
+              </button>
+            </div>
+          </ModalShell>
+        );
+      })()}
+
+      {modal.type === 'groupRecoveryPicker' && (() => {
+        const candidates = modal.studentIds
+          .map((sid) => students.find((s) => s.id === sid))
+          .filter((s): s is TrackerStudent => !!s);
+        if (candidates.length === 0) return null;
+        return (
+          <GroupRecoveryPickerModal
+            date={modal.date}
+            candidates={candidates}
+            busy={busy}
+            onClose={() => setModal({ type: null })}
+            onConfirm={(selectedIds) => handleConfirmGroupRecovery(modal.date, selectedIds)}
+          />
+        );
+      })()}
+
       {modal.type === 'studentHistory' && (() => {
         const student = students.find((s) => s.id === modal.studentId);
         if (!student) return null;
@@ -2636,6 +2743,62 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
         {children}
       </div>
     </div>
+  );
+}
+
+// Selectorul de participanti pentru recuperarea de grup: toti candidatii vin pre-bifati (cazul
+// tipic - toti au participat), profesorul debifeaza manual pe cine NU a fost de fapt prezent
+// (de ex. a fost o recuperare de grup cu doar 2 din 3 elevi detectati). Necesita minim 2
+// elevi bifati - sub 2 nu mai e "grup", ci o recuperare individuala, deja tratata normal.
+function GroupRecoveryPickerModal({
+  date, candidates, busy, onClose, onConfirm,
+}: {
+  date: string; candidates: TrackerStudent[]; busy: boolean;
+  onClose: () => void; onConfirm: (selectedIds: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(candidates.map((c) => c.id)));
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  const canConfirm = selected.size >= 2 && !busy;
+  return (
+    <ModalShell onClose={onClose}>
+      <h3 className="text-xl font-bold mb-2 text-[#C8F023]">👥 Cine a participat?</h3>
+      <p className="text-sm text-gray-400 mb-4">
+        Bifează exact elevii care au fost prezenți la sesiunea de recuperare din{' '}
+        <span className="text-white font-semibold">{new Date(date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>.
+        Sesiunea va conta ca <span className="text-white font-semibold">o singură oră</span> plătită, indiferent câți elevi bifezi.
+      </p>
+      <div className="space-y-2 mb-6">
+        {candidates.map((s) => (
+          <label
+            key={s.id}
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border cursor-pointer transition-colors ${selected.has(s.id) ? 'bg-blue-500/15 border-blue-500/40' : 'bg-gray-800 border-gray-700'}`}
+          >
+            <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} className="w-4 h-4 accent-[#C8F023]" />
+            <span className="font-semibold text-sm">{s.name}</span>
+          </label>
+        ))}
+      </div>
+      {selected.size < 2 && (
+        <p className="text-xs text-amber-400 mb-4">Bifează cel puțin 2 elevi ca să formezi un grup.</p>
+      )}
+      <div className="flex gap-3">
+        <button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+          ✖️ Anulează
+        </button>
+        <button
+          type="button" disabled={!canConfirm} onClick={() => onConfirm([...selected])}
+          className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          ✅ Confirmă grupul
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 
