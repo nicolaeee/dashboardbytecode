@@ -326,13 +326,13 @@ type ModalState =
   | { type: 'confirmDeleteClass'; groupId: string }
   | { type: 'confirmDeleteLesson'; lessonId: string }
   | { type: 'newLesson'; groupId: string }
+  // Prima intrebare la apasarea "Recuperat": profesorul alege explicit daca a fost o
+  // sesiune 1-la-1 sau una de grup, INAINTE de a completa data/ora recuperarii.
+  | { type: 'recoveryTypeChoice'; studentId: string; lessonId: string }
   | { type: 'recordRecovery'; studentId: string; lessonId: string }
-  // Popup "Este o recuperare de grup?" - aparut automat dupa ce profesorul confirma o
-  // recuperare pentru un elev si mai exista alti elevi din aceeasi clasa marcati "Recuperat"
-  // cu aceeasi data (vezi findGroupRecoveryCandidates). studentIds = elevul curent + candidatii.
-  | { type: 'groupRecoveryConfirm'; date: string; studentIds: string[] }
-  // Selectorul afisat dupa "Da" - profesorul bifeaza exact cine a participat la sesiune.
-  | { type: 'groupRecoveryPicker'; date: string; studentIds: string[] }
+  // Data/ora recuperarii + chenarul cu ceilalti colegi din grupa, pentru bifat cine a
+  // participat efectiv (vezi GroupRecoveryFormModal si handleSubmitGroupRecovery).
+  | { type: 'recordGroupRecovery'; studentId: string; lessonId: string }
   | { type: 'studentHistory'; studentId: string }
   | { type: 'editMakeupLink' };
 
@@ -1282,11 +1282,11 @@ export default function ProgressTracker({
   // din Payslip-ul din /registru.
   async function setAttendanceStatus(
     studentId: string, lessonId: string, status: AttendanceStatus, recoveryDate?: string, recoveryTime?: string
-  ) {
+  ): Promise<TrackerAttendance | undefined> {
     const student = students.find((s) => s.id === studentId);
-    if (!student) return;
+    if (!student) return undefined;
     const group = getGroupById(student.group_id);
-    if (!group) return;
+    if (!group) return undefined;
 
     // O lectie poate fi salvata chiar daca marcheaza 100% dintre elevi Absenti - nu blocam in
     // acest caz (vezi regula de business: se inregistreaza absentele normal). Indexul de materie
@@ -1336,7 +1336,8 @@ export default function ProgressTracker({
 
     if (error || !data) {
       setAttendance(previousAttendance);
-      return showToast('Eroare', 'error');
+      showToast('Eroare', 'error');
+      return undefined;
     }
     setAttendance((as) => [...as.filter((a) => !(a.lesson_id === lessonId && a.student_id === studentId)), data as TrackerAttendance]);
 
@@ -1384,6 +1385,7 @@ export default function ProgressTracker({
       }
       await patchStudent(studentId, patch);
     }
+    return data as TrackerAttendance;
   }
 
   // Butonul "+" (lectie noua) e blocat STRICT daca ultima lectie a clasei mai are elevi
@@ -1412,7 +1414,7 @@ export default function ProgressTracker({
   function openRecoveryModal(studentId: string, lessonId: string) {
     const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
     setRecoveryForm({ date: current?.recovery_date ?? nowDate(), time: current?.recovery_time ?? nowTime() });
-    setModal({ type: 'recordRecovery', studentId, lessonId });
+    setModal({ type: 'recoveryTypeChoice', studentId, lessonId });
   }
 
   function openStudentHistory(studentId: string) {
@@ -1447,61 +1449,41 @@ export default function ProgressTracker({
     if (created) setModal({ type: null });
   }
 
-  // Alti elevi din ACEEASI clasa, deja marcati "Recuperat" pentru ACEEASI data de recuperare
-  // (indiferent de lectia lor ratata initial, care poate fi diferita per elev) - semnul ca ar
-  // putea fi vorba de o singura sesiune reala de recuperare cu mai multi elevi impreuna, nu de
-  // recuperari 1-la-1 separate intamplator programate in aceeasi zi. Ignora elevii deja
-  // regrupati impreuna cu "studentId" (evita re-declansarea popup-ului pentru un grup deja
-  // confirmat). Foloseste `attendance`-ul din inchiderea acestui render (starea DINAINTE de
-  // recuperarea tocmai salvata) - suficient, pentru ca oricum excludem studentId din rezultat.
-  function findGroupRecoveryCandidates(studentId: string, date: string): string[] {
-    const student = students.find((s) => s.id === studentId);
-    if (!student) return [];
-    const current = attendance.find((a) => a.student_id === studentId && a.status === 'made_up' && a.recovery_date === date);
-    const seen = new Set<string>();
-    const candidates: string[] = [];
-    for (const a of attendance) {
-      if (a.student_id === studentId || a.status !== 'made_up' || a.recovery_date !== date) continue;
-      if (current?.recovery_group_id && a.recovery_group_id === current.recovery_group_id) continue;
-      if (seen.has(a.student_id)) continue;
-      const candidateStudent = students.find((s) => s.id === a.student_id);
-      if (!candidateStudent || candidateStudent.group_id !== student.group_id) continue;
-      seen.add(a.student_id);
-      candidates.push(a.student_id);
-    }
-    return candidates;
-  }
-
+  // Recuperare individuala (1-la-1) - alegerea "Individual" din primul pas. Se inregistreaza
+  // DOAR pentru elevul curent, fara nicio legatura de grup.
   async function handleSubmitRecovery(e: React.FormEvent, studentId: string, lessonId: string) {
     e.preventDefault();
     setBusy(true);
     await setAttendanceStatus(studentId, lessonId, 'made_up', recoveryForm.date, recoveryForm.time);
     setBusy(false);
-    const others = findGroupRecoveryCandidates(studentId, recoveryForm.date);
-    if (others.length > 0) {
-      setModal({ type: 'groupRecoveryConfirm', date: recoveryForm.date, studentIds: [studentId, ...others] });
-    } else {
-      setModal({ type: null });
-    }
+    setModal({ type: null });
   }
 
-  // Aplica gruparea aleasa de profesor din selectorul "Recuperare de grup": genereaza un id
-  // comun (client-side, nu avem nevoie de un tabel separat - legatura traieste direct pe
-  // randurile din tracker_attendance) si il scrie pe TOATE randurile elevilor bifati, pentru
-  // data de recuperare curenta. Elevii nebifati raman recuperari individuale, contorizate
-  // separat, exact ca inainte (vezi tabelul din Registru.tsx).
-  async function handleConfirmGroupRecovery(date: string, selectedStudentIds: string[]) {
-    if (selectedStudentIds.length < 2) { setModal({ type: null }); return; }
+  // Recuperare de grup - alegerea "Grup" din primul pas. Marcheaza "Recuperat" pentru elevul
+  // curent SI pentru fiecare coleg bifat in chenar, toti pe aceeasi lectie/data/ora. Daca la
+  // final sunt cel putin 2 elevi marcati, genereaza un recovery_group_id comun (client-side,
+  // nu avem nevoie de un tabel separat - legatura traieste direct pe randurile din
+  // tracker_attendance) si il scrie pe toate randurile lor, ca sistemul sa le numere ca O
+  // SINGURA sesiune platita in registru (vezi recoveryUnits din Registru.tsx), desi salveaza
+  // legatura exacta cu fiecare elev bifat. Daca profesorul nu bifeaza niciun coleg, ramane o
+  // recuperare individuala normala, identica cu fluxul de mai sus.
+  async function handleSubmitGroupRecovery(e: React.FormEvent, studentId: string, lessonId: string, otherStudentIds: string[]) {
+    e.preventDefault();
     setBusy(true);
-    const groupId = crypto.randomUUID();
-    const rows = attendance.filter((a) => selectedStudentIds.includes(a.student_id) && a.status === 'made_up' && a.recovery_date === date);
-    const ids = rows.map((r) => r.id);
-    const { error } = await supabase.from('tracker_attendance').update({ recovery_group_id: groupId }).in('id', ids);
+    const rows: TrackerAttendance[] = [];
+    for (const id of [studentId, ...otherStudentIds]) {
+      const row = await setAttendanceStatus(id, lessonId, 'made_up', recoveryForm.date, recoveryForm.time);
+      if (row) rows.push(row);
+    }
+    if (rows.length >= 2) {
+      const groupId = crypto.randomUUID();
+      const ids = rows.map((r) => r.id);
+      const { error } = await supabase.from('tracker_attendance').update({ recovery_group_id: groupId }).in('id', ids);
+      if (!error) setAttendance((as) => as.map((a) => (ids.includes(a.id) ? { ...a, recovery_group_id: groupId } : a)));
+    }
     setBusy(false);
-    if (error) return showToast('Eroare', 'error');
-    setAttendance((as) => as.map((a) => (ids.includes(a.id) ? { ...a, recovery_group_id: groupId } : a)));
     setModal({ type: null });
-    showToast(`Recuperare de grup salvata (${selectedStudentIds.length} elevi)`);
+    showToast(rows.length >= 2 ? `Recuperare de grup salvata (${rows.length} elevi)` : 'Recuperare salvata');
   }
 
 
@@ -2356,6 +2338,38 @@ export default function ProgressTracker({
         </ModalShell>
       )}
 
+      {modal.type === 'recoveryTypeChoice' && (() => {
+        const student = students.find((s) => s.id === modal.studentId);
+        if (!student) return null;
+        return (
+          <ModalShell onClose={() => setModal({ type: null })}>
+            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">🔄 Tip Recuperare</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Recuperare pentru <span className="text-white font-semibold">{student.name}</span> - a fost o
+              sesiune 1 la 1 sau de grup, cu mai mulți colegi?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => setModal({ type: 'recordRecovery', studentId: modal.studentId, lessonId: modal.lessonId })}
+                className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 py-4 rounded-2xl font-semibold text-left px-4 transition-colors"
+              >
+                👤 Individual
+                <span className="block text-xs text-gray-400 font-normal mt-0.5">Sesiune 1 la 1, doar pentru acest elev</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setModal({ type: 'recordGroupRecovery', studentId: modal.studentId, lessonId: modal.lessonId })}
+                className="w-full tracker-btn-primary py-4 rounded-2xl font-semibold text-left px-4"
+              >
+                👥 Grup
+                <span className="block text-xs opacity-70 font-normal mt-0.5">Sesiune comună cu alți colegi din grupă</span>
+              </button>
+            </div>
+          </ModalShell>
+        );
+      })()}
+
       {modal.type === 'recordRecovery' && (() => {
         const student = students.find((s) => s.id === modal.studentId);
         if (!student) return null;
@@ -2395,48 +2409,22 @@ export default function ProgressTracker({
         );
       })()}
 
-      {modal.type === 'groupRecoveryConfirm' && (() => {
-        const names = modal.studentIds.map((sid) => students.find((s) => s.id === sid)?.name ?? '?').join(', ');
+      {modal.type === 'recordGroupRecovery' && (() => {
+        const student = students.find((s) => s.id === modal.studentId);
+        const lesson = lessons.find((l) => l.id === modal.lessonId);
+        if (!student || !lesson) return null;
+        const otherStudents = getStudentsForGroup(lesson.group_id).filter((s) => s.id !== modal.studentId);
         return (
-          <ModalShell onClose={() => setModal({ type: null })}>
-            <h3 className="text-xl font-bold mb-2 text-[#C8F023]">🔄 Recuperare de grup?</h3>
-            <p className="text-sm text-gray-400 mb-6">
-              Ai marcat mai mulți elevi ca <span className="text-white font-semibold">Recuperat</span> pentru
-              data de <span className="text-white font-semibold">{new Date(modal.date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>:{' '}
-              <span className="text-white font-semibold">{names}</span>. A fost o singură sesiune de recuperare
-              cu mai mulți elevi împreună?
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button" onClick={() => setModal({ type: null })}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors"
-              >
-                ❌ Nu, separat
-              </button>
-              <button
-                type="button"
-                onClick={() => setModal({ type: 'groupRecoveryPicker', date: modal.date, studentIds: modal.studentIds })}
-                className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold"
-              >
-                ✅ Da, grup
-              </button>
-            </div>
-          </ModalShell>
-        );
-      })()}
-
-      {modal.type === 'groupRecoveryPicker' && (() => {
-        const candidates = modal.studentIds
-          .map((sid) => students.find((s) => s.id === sid))
-          .filter((s): s is TrackerStudent => !!s);
-        if (candidates.length === 0) return null;
-        return (
-          <GroupRecoveryPickerModal
-            date={modal.date}
-            candidates={candidates}
+          <GroupRecoveryFormModal
+            student={student}
+            otherStudents={otherStudents}
+            date={recoveryForm.date}
+            time={recoveryForm.time}
             busy={busy}
+            onDateChange={(v) => setRecoveryForm((f) => ({ ...f, date: v }))}
+            onTimeChange={(v) => setRecoveryForm((f) => ({ ...f, time: v }))}
             onClose={() => setModal({ type: null })}
-            onConfirm={(selectedIds) => handleConfirmGroupRecovery(modal.date, selectedIds)}
+            onSubmit={(e, otherIds) => handleSubmitGroupRecovery(e, modal.studentId, modal.lessonId, otherIds)}
           />
         );
       })()}
@@ -2746,17 +2734,20 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
   );
 }
 
-// Selectorul de participanti pentru recuperarea de grup: toti candidatii vin pre-bifati (cazul
-// tipic - toti au participat), profesorul debifeaza manual pe cine NU a fost de fapt prezent
-// (de ex. a fost o recuperare de grup cu doar 2 din 3 elevi detectati). Necesita minim 2
-// elevi bifati - sub 2 nu mai e "grup", ci o recuperare individuala, deja tratata normal.
-function GroupRecoveryPickerModal({
-  date, candidates, busy, onClose, onConfirm,
+// Chenarul de recuperare de grup: data/ora sesiunii + lista celorlalti colegi din grupa
+// elevului curent, fiecare cu bifa proprie. Elevul pentru care s-a apasat "Recuperat" e mereu
+// inclus (nu are bifa - e implicit); profesorul bifeaza rapid EXACT care alti colegi au fost
+// si ei prezenti la aceeasi sesiune (de ex. 2 din 3 copii). Indiferent cati colegi sunt bifati,
+// handleSubmitGroupRecovery scrie un singur recovery_group_id comun pe toate randurile lor -
+// sesiunea conteaza ca o singura ora platita in registru (vezi recoveryUnits din Registru.tsx).
+function GroupRecoveryFormModal({
+  student, otherStudents, date, time, busy, onDateChange, onTimeChange, onClose, onSubmit,
 }: {
-  date: string; candidates: TrackerStudent[]; busy: boolean;
-  onClose: () => void; onConfirm: (selectedIds: string[]) => void;
+  student: TrackerStudent; otherStudents: TrackerStudent[]; date: string; time: string; busy: boolean;
+  onDateChange: (v: string) => void; onTimeChange: (v: string) => void; onClose: () => void;
+  onSubmit: (e: React.FormEvent, otherStudentIds: string[]) => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(candidates.map((c) => c.id)));
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -2764,40 +2755,55 @@ function GroupRecoveryPickerModal({
       return next;
     });
   }
-  const canConfirm = selected.size >= 2 && !busy;
   return (
     <ModalShell onClose={onClose}>
-      <h3 className="text-xl font-bold mb-2 text-[#C8F023]">👥 Cine a participat?</h3>
+      <h3 className="text-xl font-bold mb-2 text-[#C8F023]">👥 Recuperare de grup</h3>
       <p className="text-sm text-gray-400 mb-4">
-        Bifează exact elevii care au fost prezenți la sesiunea de recuperare din{' '}
-        <span className="text-white font-semibold">{new Date(date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>.
-        Sesiunea va conta ca <span className="text-white font-semibold">o singură oră</span> plătită, indiferent câți elevi bifezi.
+        Sesiune de grup pentru <span className="text-white font-semibold">{student.name}</span>
       </p>
-      <div className="space-y-2 mb-6">
-        {candidates.map((s) => (
-          <label
-            key={s.id}
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border cursor-pointer transition-colors ${selected.has(s.id) ? 'bg-blue-500/15 border-blue-500/40' : 'bg-gray-800 border-gray-700'}`}
-          >
-            <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} className="w-4 h-4 accent-[#C8F023]" />
-            <span className="font-semibold text-sm">{s.name}</span>
-          </label>
-        ))}
-      </div>
-      {selected.size < 2 && (
-        <p className="text-xs text-amber-400 mb-4">Bifează cel puțin 2 elevi ca să formezi un grup.</p>
-      )}
-      <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
-          ✖️ Anulează
-        </button>
-        <button
-          type="button" disabled={!canConfirm} onClick={() => onConfirm([...selected])}
-          className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          ✅ Confirmă grupul
-        </button>
-      </div>
+      <form onSubmit={(e) => onSubmit(e, [...selected])}>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Data</label>
+            <input
+              type="date" value={date} onChange={(e) => onDateChange(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" required autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-2">Ora</label>
+            <TimeInput value={time} onChange={onTimeChange} className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white" />
+          </div>
+        </div>
+        {otherStudents.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm font-semibold mb-2">Cine altcineva a participat?</p>
+            <p className="text-xs text-gray-400 mb-3">
+              Bifează colegii din grupă care au participat și ei la această sesiune. Indiferent câți bifezi, sesiunea
+              va conta ca <span className="text-white font-semibold">o singură oră</span> plătită în registru.
+            </p>
+            <div className="space-y-2">
+              {otherStudents.map((s) => (
+                <label
+                  key={s.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl border cursor-pointer transition-colors ${selected.has(s.id) ? 'bg-blue-500/15 border-blue-500/40' : 'bg-gray-800 border-gray-700'}`}
+                >
+                  <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} className="w-4 h-4 accent-[#C8F023]" />
+                  <span className="font-semibold text-sm">{s.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+            ✖️ Anuleaza
+          </button>
+          <button type="submit" disabled={busy} className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold">
+            ✅ Confirma recuperarea
+          </button>
+        </div>
+      </form>
     </ModalShell>
   );
 }
