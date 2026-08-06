@@ -319,7 +319,9 @@ create table public.tracker_lessons (
   format         text not null default 'grup' check (format in ('grup', 'individual')),
   -- false = "Neefectuata" (absolut toti elevii activi ai grupei marcati Absent la aceasta
   -- lectie) - recalculat automat la fiecare marcare de prezenta (vezi setAttendanceStatus in
-  -- ProgressTracker.tsx). Exclusa din contorul de ore predate din Payslip-ul din /registru.
+  -- ProgressTracker.tsx). Controleaza DOAR avansarea materiei (M/L) - devine true si pe baza
+  -- unui 'made_up' fara nicio sedinta live. Payslip-ul din /registru NU foloseste acest flag
+  -- (ar dubla ora), ci prezenta 'present' live - vezi src/lib/registryCalc.ts.
   is_taught      boolean not null default true,
   homework_note  text,   -- notita libera de tema pentru aceasta lectie, editabila din Tracker
   created_at     timestamptz not null default now(),

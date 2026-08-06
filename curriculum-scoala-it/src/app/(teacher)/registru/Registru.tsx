@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerLesson, TrackerAttendance } from '@/lib/types';
+import { computeMonthEntries, computePayslipTable, computePayslipTotals, type RegistryEntry } from '@/lib/registryCalc';
 
 const MONTHS = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
 const DAY_LABELS = ['Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă', 'Duminică'];
@@ -14,10 +15,6 @@ const ENTRY_CONFIG = {
 
 type TeacherOption = { id: string; label: string };
 type StudentOption = { id: string; name: string };
-// groupStudentNames prezent DOAR pentru o recuperare de grup (recovery_group_id nenul pe randul
-// din tracker_attendance) - randurile grupate sunt condensate intr-o SINGURA intrare in registru,
-// desi reprezinta mai multe randuri din tracker_attendance (vezi dedup-ul din monthEntries).
-type RegistryEntry = { date: string; time: string | null; kind: keyof typeof ENTRY_CONFIG; sessionNumber?: number; groupStudentNames?: string[] };
 
 // Index Luni=0 .. Duminica=6 (spre deosebire de Date.getDay(), unde Duminica=0).
 function mondayIndexedDay(d: Date) { return (d.getDay() + 6) % 7; }
@@ -55,7 +52,10 @@ export default function Registru({
     (async () => {
       const [{ data: l }, { data: a }, { data: s }] = await Promise.all([
         supabase.from('tracker_lessons').select('*').eq('teacher_id', selectedTeacherId),
-        supabase.from('tracker_attendance').select('*').eq('teacher_id', selectedTeacherId).eq('status', 'made_up'),
+        // 'present' e necesar (nu doar 'made_up') ca sa stim care lectii au avut o sedinta
+        // LIVE reala (vezi liveLessonIds in registryCalc.ts) - fara el, o lectie 100% absenta
+        // si recuperata ulterior ar fi platita de doua ori.
+        supabase.from('tracker_attendance').select('*').eq('teacher_id', selectedTeacherId).in('status', ['present', 'made_up']),
         supabase.from('tracker_students').select('id, name').eq('teacher_id', selectedTeacherId),
       ]);
       if (cancelled) return;
@@ -67,83 +67,22 @@ export default function Registru({
     return () => { cancelled = true; };
   }, [selectedTeacherId, viewerId, initialLessons, initialAttendance, initialStudents, supabase]);
 
-  // O recuperare de grup (recovery_group_id nenul, mai multi elevi pe aceeasi sesiune reala -
-  // vezi popup-ul "Este o recuperare de grup?" din ProgressTracker.tsx) conteaza ca O SINGURA
-  // ora predata/platita, indiferent de cati elevi participa (1-3 de obicei) - randurile grupate
-  // se dedup dupa recovery_group_id inainte de a fi numarate. Recuperarile individuale
-  // (recovery_group_id null) raman neschimbate: fiecare rand conteaza separat, ca inainte.
-  const recoveryUnits = useMemo(() => {
-    const seenGroups = new Set<string>();
-    const units: { date: string; time: string | null; studentNames: string[] }[] = [];
-    for (const a of attendance) {
-      if (a.status !== 'made_up' || !a.recovery_date) continue;
-      if (a.recovery_group_id) {
-        if (seenGroups.has(a.recovery_group_id)) continue;
-        seenGroups.add(a.recovery_group_id);
-        const groupNames = attendance
-          .filter((x) => x.recovery_group_id === a.recovery_group_id)
-          .map((x) => students.find((s) => s.id === x.student_id)?.name ?? '?');
-        units.push({ date: a.recovery_date, time: a.recovery_time, studentNames: groupNames });
-      } else {
-        const name = students.find((s) => s.id === a.student_id)?.name ?? '?';
-        units.push({ date: a.recovery_date, time: a.recovery_time, studentNames: [name] });
-      }
-    }
-    return units;
-  }, [attendance, students]);
+  // Toata logica de calcul (ce conteaza ca ora "grup"/"individual" vs "recuperare", fara
+  // dublari) traieste in lib/registryCalc.ts, testata separat in registryCalc.test.ts -
+  // NU folosim is_taught aici (acela e despre avansarea materiei, vezi ProgressTracker.tsx),
+  // ci prezenta LIVE ('present') a cel putin unui elev la lesson_date.
+  const table = useMemo(
+    () => computePayslipTable(lessons, attendance, students, year),
+    [lessons, attendance, students, year]
+  );
 
-  const table = useMemo(() => {
-    const rows = MONTHS.map(() => ({ grup: 0, individual: 0, recuperare: 0 }));
-    for (const l of lessons) {
-      // Lectie "Neefectuata" (0 prezenti, toti elevii absenti) - nu conteaza ca ora
-      // predata/achitata, vezi is_taught in ProgressTracker.tsx (setAttendanceStatus).
-      if (!l.is_taught) continue;
-      const d = new Date(l.lesson_date);
-      if (d.getFullYear() !== year) continue;
-      if (l.format === 'individual') rows[d.getMonth()].individual += 1;
-      else rows[d.getMonth()].grup += 1;
-    }
-    for (const u of recoveryUnits) {
-      const d = new Date(u.date);
-      if (d.getFullYear() !== year) continue;
-      rows[d.getMonth()].recuperare += 1;
-    }
-    return rows;
-  }, [lessons, recoveryUnits, year]);
-
-  const totals = useMemo(() => {
-    const t = { grup: 0, individual: 0, recuperare: 0 };
-    table.forEach((row) => { t.grup += row.grup; t.individual += row.individual; t.recuperare += row.recuperare; });
-    return t;
-  }, [table]);
+  const totals = useMemo(() => computePayslipTotals(table), [table]);
   const grandTotal = totals.grup + totals.individual + totals.recuperare;
 
   const monthEntries = useMemo(() => {
     if (selectedMonth === null) return [];
-    const entries: RegistryEntry[] = [];
-    for (const l of lessons) {
-      // Lectie "Neefectuata" (0 prezenti) - exclusa si din detaliul lunar, la fel ca din total.
-      if (!l.is_taught) continue;
-      const d = new Date(l.lesson_date);
-      if (d.getFullYear() === year && d.getMonth() === selectedMonth) {
-        entries.push({ date: l.lesson_date, time: l.lesson_time, kind: l.format, sessionNumber: l.session_number });
-      }
-    }
-    for (const u of recoveryUnits) {
-      const d = new Date(u.date);
-      if (d.getFullYear() === year && d.getMonth() === selectedMonth) {
-        // Un singur elev = recuperare individuala normala (fara nume in eticheta, ca inainte);
-        // 2+ = recuperare de grup, condensata intr-o singura intrare "o ora", cu numele tuturor
-        // participantilor afisate explicit (vezi recoveryUnits mai sus).
-        entries.push({
-          date: u.date, time: u.time, kind: 'recuperare',
-          groupStudentNames: u.studentNames.length > 1 ? u.studentNames : undefined,
-        });
-      }
-    }
-    entries.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''));
-    return entries;
-  }, [lessons, recoveryUnits, year, selectedMonth]);
+    return computeMonthEntries(lessons, attendance, students, year, selectedMonth);
+  }, [lessons, attendance, students, year, selectedMonth]);
 
   const monthWeeks = useMemo(() => {
     const map = new Map<number, RegistryEntry[]>();

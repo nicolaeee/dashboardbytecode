@@ -1346,8 +1346,9 @@ export default function ProgressTracker({
     // marcare (nu doar la "absent"), inclusiv cand profesorul editeaza o lectie din trecut -
     // asta garanteaza ca schimbarea unui elev din Absent in Recuperat, chiar si retroactiv,
     // deblocheaza imediat indexul (vezi createLesson, care scaneaza toate lectiile "Efectuate"
-    // din istoric, nu doar ultima). Alimenteaza badge-ul "Neefectuată" din Progress Tracker si
-    // excluderea din Payslip-ul din /registru.
+    // din istoric, nu doar ultima). Alimenteaza DOAR badge-ul "Neefectuată" din Progress Tracker -
+    // NU si Payslip-ul din /registru, care numara orele dupa prezenta 'present' LIVE la
+    // lesson_date (vezi src/lib/registryCalc.ts), ca sa nu dubleze o lectie ratata+recuperata.
     const groupStudents = getStudentsForGroup(student.group_id);
     const hasAnyPresentOrMadeUp = groupStudents.some((gs) => {
       const st = gs.id === studentId ? status : attendance.find((a) => a.lesson_id === lessonId && a.student_id === gs.id)?.status;

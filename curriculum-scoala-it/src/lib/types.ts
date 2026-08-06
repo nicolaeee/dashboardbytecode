@@ -152,8 +152,11 @@ export type TrackerLesson = {
   format: LessonKind;
   /** false = "Neefectuată" - absolut toti elevii activi ai grupei au fost marcati Absenti la
    * aceasta lectie (recalculat automat la fiecare marcare de prezenta, vezi setAttendanceStatus
-   * in ProgressTracker.tsx). Exclusa din contorul de ore predate din Payslip-ul din /registru,
-   * dar prezentele elevilor raman salvate normal (alertele de recuperare functioneaza la fel). */
+   * in ProgressTracker.tsx). Controleaza DOAR avansarea materiei (M/L, vezi createLesson) -
+   * devine true si pe baza unui 'made_up' (recuperare), fara nicio sedinta live la lesson_date.
+   * NU e folosit pentru Payslip-ul din /registru (ar dubla ora - vezi lib/registryCalc.ts,
+   * care foloseste prezenta 'present' live, nu is_taught). Prezentele elevilor raman salvate
+   * normal indiferent de acest flag (alertele de recuperare functioneaza la fel). */
   is_taught: boolean;
   /** Notita libera de tema pentru aceasta lectie (nu per elev), editabila din Tracker. */
   homework_note: string | null;
