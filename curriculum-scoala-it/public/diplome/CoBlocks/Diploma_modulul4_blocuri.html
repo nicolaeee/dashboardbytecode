@@ -138,6 +138,7 @@
         .subtitle { font-size: 20px; color: var(--text-muted); margin: 30px 0 10px 0; font-weight: 400; }
 
         .student-name {
+            white-space: nowrap;
             font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900; color: var(--brand-color); margin: 0 0 30px 0;
             text-shadow: 0 0 40px rgba(200, 240, 35, 0.3); letter-spacing: -1px;
         }
@@ -379,7 +380,128 @@
 
     <!-- SCRIPTURI FUNCTIONALITATE -->
     <script>
+                                function fitStudentNameMeasure(text, style, weight, sizePx, family, letterSpacing) {
+            var canvas = fitStudentNameMeasure._c || (fitStudentNameMeasure._c = document.createElement('canvas'));
+            var ctx = canvas.getContext('2d');
+            ctx.font = [style && style !== 'normal' ? style : '', weight, sizePx + 'px', family].filter(Boolean).join(' ');
+            var w = ctx.measureText(text).width;
+            var ls = parseFloat(letterSpacing) || 0;
+            if (ls) w += ls * Math.max(0, text.length - 1);
+            return w;
+        }
+
+        function fitStudentNamePseudoWidth(el, pseudo) {
+            var cs = getComputedStyle(el, pseudo);
+            var content = cs.content;
+            if (!content || content === 'none' || content === 'normal') return 0;
+            var str = content.replace(/^["']|["']$/g, '');
+            if (!str) return 0;
+            return fitStudentNameMeasure(str, cs.fontStyle, cs.fontWeight, parseFloat(cs.fontSize), cs.fontFamily, cs.letterSpacing);
+        }
+
+                function fitStudentNameMeasure(text, style, weight, sizePx, family, letterSpacing) {
+            var canvas = fitStudentNameMeasure._c || (fitStudentNameMeasure._c = document.createElement('canvas'));
+            var ctx = canvas.getContext('2d');
+            ctx.font = [style && style !== 'normal' ? style : '', weight, sizePx + 'px', family].filter(Boolean).join(' ');
+            var w = ctx.measureText(text).width;
+            var ls = parseFloat(letterSpacing) || 0;
+            if (ls) w += ls * Math.max(0, text.length - 1);
+            return w;
+        }
+
+        function fitStudentNamePseudoWidth(el, pseudo) {
+            var cs = getComputedStyle(el, pseudo);
+            var content = cs.content;
+            if (!content || content === 'none' || content === 'normal') return 0;
+            var str = content.replace(/^["']|["']$/g, '');
+            if (!str) return 0;
+            return fitStudentNameMeasure(str, cs.fontStyle, cs.fontWeight, parseFloat(cs.fontSize), cs.fontFamily, cs.letterSpacing);
+        }
+
+        function fitStudentName() {
+            var nameEl = document.getElementById('name-p1');
+            if (!nameEl) return;
+            var parent = nameEl.parentElement;
+            if (!parent) return;
+            if (!nameEl.dataset.baseFontSize) {
+                nameEl.dataset.baseFontSize = parseFloat(getComputedStyle(nameEl).fontSize);
+            }
+            var baseSize = parseFloat(nameEl.dataset.baseFontSize);
+            var text = (nameEl.innerText || nameEl.textContent || '').trim();
+            var len = text.length;
+            var scale = 1;
+            if (len > 28) scale = 0.62;
+            else if (len > 20) scale = 0.82;
+            nameEl.style.transition = 'none';
+            nameEl.style.whiteSpace = 'nowrap';
+
+            // Fixed-width siblings sharing a flex row with the name (e.g. decorative
+            // laurels) don't shrink, so subtract them from the available width once.
+            // A flex-row parent is itself typically sized to fit its children (including
+            // the name), so it's an unreliable width reference - start the ancestor scan
+            // one level higher in that case, and let the sibling subtraction below account
+            // for the space those fixed-width neighbors take out of that wider ancestor.
+            var reduction = 0;
+            var parentStyle = getComputedStyle(parent);
+            var isFlexRow = parentStyle.display.indexOf('flex') !== -1 && parentStyle.flexDirection.indexOf('row') !== -1;
+            if (isFlexRow) {
+                var gap = parseFloat(parentStyle.columnGap || parentStyle.gap) || 0;
+                Array.prototype.forEach.call(parent.children, function (sibling) {
+                    if (sibling === nameEl) return;
+                    var siblingStyle = getComputedStyle(sibling);
+                    if (siblingStyle.position === 'absolute' || siblingStyle.display === 'none') return;
+                    reduction += sibling.getBoundingClientRect().width + gap;
+                });
+            }
+
+            // The immediate parent (or its parent, for the flex-row case above) may be
+            // sized to fit its (currently oversized) content rather than to the card's
+            // real available space, so walk up through every ancestor up to the card
+            // (.page) and take the narrowest clientWidth seen - that's the tightest real
+            // constraint regardless of which level imposes it.
+            var minWidth = Infinity;
+            var node = isFlexRow ? (parent.parentElement || parent) : parent;
+            var depth = 0;
+            while (node && depth < 10) {
+                if (node.clientWidth > 0) minWidth = Math.min(minWidth, node.clientWidth);
+                if (node.classList && node.classList.contains('page')) break;
+                node = node.parentElement;
+                depth++;
+            }
+            if (!isFinite(minWidth)) minWidth = parent.clientWidth;
+            var maxWidth = minWidth - reduction - 6;
+
+            // Measure the *actual* text width with canvas instead of relying on
+            // scrollWidth: when the element is stretched to fill its flex container
+            // (rather than shrink-wrapped to its content), scrollWidth just reports the
+            // box's own width and never reveals how much shorter the real text is.
+            var cs = getComputedStyle(nameEl);
+            var paddingW = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+            var borderW = (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+            var beforeW = fitStudentNamePseudoWidth(nameEl, '::before');
+            var afterW = fitStudentNamePseudoWidth(nameEl, '::after');
+            var chrome = paddingW + borderW + beforeW + afterW;
+
+            var fontSize = baseSize * scale;
+            var guard = 0;
+            while (maxWidth > 0 && guard < 80) {
+                var textW = fitStudentNameMeasure(text, cs.fontStyle, cs.fontWeight, fontSize, cs.fontFamily, cs.letterSpacing);
+                if (textW + chrome <= maxWidth) break;
+                fontSize -= 1;
+                guard++;
+                if (fontSize < baseSize * 0.25) { fontSize = baseSize * 0.25; break; }
+            }
+            nameEl.style.fontSize = fontSize + 'px';
+        }
+
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+                if (typeof fitStudentName === 'function') fitStudentName();
+            });
+        }
+
         function syncNames() {
+            fitStudentName();
             const fullName = document.getElementById('name-p1').innerText;
             const firstName = fullName.split(' ')[0] || fullName;
             const p3 = document.getElementById('name-p3');
