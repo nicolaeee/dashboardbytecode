@@ -111,6 +111,36 @@ export async function POST(request: Request) {
   // La "Programat" nu incrementam contorul de notificari catre parinte - e un pas diferit,
   // nu un nou reminder; trimitem in payload valoarea curenta, neschimbata.
   const notificationStep = action === 'notify_parent' ? currentCount + 1 : currentCount;
+  const lastMakeupNotification = new Date().toISOString();
+
+  /**
+   * FIX duplicare Notificare (7-8h intre trimiteri, acelasi elev): inainte, contorul se
+   * actualiza DUPA fetch-ul catre Pabbly - doua request-uri notify_parent care citesc elevul
+   * aproape in acelasi timp (dublu-click, tab dublu, retry din alta sesiune) treceau AMANDOUA
+   * de canSendMakeupNotification() de mai sus (inca nu apucase niciunul sa scrie), deci ambele
+   * ajungeau sa cheme webhook-ul. Acum "rezervam" pasul ATOMIC in DB, printr-un update
+   * conditionat de valoarea EXACTA a contorului citita mai sus (compare-and-swap) - INAINTE
+   * de orice fetch. Daca alt request a apucat deja sa modifice contorul intre timp, update-ul
+   * de mai jos nu potriveste niciun rand (`claimed` gol) si oprim aici, fara sa mai trimitem
+   * inca o data catre Pabbly. Restul fluxului (makeup_scheduled) ramane neatins.
+   */
+  if (action === 'notify_parent') {
+    const { data: claimed, error: claimError } = await supabase
+      .from('tracker_students')
+      .update({ makeup_notification_count: notificationStep, last_makeup_notification: lastMakeupNotification })
+      .eq('id', student.id)
+      .eq('makeup_notification_count', currentCount)
+      .select('id');
+    if (claimError) {
+      console.error('MAKEUP NOTIFICATION LOCK ERROR:', claimError);
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+    if (!claimed || claimed.length === 0) {
+      // Deja rezervata/trimisa de un alt request concurent - raspundem idempotent, cu starea
+      // deja salvata, fara sa mai chemam webhook-ul inca o data.
+      return NextResponse.json({ ok: true, makeup_notification_count: currentCount, last_makeup_notification: student.last_makeup_notification });
+    }
+  }
 
   try {
     const res = await fetch(MAKEUP_NOTIFICATION_WEBHOOK_URL, {
@@ -131,20 +161,22 @@ export async function POST(request: Request) {
     });
     if (!res.ok) {
       console.error('MAKEUP NOTIFICATION WEBHOOK ERROR:', res.status, await res.text());
+      if (action === 'notify_parent') {
+        // Rollback: rezervarea de mai sus a "consumat" acest pas, dar trimiterea a esuat -
+        // eliberam contorul ca profesorul sa poata incerca din nou.
+        await supabase.from('tracker_students').update({ makeup_notification_count: currentCount, last_makeup_notification: student.last_makeup_notification }).eq('id', student.id);
+      }
       return NextResponse.json({ ok: false }, { status: 502 });
     }
   } catch (error) {
     console.error('MAKEUP NOTIFICATION WEBHOOK ERROR:', error);
+    if (action === 'notify_parent') {
+      await supabase.from('tracker_students').update({ makeup_notification_count: currentCount, last_makeup_notification: student.last_makeup_notification }).eq('id', student.id);
+    }
     return NextResponse.json({ ok: false }, { status: 502 });
   }
 
   if (action === 'notify_parent') {
-    const lastMakeupNotification = new Date().toISOString();
-    const { error: updateError } = await supabase
-      .from('tracker_students')
-      .update({ makeup_notification_count: notificationStep, last_makeup_notification: lastMakeupNotification })
-      .eq('id', student.id);
-    if (updateError) console.error('MAKEUP NOTIFICATION DB UPDATE ERROR:', updateError);
     return NextResponse.json({ ok: true, makeup_notification_count: notificationStep, last_makeup_notification: lastMakeupNotification });
   }
 

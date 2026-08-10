@@ -2652,6 +2652,7 @@ export default function ProgressTracker({
               </button>
               <button
                 type="button" onClick={() => handleConfirmMakeupNotification(makeupNotifyConfirm)}
+                disabled={markingMakeupIds.has(makeupNotifyConfirm.id)}
                 className="flex-1 tracker-btn-primary py-3 rounded-2xl font-semibold"
               >
                 Da
