@@ -981,6 +981,11 @@ export default function ProgressTracker({
         ? { ...s, makeup_notification_count: json.makeup_notification_count, last_makeup_notification: json.last_makeup_notification }
         : s)));
       showToast('Notificare trimisă!');
+      // Invalideaza Router Cache-ul, ca un back/forward sau un tab-restore (frecvent pe
+      // mobil/Safari, la cateva ore distanta) sa aduca mereu contorul proaspat din DB, nu un
+      // instantaneu de dinainte de trimitere - butonul ramane dezactivat definitiv pe baza
+      // starii reale, nu a unui payload vechi retrimis din cache.
+      router.refresh();
     } finally {
       setMarkingMakeupIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
     }
