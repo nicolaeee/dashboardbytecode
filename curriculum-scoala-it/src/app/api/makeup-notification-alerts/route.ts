@@ -85,7 +85,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: student, error: studentError } = await supabase
     .from('tracker_students')
-    .select('id, name, short_name, parent_phones, parent_emails, group_id, pending_makeups, makeup_notification_count, last_makeup_notification, is_scheduled')
+    .select('id, name, short_name, parent_phones, parent_emails, group_id, pending_makeups, makeup_notification_count, last_makeup_notification, is_scheduled, absence_date')
     .eq('id', body.studentId)
     .single();
   if (studentError || !student) {
@@ -157,6 +157,7 @@ export async function POST(request: Request) {
         teacherPhone: profile.phone ?? '',
         calendarLink: profile.makeup_calendar_link ?? '',
         notificationStep,
+        deduplication_id: `${student.id}_${student.absence_date ?? 'none'}_notif${notificationStep}`,
       }),
     });
     if (!res.ok) {
