@@ -9,6 +9,7 @@ import { COURSES } from '@/lib/diplomas';
 import { createClass, transferClassTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
+import { computeMakeupPatch } from '@/lib/attendanceTransition';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -1370,30 +1371,13 @@ export default function ProgressTracker({
 
     // Task-uri Urgente de recuperare: marcarea explicita "Absent" adauga o restanta;
     // anularea ei (trecerea la Prezent/Recuperat dintr-un rand deja marcat Absent) o scade
-    // la loc (fara sa scada sub 0). wasAbsent se uita la statusul PRECEDENT (current), nu la
-    // eticheta vizuala implicita din UI (care arata "absent" si atunci cand nu exista inca
-    // niciun rand in tracker_attendance).
-    const wasAbsent = current?.status === 'absent';
-    const willBeAbsent = status === 'absent';
-    if (willBeAbsent && !wasAbsent) {
-      const nextPending = (student.pending_makeups ?? 0) + 1;
-      const patch: Partial<TrackerStudent> = { pending_makeups: nextPending };
-      // Prima absenta nerezolvata (0 -> 1) porneste countdown-ul de 7 zile pentru cardul
-      // "🚨 Recuperare necesara" - daca mai era deja una in asteptare, nu resetam data (ramane
-      // legata de alerta activa) si nici contorul/cooldown-ul de notificari.
-      if (nextPending === 1) patch.absence_date = nowDate();
-      await patchStudent(studentId, patch);
-    } else if (!willBeAbsent && wasAbsent) {
-      const nextPending = Math.max(0, (student.pending_makeups ?? 0) - 1);
-      const patch: Partial<TrackerStudent> = { pending_makeups: nextPending };
-      // Absenta anulata si nu mai e nicio alta in asteptare - inchidem complet alerta.
-      if (nextPending === 0) {
-        patch.absence_date = null;
-        patch.makeup_notification_count = 0;
-        patch.last_makeup_notification = null;
-      }
-      await patchStudent(studentId, patch);
-    }
+    // la loc (fara sa scada sub 0). current?.status e statusul PRECEDENT real (undefined cand
+    // nu exista inca niciun rand), nu eticheta vizuala implicita din UI (care arata "absent"
+    // si atunci cand nu exista inca niciun rand in tracker_attendance) - vezi
+    // computeMakeupPatch si attendanceTransition.test.ts pentru regresia exacta pe care asta o
+    // acopera (Gol -> Absent trebuie sa declanseze alerta la fel ca Prezent -> Absent).
+    const makeupPatch = computeMakeupPatch(current?.status, status, student.pending_makeups ?? 0, nowDate());
+    if (makeupPatch) await patchStudent(studentId, makeupPatch);
     return data as TrackerAttendance;
   }
 
