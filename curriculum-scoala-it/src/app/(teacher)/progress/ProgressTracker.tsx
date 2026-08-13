@@ -999,7 +999,10 @@ export default function ProgressTracker({
     // recalculeaza ca diferenta fata de lectiile deja inregistrate automat in aplicatie,
     // ca de acum incolo calculele viitoare sa continue exact de la M/L introdus manual.
     const clampedModule = Math.max(1, Math.round(numOrZero(editStudentModule)));
-    const clampedLesson = Math.min(16, Math.max(1, Math.round(numOrZero(editStudentLesson))));
+    // min 0, nu 1: L0 e o pozitie valida (inseamna "niciun elev inceput inca in acest modul"),
+    // altfel salvarea nemodificata a formularului pentru un elev nou (0 lectii) baga un
+    // lesson_offset de 1 in loc de 0, iar prima lui lectie reala apare gresit ca L2.
+    const clampedLesson = Math.min(16, Math.max(0, Math.round(numOrZero(editStudentLesson))));
     const desiredTotal = totalLessonsFor(clampedModule, clampedLesson);
     const lessonOffset = desiredTotal - studentLessonCount(studentId);
     const stars = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentStars))));
@@ -1433,9 +1436,19 @@ export default function ProgressTracker({
   function openEditStudentModal(s: TrackerStudent) {
     setEditStudentName(s.name);
     setEditStudentShortName(s.short_name ?? '');
-    const { module, lesson } = computeModuleLesson(s.lesson_offset + studentLessonCount(s.id));
-    setEditStudentModule(module);
-    setEditStudentLesson(lesson);
+    // computeModuleLesson forteaza un minim de 1 lectie (foloseste Math.max(1, ...) intern),
+    // deci pentru un elev fara nicio lectie (total 0) ar intoarce gresit "M1/L1" in loc de
+    // "M1/L0" - tratam explicit cazul, altfel salvarea nemodificata a formularului baga un
+    // lesson_offset de 1 in loc de 0 (vezi si clampedLesson mai sus).
+    const totalNow = s.lesson_offset + studentLessonCount(s.id);
+    if (totalNow <= 0) {
+      setEditStudentModule(1);
+      setEditStudentLesson(0);
+    } else {
+      const { module, lesson } = computeModuleLesson(totalNow);
+      setEditStudentModule(module);
+      setEditStudentLesson(lesson);
+    }
     setEditStudentStars(s.progress);
     setEditStudentPresences(s.presence_count ?? 0);
     setEditStudentAbsences(s.absence_count ?? 0);
@@ -2136,7 +2149,7 @@ export default function ProgressTracker({
                   <div className="flex-1">
                     <span className="block text-[11px] text-gray-500 mb-1">Lecție</span>
                     <input
-                      type="number" min={1} max={16} value={editStudentLesson} onWheel={blurOnWheel}
+                      type="number" min={0} max={16} value={editStudentLesson} onWheel={blurOnWheel}
                       onChange={(e) => setEditStudentLesson(numericInputValue(e.target.value))}
                       className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                     />
