@@ -539,3 +539,235 @@ select cron.schedule(
 --    apoi ruleaza linia de mai jos cu emailul tau:
 -- ----------------------------------------------------------------------------
 -- update public.profiles set role = 'admin' where email = 'adresa@scoala.ro';
+
+-- ----------------------------------------------------------------------------
+-- 12. STATUS ELEV, TRANSFER, ABONAMENTE, ACCES LA MODULE NOI (Super Admin)
+--    Vezi supabase/migrations/add_student_status_and_transfers.sql,
+--    add_lesson_balance_subscriptions.sql si add_feature_access_and_dropout_stats.sql
+--    pentru comentariile complete de business din spatele fiecarei decizii.
+-- ----------------------------------------------------------------------------
+alter table public.tracker_students
+  add column status text not null default 'active'
+    check (status in ('active', 'paused', 'dropped_out')),
+  add column status_changed_at timestamptz,
+  add column status_changed_by uuid references public.profiles(id) on delete set null,
+  add column status_note text,
+  add column subscription_type text
+    check (subscription_type in ('individual_lunar', 'individual_integral', 'grup_lunar', 'grup_integral')),
+  add column total_lessons_remaining int not null default 0;
+
+create index on public.tracker_students (teacher_id, status);
+
+create table public.tracker_student_transfers (
+  id              uuid primary key default gen_random_uuid(),
+  student_id      uuid not null references public.tracker_students(id) on delete cascade,
+  from_teacher_id uuid references public.profiles(id) on delete set null,
+  to_teacher_id   uuid not null references public.profiles(id) on delete cascade,
+  from_group_id   uuid references public.tracker_groups(id) on delete set null,
+  to_group_id     uuid not null references public.tracker_groups(id) on delete cascade,
+  transferred_by  uuid references public.profiles(id) on delete set null,
+  transferred_at  timestamptz not null default now(),
+  note            text
+);
+create index on public.tracker_student_transfers (student_id);
+create index on public.tracker_student_transfers (to_teacher_id);
+alter table public.tracker_student_transfers enable row level security;
+create policy "adminul vede si gestioneaza transferurile" on public.tracker_student_transfers
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.transfer_student_teacher(
+  p_student_id uuid, p_new_teacher_id uuid, p_new_group_id uuid, p_note text default null
+)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_old_teacher_id uuid;
+  v_old_group_id uuid;
+begin
+  if not public.is_admin() then
+    raise exception 'Doar administratorii pot transfera un elev.';
+  end if;
+  select teacher_id, group_id into v_old_teacher_id, v_old_group_id
+    from public.tracker_students where id = p_student_id;
+  if v_old_teacher_id is null then
+    raise exception 'Elevul nu a fost găsit.';
+  end if;
+  if not exists (
+    select 1 from public.tracker_groups where id = p_new_group_id and teacher_id = p_new_teacher_id and deleted_at is null
+  ) then
+    raise exception 'Clasa aleasă nu aparține profesorului ales.';
+  end if;
+  if v_old_teacher_id = p_new_teacher_id and v_old_group_id = p_new_group_id then
+    return;
+  end if;
+  update public.tracker_students
+    set teacher_id = p_new_teacher_id, group_id = p_new_group_id
+    where id = p_student_id;
+  insert into public.tracker_student_transfers
+    (student_id, from_teacher_id, to_teacher_id, from_group_id, to_group_id, transferred_by, note)
+  values (p_student_id, v_old_teacher_id, p_new_teacher_id, v_old_group_id, p_new_group_id, auth.uid(), p_note);
+end;
+$$;
+grant execute on function public.transfer_student_teacher(uuid, uuid, uuid, text) to authenticated;
+
+create table public.tracker_lesson_transactions (
+  id            uuid primary key default gen_random_uuid(),
+  student_id    uuid not null references public.tracker_students(id) on delete cascade,
+  teacher_id    uuid not null references public.profiles(id) on delete cascade,
+  delta         int not null,
+  reason        text not null check (reason in ('purchase', 'adjustment')),
+  balance_after int not null,
+  note          text,
+  created_by    uuid references public.profiles(id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+create index on public.tracker_lesson_transactions (student_id);
+create index on public.tracker_lesson_transactions (teacher_id);
+alter table public.tracker_lesson_transactions enable row level security;
+create policy "profesorul isi gestioneaza tranzactiile de lectii" on public.tracker_lesson_transactions
+  for all to authenticated using (teacher_id = auth.uid())
+  with check (
+    teacher_id = auth.uid()
+    and exists (select 1 from public.tracker_students s where s.id = tracker_lesson_transactions.student_id and s.teacher_id = auth.uid())
+  );
+create policy "adminul gestioneaza toate tranzactiile de lectii" on public.tracker_lesson_transactions
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create table public.feature_access (
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  module_key text not null check (module_key in ('subscriptions', 'dropout_analytics')),
+  enabled    boolean not null default false,
+  granted_by uuid references public.profiles(id) on delete set null,
+  granted_at timestamptz not null default now(),
+  primary key (user_id, module_key)
+);
+alter table public.feature_access enable row level security;
+create policy "vad propriul acces la module" on public.feature_access
+  for select to authenticated using (user_id = auth.uid() or public.is_admin());
+create policy "adminul gestioneaza accesul la module" on public.feature_access
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.has_feature_access(p_module_key text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_admin()
+      or exists (select 1 from public.feature_access fa
+                 where fa.module_key = p_module_key and fa.user_id = auth.uid() and fa.enabled = true);
+$$;
+grant execute on function public.has_feature_access(text) to authenticated;
+
+create or replace function public.teacher_dropout_stats(p_months int default 4)
+returns table (
+  teacher_id uuid, teacher_name text, total_students bigint, dropped_students bigint, dropout_rate numeric
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_start timestamptz := now() - (p_months || ' months')::interval;
+  v_end   timestamptz := now();
+begin
+  return query
+    select
+      p.id,
+      coalesce(nullif(p.full_name, ''), p.email),
+      count(s.id) filter (
+        where s.created_at <= v_end and (s.status <> 'dropped_out' or s.status_changed_at >= v_start)
+      ),
+      count(s.id) filter (where s.status = 'dropped_out' and s.status_changed_at between v_start and v_end),
+      case when count(s.id) filter (
+        where s.created_at <= v_end and (s.status <> 'dropped_out' or s.status_changed_at >= v_start)
+      ) = 0 then 0
+      else round(
+        count(s.id) filter (where s.status = 'dropped_out' and s.status_changed_at between v_start and v_end)::numeric
+        / count(s.id) filter (
+            where s.created_at <= v_end and (s.status <> 'dropped_out' or s.status_changed_at >= v_start)
+          ) * 100, 1)
+      end
+    from public.profiles p
+    left join public.tracker_students s on s.teacher_id = p.id
+    where p.role = 'teacher' and (public.is_admin() or p.id = auth.uid())
+    group by p.id, p.full_name, p.email
+    order by p.full_name;
+end;
+$$;
+grant execute on function public.teacher_dropout_stats(int) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 13. ALERTA DIPLOMA INTARZIATA (>= 3 zile LUCRATOARE de la deschiderea task-ului)
+--    Vezi supabase/migrations/add_diploma_overdue_alerts.sql pentru comentariile
+--    complete de business din spatele fiecarei decizii. Necesita pg_net (Supabase
+--    -> Database -> Extensions, daca CREATE EXTENSION esueaza cu eroare de permisiuni).
+-- ----------------------------------------------------------------------------
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+alter table public.tracker_students
+  add column pending_diploma_milestone_at timestamptz,
+  add column diploma_overdue_alert_sent_at timestamptz;
+
+create or replace function public.touch_pending_diploma_milestone()
+returns trigger language plpgsql as $$
+begin
+  if new.pending_diploma_milestone is distinct from old.pending_diploma_milestone then
+    new.pending_diploma_milestone_at := case when new.pending_diploma_milestone is null then null else now() end;
+    new.diploma_overdue_alert_sent_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger tracker_students_touch_pending_diploma
+  before update on public.tracker_students
+  for each row execute function public.touch_pending_diploma_milestone();
+
+-- Adauga N zile LUCRATOARE (luni-vineri) la o data - vezi send_overdue_diploma_alerts mai jos.
+create or replace function public.add_business_days(start_date date, num_days int)
+returns date language plpgsql immutable as $$
+declare
+  result date := start_date;
+  added int := 0;
+begin
+  while added < num_days loop
+    result := result + 1;
+    if extract(isodow from result) < 6 then -- isodow: 1=Luni .. 5=Vineri, 6=Sambata, 7=Duminica
+      added := added + 1;
+    end if;
+  end loop;
+  return result;
+end;
+$$;
+
+create or replace function public.send_overdue_diploma_alerts()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+begin
+  for r in
+    select s.id, s.name as student_name, s.pending_diploma_milestone_at,
+           coalesce(nullif(p.full_name, ''), p.email) as teacher_name
+    from public.tracker_students s
+    join public.profiles p on p.id = s.teacher_id
+    where s.deleted_at is null
+      and s.pending_diploma_milestone is not null
+      and current_date >= public.add_business_days(s.pending_diploma_milestone_at::date, 3)
+      and s.diploma_overdue_alert_sent_at is null
+  loop
+    perform net.http_post(
+      url := 'https://connect.pabbly.com/webhook-listener/webhook/IjU3NjIwNTY5MDYzMzA0MzM1MjZiNTUzMyI_3D_pc/IjU3NjcwNTY4MDYzNjA0M2Q1MjZjNTUzMjUxMzMi_pc',
+      headers := '{"Content-Type": "application/json"}'::jsonb,
+      body := jsonb_build_object(
+        'nume_copil', r.student_name,
+        'nume_profesor', r.teacher_name,
+        'data_cererii', r.pending_diploma_milestone_at,
+        'mesaj_alerta', 'Profesorul nu a trimis diploma de 3 zile lucrătoare. Te rugăm să ceri diploma.'
+      )
+    );
+    update public.tracker_students set diploma_overdue_alert_sent_at = now() where id = r.id;
+  end loop;
+end;
+$$;
+
+grant execute on function public.send_overdue_diploma_alerts() to postgres, service_role;
+
+select cron.schedule(
+  'send-overdue-diploma-alerts-daily',
+  '0 7 * * *',
+  $$select public.send_overdue_diploma_alerts();$$
+);

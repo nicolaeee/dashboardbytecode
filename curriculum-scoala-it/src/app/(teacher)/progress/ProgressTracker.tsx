@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar, Star } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind } from '@/lib/types';
+import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType } from '@/lib/types';
+import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
-import { createClass, transferClassTeacher } from '@/app/admin/actions';
+import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
-import { computeMakeupPatch } from '@/lib/attendanceTransition';
+import { computeLessonBalanceDelta, computeMakeupPatch } from '@/lib/attendanceTransition';
 
 // ----------------------------------------------------------------------------
 // Constante (identice cu tracker-ul original)
@@ -335,6 +336,11 @@ type ModalState =
   // participat efectiv (vezi GroupRecoveryFormModal si handleSubmitGroupRecovery).
   | { type: 'recordGroupRecovery'; studentId: string; lessonId: string }
   | { type: 'studentHistory'; studentId: string }
+  // Transfer la alt profesor (Fișa Elevului -> "🔀 Transferă") - rezervat adminului. Separat de
+  // 'editStudent'/'studentHistory' pentru că necesită alegerea unei clase DESTINAȚIE, ale cărei
+  // opțiuni se încarcă la cerere (vezi loadTransferGroupOptions) - nu fac parte din state-ul
+  // deja încărcat (grupele altui profesor decât cel vizualizat).
+  | { type: 'transferStudent'; studentId: string }
   | { type: 'editMakeupLink' };
 
 export default function ProgressTracker({
@@ -400,6 +406,13 @@ export default function ProgressTracker({
   // sursa de adevar pe termen lung, la urmatorul reload).
   const shownMilestonesRef = useRef<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+
+  // Modalul "🔀 Transferă la alt profesor" (Fișa Elevului, admin) - lista de clase se încarcă
+  // la cerere, cand adminul alege profesorul destinație (nu face parte din state-ul deja
+  // încărcat, care ține doar de profesorul vizualizat curent - vezi loadTransferGroupOptions).
+  const [transferTeacherId, setTransferTeacherId] = useState('');
+  const [transferGroupOptions, setTransferGroupOptions] = useState<{ id: string; group_name: string }[]>([]);
+  const [transferGroupId, setTransferGroupId] = useState('');
 
   const [createForm, setCreateForm] = useState<{ module: number; count: number; reward: string; names: string[]; day: string | null; time: string; course: CourseId | null }>(
     { module: 1, count: 1, reward: 'stars', names: [''], day: 'luni', time: '', course: null }
@@ -643,6 +656,91 @@ export default function ProgressTracker({
     }
     setStudents((ss) => ss.map((s) => (s.id === id ? (data as TrackerStudent) : s)));
     return data as TrackerStudent;
+  }
+
+  // Sold de lectii (sistem pe baza de sold, vezi total_lessons_remaining in schema.sql): apelata
+  // din setAttendanceStatus la FIECARE marcare de prezenta, cu delta-ul calculat de
+  // computeLessonBalanceDelta (present/absent/made_up consuma 1 lectie, dar o recuperare nu
+  // taxeaza a doua oara aceeasi lectie deja scazuta la absenta initiala). Soldul nu scade sub 0.
+  // Cand ajunge la EXACT 2 sau 0, declanseaza alerta Pabbly prin /api/lesson-balance-alerts
+  // (server-side, fire-and-forget - ruta re-citeste datele reale din DB, nu are incredere in
+  // ce trimite clientul aici).
+  async function applyLessonBalanceDelta(studentId: string, delta: number) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+    const nextRemaining = Math.max(0, (student.total_lessons_remaining ?? 0) + delta);
+    await patchStudent(studentId, { total_lessons_remaining: nextRemaining });
+    if (delta < 0 && (nextRemaining === 2 || nextRemaining === 0)) {
+      try {
+        await fetch('/api/lesson-balance-alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId }),
+        });
+      } catch (error) {
+        console.error('LESSON BALANCE ALERT REQUEST ERROR:', error);
+      }
+    }
+  }
+
+  // Butoanele de status din Fisa Elevului ("Activ" / "Intrerupt (Pauza)" / "Abandon") - vezi
+  // StudentHistoryModal. Independent de transfer (transferStudentTeacher mai jos): un elev
+  // transferat la alt profesor RAMANE 'active', doar teacher_id/group_id se schimba.
+  async function handleChangeStudentStatus(studentId: string, status: StudentStatus, note?: string) {
+    await patchStudent(studentId, {
+      status, status_changed_at: new Date().toISOString(), status_changed_by: teacherId, status_note: note ?? null,
+    });
+    showToast(
+      status === 'dropped_out' ? 'Elev marcat ca abandon' : status === 'paused' ? 'Abonament întrerupt (Pauză)' : 'Elev reactivat (Activ)'
+    );
+  }
+
+  // Butonul "➕ Adauga lectii" din Fisa Elevului (parintele reinnoieste abonamentul) - creste
+  // soldul si logheaza tranzactia in tracker_lesson_transactions (audit: cine, cand, cat).
+  async function handleAddLessons(studentId: string, amount: number) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student || amount <= 0) return;
+    const nextRemaining = (student.total_lessons_remaining ?? 0) + amount;
+    const updated = await patchStudent(studentId, { total_lessons_remaining: nextRemaining });
+    if (!updated) return;
+    const { error } = await supabase.from('tracker_lesson_transactions').insert({
+      student_id: studentId, teacher_id: student.teacher_id, delta: amount, reason: 'purchase',
+      balance_after: nextRemaining, created_by: teacherId,
+    });
+    if (error) console.error('LESSON TRANSACTION LOG ERROR:', error);
+    showToast(`+${amount} lecții adăugate`);
+  }
+
+  // Incarca clasele profesorului ales in dropdown-ul modalului de transfer elev (vezi
+  // ModalState 'transferStudent') - admin-only, foloseste RLS-ul de admin (acces total).
+  async function loadTransferGroupOptions(newTeacherId: string) {
+    setTransferTeacherId(newTeacherId);
+    setTransferGroupId('');
+    if (!newTeacherId) { setTransferGroupOptions([]); return; }
+    const { data } = await supabase.from('tracker_groups')
+      .select('id, group_name').eq('teacher_id', newTeacherId).is('deleted_at', null).order('group_name');
+    setTransferGroupOptions((data ?? []) as { id: string; group_name: string }[]);
+  }
+
+  function openTransferStudentModal(studentId: string) {
+    setTransferTeacherId('');
+    setTransferGroupOptions([]);
+    setTransferGroupId('');
+    setModal({ type: 'transferStudent', studentId });
+  }
+
+  async function handleSubmitTransferStudent(e: React.FormEvent, studentId: string) {
+    e.preventDefault();
+    if (!transferTeacherId || !transferGroupId) return showToast('Alege profesorul și clasa destinație', 'error');
+    setBusy(true);
+    const result = await transferStudentTeacher(studentId, transferTeacherId, transferGroupId);
+    setBusy(false);
+    if (!result.ok) return showToast(result.error, 'error');
+    setModal({ type: null });
+    showToast('Elev transferat cu succes!');
+    // Elevul a plecat la alt profesor - dispare din lista profesorului vizualizat curent.
+    setStudents((ss) => ss.filter((s) => s.id !== studentId));
+    router.refresh();
   }
 
   async function patchLesson(id: string, patch: Partial<TrackerLesson>) {
@@ -1378,6 +1476,12 @@ export default function ProgressTracker({
     // acopera (Gol -> Absent trebuie sa declanseze alerta la fel ca Prezent -> Absent).
     const makeupPatch = computeMakeupPatch(current?.status, status, student.pending_makeups ?? 0, nowDate());
     if (makeupPatch) await patchStudent(studentId, makeupPatch);
+
+    // Sold de lectii (sistem pe baza de sold): vezi computeLessonBalanceDelta si
+    // applyLessonBalanceDelta mai sus - doar 0 inseamna "nicio schimbare reala de consum".
+    const lessonDelta = computeLessonBalanceDelta(current?.status, status);
+    if (lessonDelta !== 0) await applyLessonBalanceDelta(studentId, lessonDelta);
+
     return data as TrackerAttendance;
   }
 
@@ -2448,8 +2552,66 @@ export default function ProgressTracker({
             student={student}
             group={group}
             history={history}
+            isAdmin={isAdmin}
             onClose={() => setModal({ type: null })}
+            onChangeStatus={(status) => handleChangeStudentStatus(student.id, status)}
+            onChangeSubscription={(subscriptionType) => patchStudent(student.id, { subscription_type: subscriptionType })}
+            onAddLessons={(amount) => handleAddLessons(student.id, amount)}
+            onOpenTransfer={() => openTransferStudentModal(student.id)}
           />
+        );
+      })()}
+
+      {modal.type === 'transferStudent' && (() => {
+        const student = students.find((s) => s.id === modal.studentId);
+        if (!student) return null;
+        return (
+          <ModalShell onClose={() => setModal({ type: null })}>
+            <h3 className="text-xl font-bold mb-1 text-[#C8F023]">🔀 Transferă la alt profesor</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Muți pe <span className="text-white font-semibold">{student.name}</span> la un alt profesor - o mutare internă,
+              nu contează ca abandon. Istoricul de lecții/prezență rămâne la clasa veche.
+            </p>
+            <form onSubmit={(e) => handleSubmitTransferStudent(e, student.id)} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Profesor nou</label>
+                <select
+                  required value={transferTeacherId} onChange={(e) => loadTransferGroupOptions(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                >
+                  <option value="" className="bg-gray-900">Alege profesorul...</option>
+                  {teacherOptions.filter((t) => t.id !== student.teacher_id).map((t) => (
+                    <option key={t.id} value={t.id} className="bg-gray-900">{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              {transferTeacherId && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-400 mb-1">Clasă destinație</label>
+                  <select
+                    required value={transferGroupId} onChange={(e) => setTransferGroupId(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                  >
+                    <option value="" className="bg-gray-900">Alege clasa...</option>
+                    {transferGroupOptions.map((g) => (
+                      <option key={g.id} value={g.id} className="bg-gray-900">{g.group_name}</option>
+                    ))}
+                  </select>
+                  {transferGroupOptions.length === 0 && (
+                    <p className="text-[11px] text-amber-400 mt-1">Acest profesor nu are nicio clasă activă.</p>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                  Renunță
+                </button>
+                <button type="submit" disabled={busy || !transferTeacherId || !transferGroupId} className="tracker-btn-primary flex-1 py-3 rounded-2xl font-semibold disabled:opacity-60">
+                  {busy ? 'Se transferă…' : 'Transferă'}
+                </button>
+              </div>
+            </form>
+          </ModalShell>
         );
       })()}
 
@@ -2821,15 +2983,22 @@ const HISTORY_STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: Rea
 const UNMARKED_HISTORY_CONFIG = { label: 'Nemarcat', icon: <span className="text-[10px] leading-none">–</span>, pill: 'bg-white/5 text-gray-400 border border-white/10', dot: 'bg-gray-500' };
 
 function StudentHistoryModal({
-  student, group, history, onClose,
+  student, group, history, isAdmin, onClose, onChangeStatus, onChangeSubscription, onAddLessons, onOpenTransfer,
 }: {
   student: TrackerStudent; group: TrackerGroup | null;
   history: { lesson: TrackerLesson; record: TrackerAttendance | null }[];
+  isAdmin: boolean;
   onClose: () => void;
+  onChangeStatus: (status: StudentStatus) => void;
+  onChangeSubscription: (subscriptionType: SubscriptionType) => void;
+  onAddLessons: (amount: number) => void;
+  onOpenTransfer: () => void;
 }) {
   const rewardEmoji = group ? getRewardEmoji(group.reward_type) : '⭐';
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [addLessonsAmount, setAddLessonsAmount] = useState(4);
+  const remaining = student.total_lessons_remaining ?? 0;
   const statusOf = (r: TrackerAttendance | null): AttendanceStatus | undefined => r?.status;
   const filteredHistory = history.filter(({ lesson }) => {
     if (startDate && lesson.lesson_date < startDate) return false;
@@ -2879,6 +3048,74 @@ function StudentHistoryModal({
           >
             <XIcon size={16} />
           </button>
+        </div>
+
+        {/* Status elev + sold de lectii + abonament - vezi cerinta "Sistem pe baza de sold"
+            si statusurile extinse (Activ/Abandon/Intrerupt). Independente de istoricul de
+            prezenta afisat mai jos. */}
+        <div className="px-4 pt-4 shrink-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {(['active', 'paused', 'dropped_out'] as StudentStatus[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  if (s === 'dropped_out' && !confirm(`Marchezi pe ${student.name} ca Abandon? Elevul a plecat din școală.`)) return;
+                  onChangeStatus(s);
+                }}
+                className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors ${
+                  student.status === s
+                    ? s === 'dropped_out' ? 'bg-red-500 text-white' : s === 'paused' ? 'bg-amber-400 text-black' : 'bg-emerald-500 text-black'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                {STUDENT_STATUS_LABELS[s]}
+              </button>
+            ))}
+            {isAdmin && (
+              <button
+                type="button" onClick={onOpenTransfer}
+                className="ml-auto px-3 py-1.5 rounded-full text-[12px] font-bold bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors"
+              >
+                🔀 Transferă
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">💳 Sold lecții</span>
+              <span className={`text-lg font-bold ${remaining <= 2 ? 'text-red-400' : 'text-white'}`}>{remaining}</span>
+            </div>
+            {remaining <= 2 && (
+              <p className="text-[11px] text-red-400 mb-2">⚠️ Abonamentul e aproape epuizat - a fost trimisă o alertă.</p>
+            )}
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <select
+                value={student.subscription_type ?? ''}
+                onChange={(e) => onChangeSubscription(e.target.value as SubscriptionType)}
+                className="flex-1 min-w-[160px] bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-[13px] text-white"
+              >
+                <option value="" className="bg-gray-900">Fără pachet ales</option>
+                {Object.entries(SUBSCRIPTION_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value} className="bg-gray-900">{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min={1} value={addLessonsAmount}
+                onChange={(e) => setAddLessonsAmount(Math.max(1, Number(e.target.value) || 1))}
+                className="w-20 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-[13px] text-white"
+              />
+              <button
+                type="button" onClick={() => onAddLessons(addLessonsAmount)}
+                className="tracker-btn-primary px-3 py-1.5 rounded-xl text-[13px] font-semibold"
+              >
+                ➕ Adaugă lecții
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2 px-4 pt-4 shrink-0">

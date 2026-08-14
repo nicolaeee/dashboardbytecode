@@ -4,8 +4,9 @@ import { ArrowLeft } from 'lucide-react';
 import { requireAdmin } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getAccessMap, getTree } from '@/lib/queries';
-import type { Profile } from '@/lib/types';
+import type { FeatureModuleKey, Profile } from '@/lib/types';
 import PermissionsClient from './PermissionsClient';
+import FeatureAccessClient from './FeatureAccessClient';
 
 export default async function TeacherAccessPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireAdmin();
@@ -16,9 +17,10 @@ export default async function TeacherAccessPage({ params }: { params: Promise<{ 
   if (!teacher) notFound();
 
   const tree = await getTree(await getAccessMap(me));
-  const [{ data: mp }, { data: lp }] = await Promise.all([
+  const [{ data: mp }, { data: lp }, { data: fa }] = await Promise.all([
     supabase.from('module_permissions').select('module_id').eq('teacher_id', id),
     supabase.from('lesson_permissions').select('lesson_id').eq('teacher_id', id),
+    supabase.from('feature_access').select('module_key').eq('user_id', id).eq('enabled', true),
   ]);
 
   return (
@@ -34,6 +36,11 @@ export default async function TeacherAccessPage({ params }: { params: Promise<{ 
           Deblochează un modul întreg sau doar anumite lecții. Restul rămâne vizibil, dar blocat.
         </p>
       </header>
+
+      <FeatureAccessClient
+        userId={id}
+        initialEnabled={(fa ?? []).map((r) => r.module_key as FeatureModuleKey)}
+      />
 
       <PermissionsClient
         teacherId={id}

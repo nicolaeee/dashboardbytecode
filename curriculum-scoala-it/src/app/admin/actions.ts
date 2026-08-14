@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/apiSecurity';
-import type { EntityKind, Role, TeacherLevel, TrackerGroup, TrackerStudent } from '@/lib/types';
+import type { EntityKind, FeatureModuleKey, Role, TeacherLevel, TrackerGroup, TrackerStudent } from '@/lib/types';
 
 const TABLES: Record<EntityKind, string> = {
   platform: 'platforms',
@@ -394,6 +394,55 @@ export async function setLessonAccess(
         .delete().eq('teacher_id', teacherId).in('lesson_id', lessonIds);
       if (error) throw error;
     }
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// ================================================================ STATUS ELEV / ABONAMENTE
+/**
+ * Transfera UN elev la alt profesor (grupa noua a acelui profesor) - rezervat adminului
+ * ("Super Admin"), la fel ca transferClassTeacher. Spre deosebire de acea functie, NU
+ * cascadeaza istoricul de lectii/prezenta - doar elevul (tracker_students) se muta mai
+ * departe, vezi supabase/migrations/add_student_status_and_transfers.sql. Statusul elevului
+ * NU se modifica aici - transferul e o mutare interna, nu se calculeaza ca abandon.
+ */
+export async function transferStudentTeacher(
+  studentId: string, newTeacherId: string, newGroupId: string, note?: string
+): Promise<Result> {
+  try {
+    const { supabase } = await adminGuard('Doar administratorii pot transfera un elev.');
+    const { error } = await supabase.rpc('transfer_student_teacher', {
+      p_student_id: studentId,
+      p_new_teacher_id: newTeacherId,
+      p_new_group_id: newGroupId,
+      p_note: note ?? null,
+    });
+    if (error) throw error;
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// ================================================================ ACCES MODULE NOI (Super Admin)
+/**
+ * Activeaza/dezactiveaza un modul nou (Pachete/Abonamente, Rata de Abandon) pentru un
+ * profesor - randarea in meniu si accesul pe pagina se decid din acest comutator (vezi
+ * src/lib/featureAccess.ts si has_feature_access() in schema.sql). Acelasi tipar ca
+ * setModuleAccess de mai sus, dar la nivel de sectiune intreaga a aplicatiei.
+ */
+export async function setFeatureAccess(
+  userId: string, moduleKey: FeatureModuleKey, enabled: boolean
+): Promise<Result> {
+  try {
+    const { supabase, userId: adminId } = await adminGuard();
+    const { error } = await supabase.from('feature_access')
+      .upsert({ user_id: userId, module_key: moduleKey, enabled, granted_by: adminId }, { onConflict: 'user_id,module_key' });
+    if (error) throw error;
     refresh();
     return { ok: true };
   } catch (e) {

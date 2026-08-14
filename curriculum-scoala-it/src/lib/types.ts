@@ -98,6 +98,15 @@ export type TrackerStudent = {
   pending_diploma_milestone: number | null;
   last_diploma_issued_milestone: number;
   /**
+   * Momentul in care task-ul de diploma a devenit pending (intretinut automat de un trigger
+   * SQL - vezi touch_pending_diploma_milestone in schema.sql, NU de cod din ProgressTracker.tsx).
+   * Baza pentru alerta zilnica "diploma intarziata" (send_overdue_diploma_alerts, >= 3 zile lucratoare).
+   */
+  pending_diploma_milestone_at: string | null;
+  /** Resetat automat la null de acelasi trigger ori de cate ori pending_diploma_milestone
+   * se schimba - dedup pentru send_overdue_diploma_alerts (o singura alerta per task deschis). */
+  diploma_overdue_alert_sent_at: string | null;
+  /**
    * Numar de recuperari neefectuate (vezi "🚨 Task-uri Urgente" din dashboard-ul profesorului):
    * crescut cu 1 cand elevul e marcat "Absent" la o lectie, scazut cu 1 (fara sa scada sub 0)
    * cand absenta e anulata sau cand recuperarea e rezolvata din dashboard.
@@ -130,8 +139,83 @@ export type TrackerStudent = {
    */
   parent_phones: string[];
   parent_emails: string[];
+  /**
+   * Statusul elevului (vezi butoanele din Fișa Elevului, StudentHistoryModal):
+   * 'active' = normal, 'paused' = abonament întrerupt (lecțiile rămân înghețate,
+   * nu se consumă), 'dropped_out' = abandon (a plecat din școală). Transferul la
+   * alt profesor NU schimbă statusul - rămâne 'active', doar teacher_id/group_id
+   * se schimbă (vezi transfer_student_teacher în schema.sql) - un transfer nu
+   * contează niciodată ca abandon în src/lib/dropoutStats.
+   */
+  status: StudentStatus;
+  status_changed_at: string | null;
+  status_changed_by: string | null;
+  status_note: string | null;
+  /** Tipul pachetului ales la înscriere - informativ, focusul tehnic e pe total_lessons_remaining. */
+  subscription_type: SubscriptionType | null;
+  /**
+   * Soldul de lecții plătite, neconsumate încă (sistem pe bază de sold). Scade automat
+   * cu 1 la prima marcare a unei prezențe (present/absent/made_up) pentru un elev -
+   * vezi computeLessonBalanceDelta în attendanceTransition.ts. Crescut manual din
+   * butonul "➕ Adaugă lecții" (StudentHistoryModal) când părintele reînnoiește
+   * abonamentul - fiecare adăugare e logată în tracker_lesson_transactions.
+   */
+  total_lessons_remaining: number;
   deleted_at: string | null;
   created_at: string;
+};
+
+/** Vezi comentariul câmpului `status` de mai sus. */
+export type StudentStatus = 'active' | 'paused' | 'dropped_out';
+export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
+  active: 'Activ',
+  paused: 'Întrerupt (Pauză)',
+  dropped_out: 'Abandon',
+};
+
+/** Vezi comentariul câmpului `subscription_type` de mai sus. */
+export type SubscriptionType = 'individual_lunar' | 'individual_integral' | 'grup_lunar' | 'grup_integral';
+export const SUBSCRIPTION_TYPE_LABELS: Record<SubscriptionType, string> = {
+  individual_lunar: 'Individual Lunar',
+  individual_integral: 'Individual Integral',
+  grup_lunar: 'Grup Lunar',
+  grup_integral: 'Grup Integral',
+};
+
+/** O intrare din jurnalul de modificări ale soldului de lecții (vezi tracker_lesson_transactions). */
+export type TrackerLessonTransaction = {
+  id: string;
+  student_id: string;
+  teacher_id: string;
+  delta: number;
+  reason: 'purchase' | 'adjustment';
+  balance_after: number;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Module noi, activabile per profesor de către Super Admin (vezi feature_access în schema.sql). */
+export type FeatureModuleKey = 'subscriptions' | 'dropout_analytics';
+export const FEATURE_MODULE_LABELS: Record<FeatureModuleKey, string> = {
+  subscriptions: 'Pachete / Abonamente',
+  dropout_analytics: 'Rata de Abandon',
+};
+export type FeatureAccess = {
+  user_id: string;
+  module_key: FeatureModuleKey;
+  enabled: boolean;
+  granted_by: string | null;
+  granted_at: string;
+};
+
+/** O linie din raportul RPC teacher_dropout_stats (rata de abandon per profesor, la N luni). */
+export type TeacherDropoutStat = {
+  teacher_id: string;
+  teacher_name: string;
+  total_students: number;
+  dropped_students: number;
+  dropout_rate: number;
 };
 
 /** Tipul unei lectii, dedus AUTOMAT din numarul de elevi din grupa (1 = individual, >1 = grup). */

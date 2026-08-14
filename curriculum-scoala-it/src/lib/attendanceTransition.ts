@@ -45,3 +45,29 @@ export function computeMakeupPatch(
 
   return null;
 }
+
+/**
+ * Contribuția unui singur status la soldul de lecții (total_lessons_remaining): 'present',
+ * 'absent' și 'made_up' consumă TOATE exact 1 lecție din sold - un elev absent tot a "folosit"
+ * slotul orar, iar o recuperare (made_up) e aceeași lecție ratată, doar mutată în timp, nu una
+ * nouă. `undefined` (niciun rând încă în tracker_attendance) nu consumă nimic.
+ */
+function lessonBalanceContribution(status: AttendanceStatus | undefined): number {
+  return status === undefined ? 0 : -1;
+}
+
+/**
+ * Câte lecții trebuie scăzute (sau restituite) din total_lessons_remaining la tranziția de
+ * status a UNUI rând din tracker_attendance. Pentru că present/absent/made_up au aceeași
+ * contribuție (-1), doar PRIMA marcare a rândului (venind din `undefined`) produce un delta
+ * real (-1) - orice schimbare ulterioară ÎNTRE cele trei statusuri (ex: Absent -> Recuperat la
+ * "✅ Recuperare efectuata" din Task-uri Urgente) produce delta 0, deci NU taxează a doua oară
+ * aceeași lecție. Exemplu de validare (regulă cerută explicit): 3 absențe -> sold -3; cele 3
+ * recuperări marcate ulterior 'made_up' -> sold rămâne -3 (nu -6, nu revine la 0).
+ */
+export function computeLessonBalanceDelta(
+  previousStatus: AttendanceStatus | undefined,
+  nextStatus: AttendanceStatus
+): number {
+  return lessonBalanceContribution(nextStatus) - lessonBalanceContribution(previousStatus);
+}
