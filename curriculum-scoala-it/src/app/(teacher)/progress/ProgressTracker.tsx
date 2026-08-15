@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar, Star } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType } from '@/lib/types';
-import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS } from '@/lib/types';
+import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode } from '@/lib/types';
+import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
 import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
@@ -158,6 +158,22 @@ function numOrZero(value: number | ''): number {
  * sagetile din interiorul input-ului (spin buttons). */
 function blurOnWheel(e: React.WheelEvent<HTMLInputElement>) {
   e.currentTarget.blur();
+}
+
+/**
+ * Ordinea + textul butoanelor de sub-pachet din selectorul "Individual / Grup" al formularului
+ * Editeaza Elev (vezi PACKAGE_TIER_LESSONS in lib/types.ts pentru numarul de lectii asociat).
+ * Textul difera de SUBSCRIPTION_TYPE_LABELS (folosit in restul aplicatiei, ex. Abonamente) -
+ * aici Grup NU repeta cuvantul "Integral" (cerinta explicita de UI: doar "16/32/48 lectii").
+ */
+const PACKAGE_BUTTON_OPTIONS: Record<StudyMode, SubscriptionType[]> = {
+  individual: ['integral_16', 'integral_32', 'integral_48', 'lunar_4'],
+  grup: ['integral_16', 'integral_32', 'integral_48'],
+};
+function packageButtonLabel(mode: StudyMode, tier: SubscriptionType): string {
+  if (tier === 'lunar_4') return 'Lunar (4 lecții)';
+  const n = PACKAGE_TIER_LESSONS[tier];
+  return mode === 'individual' ? `Integral ${n} lecții` : `${n} lecții`;
 }
 
 function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank: number })[] {
@@ -370,6 +386,11 @@ export default function ProgressTracker({
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState<ModalState>({ type: null });
+  // Numarul de reinnoiri de abonament ale elevului deschis in Fisa Elevului ("Abonamentul #N") -
+  // vezi efectul de mai jos si handleRenewSubscription. null = inca nu s-a incarcat (sau modalul
+  // nu e deschis / elevul curent nu e admin) - StudentHistoryModal afiseaza "Se încarcă…" pana
+  // atunci, ca sa nu clipeasca gresit "#0" inainte de raspunsul serverului.
+  const [subscriptionRenewalCount, setSubscriptionRenewalCount] = useState<number | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [celebrations, setCelebrations] = useState<CelebrationItem[]>([]);
   const [confetti, setConfetti] = useState<ConfettiItem[]>([]);
@@ -481,6 +502,12 @@ export default function ProgressTracker({
   // acelasi tipar ca Steluțele de mai sus.
   const [editStudentPresences, setEditStudentPresences] = useState<number | ''>(0);
   const [editStudentAbsences, setEditStudentAbsences] = useState<number | ''>(0);
+  // Pachet de lectii: Mod de Studiu + sub-optiunea de pachet (butoane cu expandare, vezi
+  // PACKAGE_BUTTON_OPTIONS) genereaza automat total_package_lessons (PACKAGE_TIER_LESSONS) -
+  // vezi handleEditStudent, unde soldul se recalculeaza ca diferenta fata de Deja efectuate.
+  const [editStudentStudyMode, setEditStudentStudyMode] = useState<StudyMode | ''>('');
+  const [editStudentSubscriptionType, setEditStudentSubscriptionType] = useState<SubscriptionType | ''>('');
+  const [editStudentAlreadyCompleted, setEditStudentAlreadyCompleted] = useState<number | ''>(0);
   const [newModuleReward, setNewModuleReward] = useState('stars');
   const [searchQuery, setSearchQuery] = useState('');
   const [newLessonForm, setNewLessonForm] = useState({ date: nowDate(), time: nowTime() });
@@ -695,20 +722,27 @@ export default function ProgressTracker({
     );
   }
 
-  // Butonul "➕ Adauga lectii" din Fisa Elevului (parintele reinnoieste abonamentul) - creste
-  // soldul si logheaza tranzactia in tracker_lesson_transactions (audit: cine, cand, cat).
-  async function handleAddLessons(studentId: string, amount: number) {
+  // Butonul "+ Adaugă abonament" din panoul de Management Abonament (Fisa Elevului, admin -
+  // folosit cand copilul termina pachetul si cumpara altul): seteaza pachetul curent
+  // (study_mode/subscription_type/total_package_lessons), creste soldul cu numarul de lectii al
+  // pachetului ales si logheaza tranzactia in tracker_lesson_transactions CU package_tier
+  // completat - baza pentru numaratoarea "Abonamentul #N" (vezi fetchSubscriptionRenewalCount).
+  async function handleRenewSubscription(studentId: string, mode: StudyMode, tier: SubscriptionType) {
     const student = students.find((s) => s.id === studentId);
-    if (!student || amount <= 0) return;
+    const amount = PACKAGE_TIER_LESSONS[tier];
+    if (!student || !amount) return;
     const nextRemaining = (student.total_lessons_remaining ?? 0) + amount;
-    const updated = await patchStudent(studentId, { total_lessons_remaining: nextRemaining });
+    const updated = await patchStudent(studentId, {
+      total_lessons_remaining: nextRemaining, study_mode: mode, subscription_type: tier, total_package_lessons: amount,
+    });
     if (!updated) return;
     const { error } = await supabase.from('tracker_lesson_transactions').insert({
       student_id: studentId, teacher_id: student.teacher_id, delta: amount, reason: 'purchase',
-      balance_after: nextRemaining, created_by: teacherId,
+      balance_after: nextRemaining, created_by: teacherId, package_tier: tier,
     });
     if (error) console.error('LESSON TRANSACTION LOG ERROR:', error);
-    showToast(`+${amount} lecții adăugate`);
+    setSubscriptionRenewalCount((c) => (c ?? 0) + 1);
+    showToast(`Abonament reînnoit: +${amount} lecții`);
   }
 
   // Incarca clasele profesorului ales in dropdown-ul modalului de transfer elev (vezi
@@ -1107,10 +1141,33 @@ export default function ProgressTracker({
     const stars = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentStars))));
     const presences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentPresences))));
     const absences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAbsences))));
+    const alreadyCompletedLessons = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAlreadyCompleted))));
     const patch: Partial<TrackerStudent> = {
       name, lesson_offset: lessonOffset, progress: stars, short_name: editStudentShortName.trim() || null,
-      presence_count: presences, absence_count: absences,
+      presence_count: presences, absence_count: absences, already_completed_lessons: alreadyCompletedLessons,
     };
+    const editedStudent = students.find((s) => s.id === studentId);
+    // total_package_lessons: generat automat din pachetul ales in dropdown-ul Tip Abonament
+    // (PACKAGE_TIER_LESSONS), NU mai e introdus manual - vezi cerinta "sa nu mai introduca
+    // numarul manual". study_mode/subscription_type se scriu DOAR daca adminul a atins efectiv
+    // Mod de Studiu (dropdown nesetat = '' initial DOAR pentru elevii fara study_mode salvat deja) -
+    // altfel o salvare banala a formularului (ex: doar telefonul parintelui) pentru un elev cu
+    // abonament legacy (individual_lunar etc., fara echivalent in noile pachete) i-ar sterge
+    // silentios subscription_type existent.
+    const selectedTierLessons = editStudentSubscriptionType ? PACKAGE_TIER_LESSONS[editStudentSubscriptionType] : undefined;
+    if (editStudentStudyMode) {
+      patch.study_mode = editStudentStudyMode;
+      patch.subscription_type = editStudentSubscriptionType || null;
+      if (selectedTierLessons !== undefined) patch.total_package_lessons = selectedTierLessons;
+    }
+    // Soldul (total_lessons_remaining) se recalculeaza DOAR daca pachetul ales sau Deja efectuate
+    // chiar s-au schimbat fata de valorile curente ale elevului - altfel o salvare banala a
+    // formularului ar suprascrie soldul deja consumat dinamic din prezente/absente marcate intre
+    // timp (vezi applyLessonBalanceDelta).
+    const effectiveTotalPackage = selectedTierLessons ?? (editedStudent?.total_package_lessons ?? 0);
+    if (editedStudent && (effectiveTotalPackage !== (editedStudent.total_package_lessons ?? 0) || alreadyCompletedLessons !== (editedStudent.already_completed_lessons ?? 0))) {
+      patch.total_lessons_remaining = Math.max(0, effectiveTotalPackage - alreadyCompletedLessons);
+    }
     // GDPR: un profesor nu vede/editeaza niciodata aceste campuri, deci nu le atingem la
     // salvare decat daca cel logat e admin - altfel am risca sa suprascriem cu starea locala goala.
     if (isAdmin) {
@@ -1120,7 +1177,22 @@ export default function ProgressTracker({
     setBusy(true);
     const ok = await patchStudent(studentId, patch);
     setBusy(false);
-    if (ok) { setModal({ type: null }); showToast('Elev actualizat!'); }
+    if (ok) {
+      // Logheaza tranzactia CU package_tier doar cand acest formular a setat efectiv un pachet
+      // nou cu numar fix (acelasi tipar ca handleRenewSubscription) - baza pentru numaratoarea
+      // "Abonamentul #N" din Fisa Elevului, ca prima configurare a pachetului (aici) sa conteze
+      // la fel ca o reinnoire ulterioara (butonul "+ Adaugă abonament").
+      if (selectedTierLessons !== undefined && patch.total_lessons_remaining !== undefined) {
+        const { error } = await supabase.from('tracker_lesson_transactions').insert({
+          student_id: studentId, teacher_id: ok.teacher_id,
+          delta: patch.total_lessons_remaining - (editedStudent?.total_lessons_remaining ?? 0),
+          reason: 'purchase', balance_after: patch.total_lessons_remaining,
+          created_by: teacherId, package_tier: editStudentSubscriptionType || null,
+        });
+        if (error) console.error('LESSON TRANSACTION LOG ERROR:', error);
+      }
+      setModal({ type: null }); showToast('Elev actualizat!');
+    }
   }
 
   async function softDeleteStudent(studentId: string) {
@@ -1518,6 +1590,26 @@ export default function ProgressTracker({
     setModal({ type: 'studentHistory', studentId });
   }
 
+  // Numaratoarea "Abonamentul #N" din panoul de Management Abonament (Fisa Elevului, admin) -
+  // cate tranzactii cu package_tier completat are elevul deschis (vezi handleRenewSubscription
+  // si handleEditStudent, singurele doua locuri care scriu package_tier). Interzis pentru
+  // profesor - nu doar ascuns in UI, ci nici macar interogat (acelasi tipar GDPR ca telefoanele
+  // parintelui): reseteaza la null de fiecare data cand modalul se inchide sau se schimba elevul,
+  // ca sa nu ramana afisat numarul elevului anterior cat timp se incarca cel nou.
+  useEffect(() => {
+    if (modal.type !== 'studentHistory' || !isAdmin) { setSubscriptionRenewalCount(null); return; }
+    let cancelled = false;
+    setSubscriptionRenewalCount(null);
+    (async () => {
+      const { count } = await supabase.from('tracker_lesson_transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('student_id', modal.studentId)
+        .not('package_tier', 'is', null);
+      if (!cancelled) setSubscriptionRenewalCount(count ?? 0);
+    })();
+    return () => { cancelled = true; };
+  }, [modal, isAdmin, supabase]);
+
   // Pregateste formularul de editare pentru un elev - refolosita atat din Cardul Elevului
   // (in interiorul unei clase), cat si din panoul "Lista Copiilor" (PARTEA 4), ca ambele
   // sa deschida FIX acelasi modal, pe aceeasi stare globala.
@@ -1540,6 +1632,12 @@ export default function ProgressTracker({
     setEditStudentStars(s.progress);
     setEditStudentPresences(s.presence_count ?? 0);
     setEditStudentAbsences(s.absence_count ?? 0);
+    setEditStudentStudyMode(s.study_mode ?? '');
+    // Doar daca abonamentul curent e unul din pachetele cu numar fix (lunar_4..integral_48) -
+    // valorile legacy (individual_lunar etc.) nu apar in dropdown, deci raman "nesetate" aici
+    // (formularul nu le suprascrie decat daca adminul alege explicit un pachet nou).
+    setEditStudentSubscriptionType(s.subscription_type && s.subscription_type in PACKAGE_TIER_LESSONS ? s.subscription_type : '');
+    setEditStudentAlreadyCompleted(s.already_completed_lessons ?? 0);
     // GDPR: pentru un profesor, aceste campuri nici nu exista in payload (vezi
     // progress/page.tsx) - dar verificam explicit isAdmin ca sa nu se strecoare
     // vreodata in starea locala a formularului pentru rolul de profesor.
@@ -2286,6 +2384,77 @@ export default function ProgressTracker({
                   Suprascrie imediat totalurile manuale (presence_count/absence_count) - separate de prezența înregistrată per lecție in tabelul de mai jos.
                 </p>
               </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">
+                  Pachet de lecții <span className="text-gray-500 font-normal">— pentru elevi cu lecții efectuate înainte de platformă</span>
+                </label>
+                <div className="space-y-2 mb-2">
+                  {(['individual', 'grup'] as StudyMode[]).map((mode) => {
+                    const isActiveMode = editStudentStudyMode === mode;
+                    return (
+                      <div key={mode}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditStudentStudyMode(mode);
+                            // Sub-optiunile difera intre Individual si Grup ("Lunar" nu exista la
+                            // Grup) - daca era deja aleasa una care nu mai e valabila in noul mod,
+                            // o resetam ca sa nu ramana o combinatie invalida ascunsa, netrimisa
+                            // vizual dar tot inclusa la salvare.
+                            if (editStudentSubscriptionType && !PACKAGE_BUTTON_OPTIONS[mode].includes(editStudentSubscriptionType)) {
+                              setEditStudentSubscriptionType('');
+                            }
+                          }}
+                          className={`w-full py-3 rounded-2xl font-bold text-sm transition-colors ${
+                            isActiveMode ? 'tracker-btn-primary' : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          {STUDY_MODE_LABELS[mode]}
+                        </button>
+                        {isActiveMode && (
+                          <div className="grid grid-cols-2 gap-2 mt-2 pl-3">
+                            {PACKAGE_BUTTON_OPTIONS[mode].map((tier) => {
+                              const isSelected = editStudentSubscriptionType === tier;
+                              return (
+                                <button
+                                  key={tier}
+                                  type="button"
+                                  onClick={() => setEditStudentSubscriptionType(tier)}
+                                  className={`py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
+                                    isSelected ? 'bg-[#C8F023] text-black border-[#C8F023]' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                                  }`}
+                                >
+                                  {packageButtonLabel(mode, tier)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mb-2">
+                  <span className="block text-[11px] text-gray-500 mb-1">Deja efectuate</span>
+                  <input
+                    type="number" min={0} max={MAX_HISTORICAL_COUNT} value={editStudentAlreadyCompleted} onWheel={blurOnWheel}
+                    onChange={(e) => setEditStudentAlreadyCompleted(numericInputValue(e.target.value))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
+                {(() => {
+                  const previewTotal = editStudentSubscriptionType
+                    ? (PACKAGE_TIER_LESSONS[editStudentSubscriptionType] ?? (student.total_package_lessons ?? 0))
+                    : (student.total_package_lessons ?? 0);
+                  const previewRemaining = Math.max(0, previewTotal - Math.round(numOrZero(editStudentAlreadyCompleted)));
+                  return (
+                    <p className="text-[11px] text-gray-500">
+                      Sold inițial la salvare: {previewRemaining} lecții rămase ({previewTotal} pachet − {Math.round(numOrZero(editStudentAlreadyCompleted))} deja efectuate).
+                      {!editStudentStudyMode && <span> Alege Mod de Studiu + Tip Abonament ca să setezi un pachet nou.</span>}
+                    </p>
+                  );
+                })()}
+              </div>
               {isAdmin && (
                 <>
                   <DynamicContactList
@@ -2553,10 +2722,10 @@ export default function ProgressTracker({
             group={group}
             history={history}
             isAdmin={isAdmin}
+            subscriptionRenewalCount={subscriptionRenewalCount}
             onClose={() => setModal({ type: null })}
             onChangeStatus={(status) => handleChangeStudentStatus(student.id, status)}
-            onChangeSubscription={(subscriptionType) => patchStudent(student.id, { subscription_type: subscriptionType })}
-            onAddLessons={(amount) => handleAddLessons(student.id, amount)}
+            onRenewSubscription={(mode, tier) => handleRenewSubscription(student.id, mode, tier)}
             onOpenTransfer={() => openTransferStudentModal(student.id)}
           />
         );
@@ -2983,21 +3152,26 @@ const HISTORY_STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: Rea
 const UNMARKED_HISTORY_CONFIG = { label: 'Nemarcat', icon: <span className="text-[10px] leading-none">–</span>, pill: 'bg-white/5 text-gray-400 border border-white/10', dot: 'bg-gray-500' };
 
 function StudentHistoryModal({
-  student, group, history, isAdmin, onClose, onChangeStatus, onChangeSubscription, onAddLessons, onOpenTransfer,
+  student, group, history, isAdmin, subscriptionRenewalCount, onClose, onChangeStatus, onRenewSubscription, onOpenTransfer,
 }: {
   student: TrackerStudent; group: TrackerGroup | null;
   history: { lesson: TrackerLesson; record: TrackerAttendance | null }[];
   isAdmin: boolean;
+  /** Cate reinnoiri de abonament are elevul (vezi efectul din ProgressTracker) - null = inca in curs de incarcare. */
+  subscriptionRenewalCount: number | null;
   onClose: () => void;
   onChangeStatus: (status: StudentStatus) => void;
-  onChangeSubscription: (subscriptionType: SubscriptionType) => void;
-  onAddLessons: (amount: number) => void;
+  onRenewSubscription: (mode: StudyMode, tier: SubscriptionType) => void;
   onOpenTransfer: () => void;
 }) {
   const rewardEmoji = group ? getRewardEmoji(group.reward_type) : '⭐';
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [addLessonsAmount, setAddLessonsAmount] = useState(4);
+  // Panoul "+ Adaugă abonament" (admin) - Nivel 1 (Grup/Individual) + Nivel 2 (sub-optiunile de
+  // pachet, vezi PACKAGE_BUTTON_OPTIONS/packageButtonLabel, definite langa formularul Editeaza
+  // Elev mai sus, si refolosite aici identic).
+  const [renewPanelOpen, setRenewPanelOpen] = useState(false);
+  const [renewMode, setRenewMode] = useState<StudyMode | ''>('');
   const remaining = student.total_lessons_remaining ?? 0;
   const statusOf = (r: TrackerAttendance | null): AttendanceStatus | undefined => r?.status;
   const filteredHistory = history.filter(({ lesson }) => {
@@ -3011,11 +3185,12 @@ function StudentHistoryModal({
   const showBaseline = !startDate && !endDate;
   const baselinePresences = showBaseline ? student.presence_count : 0;
   const baselineAbsences = showBaseline ? student.absence_count : 0;
-  const totalCount = filteredHistory.length + baselinePresences + baselineAbsences;
+  // Cele 3 categorii (Prezente/Absente/Recuperari) sunt reciproc exclusive - fiecare lectie are
+  // exact UN status curent, deci nu se suprapun (spre deosebire de un eventual istoric brut care
+  // ar numara si absentele deja recuperate separat).
   const presentCount = filteredHistory.filter((h) => statusOf(h.record) === 'present').length + baselinePresences;
-  const notRecoveredCount = filteredHistory.filter((h) => statusOf(h.record) === 'absent').length + baselineAbsences;
+  const absentCount = filteredHistory.filter((h) => statusOf(h.record) === 'absent').length + baselineAbsences;
   const madeUpCount = filteredHistory.filter((h) => statusOf(h.record) === 'made_up').length;
-  const absentCount = notRecoveredCount + madeUpCount;
   const starsCount = filteredHistory.reduce((sum, h) => sum + (h.record?.star_count ?? 0), 0);
   const sortedDesc = [...filteredHistory].sort((a, b) => b.lesson.session_number - a.lesson.session_number);
 
@@ -3034,9 +3209,9 @@ function StudentHistoryModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="glass-strong tracker-card-shadow border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+        className="glass-strong tracker-card-shadow border border-white/10 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-white/10 shrink-0">
+        <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-white/10">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#C8F023] mb-1">📋 Fișa Elevului</p>
             <h3 className="text-xl font-bold">{student.name}</h3>
@@ -3050,74 +3225,110 @@ function StudentHistoryModal({
           </button>
         </div>
 
-        {/* Status elev + sold de lectii + abonament - vezi cerinta "Sistem pe baza de sold"
-            si statusurile extinse (Activ/Abandon/Intrerupt). Independente de istoricul de
-            prezenta afisat mai jos. */}
-        <div className="px-4 pt-4 shrink-0 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {(['active', 'paused', 'dropped_out'] as StudentStatus[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  if (s === 'dropped_out' && !confirm(`Marchezi pe ${student.name} ca Abandon? Elevul a plecat din școală.`)) return;
-                  onChangeStatus(s);
-                }}
-                className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors ${
-                  student.status === s
-                    ? s === 'dropped_out' ? 'bg-red-500 text-white' : s === 'paused' ? 'bg-amber-400 text-black' : 'bg-emerald-500 text-black'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                }`}
-              >
-                {STUDENT_STATUS_LABELS[s]}
-              </button>
-            ))}
-            {isAdmin && (
+        {/* ADMIN-ONLY: status administrativ + management abonament (bani/pachete) - vezi REGULA
+            CRITICA a cerintei "Refacere completa RBAC": un profesor nu trebuie sa vada NIMIC din
+            acest bloc, nici macar in DOM (nu doar ascuns prin CSS) - de-aia intreaga sectiune e
+            inconditionat in spatele `isAdmin &&`, nu doar bucati individuale din ea. */}
+        {isAdmin && (
+          <div className="px-4 pt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {(['active', 'paused', 'dropped_out'] as StudentStatus[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    if (s === 'dropped_out' && !confirm(`Marchezi pe ${student.name} ca Abandon? Elevul a plecat din școală.`)) return;
+                    onChangeStatus(s);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors ${
+                    student.status === s
+                      ? s === 'dropped_out' ? 'bg-red-500 text-white' : s === 'paused' ? 'bg-amber-400 text-black' : 'bg-emerald-500 text-black'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                  }`}
+                >
+                  {STUDENT_STATUS_LABELS[s]}
+                </button>
+              ))}
               <button
                 type="button" onClick={onOpenTransfer}
                 className="ml-auto px-3 py-1.5 rounded-full text-[12px] font-bold bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors"
               >
                 🔀 Transferă
               </button>
-            )}
-          </div>
+            </div>
 
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">💳 Sold lecții</span>
-              <span className={`text-lg font-bold ${remaining <= 2 ? 'text-red-400' : 'text-white'}`}>{remaining}</span>
-            </div>
-            {remaining <= 2 && (
-              <p className="text-[11px] text-red-400 mb-2">⚠️ Abonamentul e aproape epuizat - a fost trimisă o alertă.</p>
-            )}
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <select
-                value={student.subscription_type ?? ''}
-                onChange={(e) => onChangeSubscription(e.target.value as SubscriptionType)}
-                className="flex-1 min-w-[160px] bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-[13px] text-white"
-              >
-                <option value="" className="bg-gray-900">Fără pachet ales</option>
-                {Object.entries(SUBSCRIPTION_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value} className="bg-gray-900">{label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number" min={1} value={addLessonsAmount}
-                onChange={(e) => setAddLessonsAmount(Math.max(1, Number(e.target.value) || 1))}
-                className="w-20 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-[13px] text-white"
-              />
-              <button
-                type="button" onClick={() => onAddLessons(addLessonsAmount)}
-                className="tracker-btn-primary px-3 py-1.5 rounded-xl text-[13px] font-semibold"
-              >
-                ➕ Adaugă lecții
-              </button>
+            {/* Management Abonament: indicator "Abonamentul #N: <pachet>" + sold ramas, apoi
+                butonul de reinnoire care extinde selectorul Grup/Individual -> sub-pachet. */}
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">💳 Abonament</span>
+                <span className={`text-sm font-bold ${remaining <= 2 ? 'text-red-400' : 'text-white'}`}>{remaining} lecții rămase</span>
+              </div>
+              <p className="text-sm text-white">
+                {subscriptionRenewalCount === null ? (
+                  <span className="text-gray-400">Se încarcă…</span>
+                ) : student.subscription_type ? (
+                  <>Abonamentul <span className="font-bold text-[#C8F023]">#{subscriptionRenewalCount || 1}</span>: {SUBSCRIPTION_TYPE_LABELS[student.subscription_type]}</>
+                ) : (
+                  <span className="text-gray-400">Niciun abonament activ încă</span>
+                )}
+              </p>
+              {remaining <= 2 && (
+                <p className="text-[11px] text-red-400">⚠️ Abonamentul e aproape epuizat - a fost trimisă o alertă.</p>
+              )}
+
+              {!renewPanelOpen ? (
+                <button
+                  type="button" onClick={() => setRenewPanelOpen(true)}
+                  className="tracker-btn-primary w-full py-2.5 rounded-xl text-[13px] font-semibold"
+                >
+                  + Adaugă abonament
+                </button>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {(['grup', 'individual'] as StudyMode[]).map((mode) => {
+                    const isActiveMode = renewMode === mode;
+                    return (
+                      <div key={mode}>
+                        <button
+                          type="button" onClick={() => setRenewMode(mode)}
+                          className={`w-full py-2.5 rounded-xl font-bold text-[13px] transition-colors ${
+                            isActiveMode ? 'tracker-btn-primary' : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          {STUDY_MODE_LABELS[mode]}
+                        </button>
+                        {isActiveMode && (
+                          <div className="grid grid-cols-2 gap-2 mt-2 pl-3">
+                            {PACKAGE_BUTTON_OPTIONS[mode].map((tier) => (
+                              <button
+                                key={tier}
+                                type="button"
+                                onClick={() => { onRenewSubscription(mode, tier); setRenewPanelOpen(false); setRenewMode(''); }}
+                                className="py-2 rounded-xl text-[12px] font-semibold border bg-gray-800 border-gray-700 text-gray-300 hover:bg-[#C8F023] hover:text-black hover:border-[#C8F023] transition-colors"
+                              >
+                                {packageButtonLabel(mode, tier)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button" onClick={() => { setRenewPanelOpen(false); setRenewMode(''); }}
+                    className="w-full py-2 rounded-xl text-[12px] font-semibold bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700"
+                  >
+                    Anulează
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
 
+        {/* Vizibil pentru AMBELE roluri (Admin si Profesor): istoric strict educational - filtru
+            de perioada, statistici agregate si lista lectiilor, fara nicio referinta la bani. */}
         <div className="grid grid-cols-2 gap-2 px-4 pt-4 shrink-0">
           <div>
             <label className="block text-[11px] font-semibold text-gray-400 mb-1">Data Început</label>
@@ -3136,13 +3347,13 @@ function StudentHistoryModal({
         </div>
 
         <div className="grid grid-cols-4 gap-2 p-4 shrink-0">
-          <div className="rounded-2xl bg-white/5 border border-white/10 py-3 text-center">
-            <div className="text-lg font-bold text-white">{totalCount}</div>
-            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total</div>
-          </div>
           <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 py-3 text-center">
             <div className="text-lg font-bold text-emerald-400">{presentCount}</div>
             <div className="text-[10px] font-semibold text-emerald-400/80 uppercase tracking-wide">✅ Prezențe</div>
+          </div>
+          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 py-3 text-center">
+            <div className="text-lg font-bold text-red-400">{absentCount}</div>
+            <div className="text-[10px] font-semibold text-red-400/80 uppercase tracking-wide">❌ Absențe</div>
           </div>
           <div className="rounded-2xl bg-blue-500/10 border border-blue-500/20 py-3 text-center">
             <div className="text-lg font-bold text-blue-400">{madeUpCount}</div>
@@ -3158,14 +3369,8 @@ function StudentHistoryModal({
             Include istoricul manual: +{baselinePresences} prezențe / +{baselineAbsences} absențe (setate din formularul Editează Elev).
           </p>
         )}
-        <div className="px-4 pb-4 shrink-0">
-          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 py-3 px-4 text-center text-sm">
-            <span className="font-bold text-red-400">❌ Absențe: {absentCount}</span>
-            <span className="text-red-400/70"> (din care {madeUpCount} recuperate, {notRecoveredCount} nerecuperate)</span>
-          </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+        <div className="px-4 pb-8 space-y-2">
           {sortedDesc.length === 0 ? (
             <p className="text-gray-400 text-center py-10 text-sm">
               {history.length === 0 ? 'Nicio lecție inregistrata inca pentru aceasta clasa.' : 'Nicio lecție în intervalul selectat.'}

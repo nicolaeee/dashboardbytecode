@@ -154,6 +154,13 @@ export type TrackerStudent = {
   /** Tipul pachetului ales la înscriere - informativ, focusul tehnic e pe total_lessons_remaining. */
   subscription_type: SubscriptionType | null;
   /**
+   * Individual sau Grup - controleaza DOAR ce optiuni de pachet apar in dropdown-ul Tip
+   * Abonament din "Editeaza Elev" (vezi STUDY_MODE_SUBSCRIPTION_OPTIONS mai jos): 'lunar_4'
+   * e disponibil doar pentru 'individual'. Independent de `format`-ul lectiilor (dedus automat
+   * din numarul de elevi din grupa) - acesta e ales manual, per elev.
+   */
+  study_mode: StudyMode | null;
+  /**
    * Soldul de lecții plătite, neconsumate încă (sistem pe bază de sold). Scade automat
    * cu 1 la prima marcare a unei prezențe (present/absent/made_up) pentru un elev -
    * vezi computeLessonBalanceDelta în attendanceTransition.ts. Crescut manual din
@@ -161,6 +168,19 @@ export type TrackerStudent = {
    * abonamentul - fiecare adăugare e logată în tracker_lesson_transactions.
    */
   total_lessons_remaining: number;
+  /**
+   * Numarul total de lectii din pachetul/abonamentul achizitionat (ex: 48) - setat din
+   * formularul "Editeaza Elev". Impreuna cu `already_completed_lessons`, da soldul initial
+   * la salvare: total_lessons_remaining = total_package_lessons - already_completed_lessons.
+   */
+  total_package_lessons: number;
+  /**
+   * Lectii efectuate deja de elev INAINTE de folosirea acestei platforme (istoric extern,
+   * ex: 66) - baza statica, setata manual din "Editeaza Elev". Afisarea "Lectii efectuate"
+   * din Fisa Elevului (StudentHistoryModal) o combina cu numarul de prezente/absente
+   * inregistrate ulterior direct in aplicatie (vezi history in StudentHistoryModal).
+   */
+  already_completed_lessons: number;
   deleted_at: string | null;
   created_at: string;
 };
@@ -173,13 +193,55 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
   dropped_out: 'Abandon',
 };
 
-/** Vezi comentariul câmpului `subscription_type` de mai sus. */
-export type SubscriptionType = 'individual_lunar' | 'individual_integral' | 'grup_lunar' | 'grup_integral';
+/**
+ * Vezi comentariul câmpului `subscription_type` de mai sus. Cele 4 valori legacy
+ * (individual_lunar..grup_integral) raman doar pentru elevii care le au deja salvate dinainte -
+ * formularul "Editeaza Elev" nu le mai ofera, a trecut pe pachetele cu numar fix de lectii de
+ * mai jos (lunar_4..integral_48), alese din dropdown-ul dependent de `study_mode` (vezi
+ * STUDY_MODE_SUBSCRIPTION_OPTIONS si PACKAGE_TIER_LESSONS).
+ */
+export type SubscriptionType =
+  | 'individual_lunar' | 'individual_integral' | 'grup_lunar' | 'grup_integral'
+  | 'lunar_4' | 'integral_16' | 'integral_32' | 'integral_48';
 export const SUBSCRIPTION_TYPE_LABELS: Record<SubscriptionType, string> = {
   individual_lunar: 'Individual Lunar',
   individual_integral: 'Individual Integral',
   grup_lunar: 'Grup Lunar',
   grup_integral: 'Grup Integral',
+  lunar_4: 'Lunar (4 Lecții)',
+  integral_16: 'Integral - 16 Lecții',
+  integral_32: 'Integral - 32 Lecții',
+  integral_48: 'Integral - 48 Lecții',
+};
+
+/** Vezi comentariul câmpului `study_mode` de pe TrackerStudent mai sus. */
+export type StudyMode = 'individual' | 'grup';
+export const STUDY_MODE_LABELS: Record<StudyMode, string> = {
+  individual: 'Individual',
+  grup: 'Grup',
+};
+
+/**
+ * Cate lectii seteaza automat fiecare pachet cu numar fix (dropdown-ul Tip Abonament din
+ * "Editeaza Elev") in total_package_lessons - vezi handleEditStudent in ProgressTracker.tsx.
+ * Valorile legacy (individual_lunar..grup_integral) nu au un numar fix asociat (istoric, fara
+ * granularitate), deci lipsesc intentionat din aceasta harta.
+ */
+export const PACKAGE_TIER_LESSONS: Partial<Record<SubscriptionType, number>> = {
+  lunar_4: 4,
+  integral_16: 16,
+  integral_32: 32,
+  integral_48: 48,
+};
+
+/**
+ * Optiunile de pachet oferite in dropdown-ul Tip Abonament, filtrate dupa Mod de Studiu ales
+ * imediat deasupra - "Lunar (4 Lecții)" e disponibil DOAR pentru 'individual' (cerinta explicita
+ * de business: nu exista abonament lunar de grup).
+ */
+export const STUDY_MODE_SUBSCRIPTION_OPTIONS: Record<StudyMode, SubscriptionType[]> = {
+  individual: ['lunar_4', 'integral_16', 'integral_32', 'integral_48'],
+  grup: ['integral_16', 'integral_32', 'integral_48'],
 };
 
 /** O intrare din jurnalul de modificări ale soldului de lecții (vezi tracker_lesson_transactions). */
@@ -190,6 +252,14 @@ export type TrackerLessonTransaction = {
   delta: number;
   reason: 'purchase' | 'adjustment';
   balance_after: number;
+  /**
+   * Pachetul cu numar fix de lectii ales la aceasta tranzactie (ex: 'integral_16') - completat
+   * DOAR pentru reinnoirile facute din panoul de Management Abonament (Fisa Elevului, admin) sau
+   * din selectorul de pachet al formularului Editeaza Elev. null pentru vechile tranzactii
+   * "+ Adauga lectii" cu suma libera. Numaratoarea "Abonamentul #N" din Fisa Elevului = cate
+   * randuri cu package_tier completat are elevul (vezi handleRenewSubscription).
+   */
+  package_tier: SubscriptionType | null;
   note: string | null;
   created_by: string | null;
   created_at: string;

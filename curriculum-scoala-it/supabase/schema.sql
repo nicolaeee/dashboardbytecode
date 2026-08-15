@@ -553,7 +553,10 @@ alter table public.tracker_students
   add column status_changed_by uuid references public.profiles(id) on delete set null,
   add column status_note text,
   add column subscription_type text
-    check (subscription_type in ('individual_lunar', 'individual_integral', 'grup_lunar', 'grup_integral')),
+    check (subscription_type in (
+      'individual_lunar', 'individual_integral', 'grup_lunar', 'grup_integral',
+      'lunar_4', 'integral_16', 'integral_32', 'integral_48'
+    )),
   add column total_lessons_remaining int not null default 0;
 
 create index on public.tracker_students (teacher_id, status);
@@ -616,12 +619,21 @@ create table public.tracker_lesson_transactions (
   delta         int not null,
   reason        text not null check (reason in ('purchase', 'adjustment')),
   balance_after int not null,
+  -- Pachetul cu numar fix ales la aceasta tranzactie (ex: 'integral_16') - baza pentru
+  -- numaratoarea "Abonamentul #N" din Fisa Elevului (vezi supabase/migrations/
+  -- add_tracker_lesson_transaction_package_tier.sql pentru comentariul complet).
+  package_tier  text
+    check (package_tier in (
+      'individual_lunar', 'individual_integral', 'grup_lunar', 'grup_integral',
+      'lunar_4', 'integral_16', 'integral_32', 'integral_48'
+    )),
   note          text,
   created_by    uuid references public.profiles(id) on delete set null,
   created_at    timestamptz not null default now()
 );
 create index on public.tracker_lesson_transactions (student_id);
 create index on public.tracker_lesson_transactions (teacher_id);
+create index on public.tracker_lesson_transactions (student_id, package_tier);
 alter table public.tracker_lesson_transactions enable row level security;
 create policy "profesorul isi gestioneaza tranzactiile de lectii" on public.tracker_lesson_transactions
   for all to authenticated using (teacher_id = auth.uid())
@@ -771,3 +783,20 @@ select cron.schedule(
   '0 7 * * *',
   $$select public.send_overdue_diploma_alerts();$$
 );
+
+-- ----------------------------------------------------------------------------
+-- 13. ISTORIC PACHET LECTII (elevi cu lectii efectuate inainte de platforma)
+--    Vezi supabase/migrations/add_tracker_package_history.sql pentru comentariul
+--    complet de business din spatele acestor doua coloane.
+-- ----------------------------------------------------------------------------
+alter table public.tracker_students
+  add column total_package_lessons int not null default 0,
+  add column already_completed_lessons int not null default 0;
+
+-- ----------------------------------------------------------------------------
+-- 14. MOD DE STUDIU (dropdown dependent pentru pachetele cu numar fix de lectii)
+--    Vezi supabase/migrations/add_tracker_study_mode_package_tiers.sql pentru
+--    comentariul complet de business.
+-- ----------------------------------------------------------------------------
+alter table public.tracker_students
+  add column study_mode text check (study_mode in ('individual', 'grup'));
