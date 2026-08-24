@@ -819,10 +819,6 @@ create table public.urgent_tasks (
   reward_received      boolean not null default false,
   reward_type          text check (reward_type is null or reward_type in ('virtual_money', 'super_power')),
   reward_details       text,
-  -- Numarul exact de monede virtuale (doar pe randul SEND_VIRTUAL_COINS - vezi
-  -- add_virtual_coins_task.sql) - introdus explicit de profesor, niciodata presupus.
-  coin_amount          int,
-  check (type <> 'SEND_VIRTUAL_COINS' or coin_amount is not null),
   parent_message       text,
   diploma_student_name text,
   diploma_teacher_name text,
@@ -892,16 +888,10 @@ Mulțumim că sunteți alături de noi - urmează multe momente minunate! ✨', 
   ])[1 + floor(random() * 8)::int];
 $$;
 
--- "Finalizează generarea diplomei" din Diplome.tsx - acum accepta si p_coin_amount (numarul
--- exact de monede virtuale introdus de profesor, obligatoriu STRICT cand p_reward_type =
--- 'virtual_money'). Semnatura se schimba (6 -> 7 parametri), deci pentru Postgres e o functie
--- DIFERITA (overload nou) - stergem explicit versiunea veche, la fel ca la modificarile
--- anterioare de semnatura (vezi add_diploma_snapshot_to_urgent_tasks.sql).
-drop function if exists public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text);
 create or replace function public.finalize_diploma_with_reward(
   p_student_id uuid, p_module int, p_reward_received boolean,
   p_reward_type text default null, p_reward_details text default null,
-  p_diploma_date text default null, p_coin_amount int default null
+  p_diploma_date text default null
 )
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -933,9 +923,6 @@ begin
     end if;
     if nullif(trim(coalesce(p_reward_details, '')), '') is null then
       raise exception 'Detaliile premiului sunt obligatorii.';
-    end if;
-    if p_reward_type = 'virtual_money' and (p_coin_amount is null or p_coin_amount <= 0) then
-      raise exception 'Numărul de monede virtuale este obligatoriu.';
     end if;
     v_reward_type := p_reward_type;
     v_reward_details := trim(p_reward_details);
@@ -991,10 +978,10 @@ begin
   -- prin acelasi unique (student_id, milestone, type).
   if p_reward_received and p_reward_type = 'virtual_money' then
     insert into public.urgent_tasks
-      (type, student_id, teacher_id, milestone, reward_received, reward_type, reward_details, coin_amount, milestone_reached_at)
+      (type, student_id, teacher_id, milestone, reward_received, reward_type, reward_details, milestone_reached_at)
     values (
       'SEND_VIRTUAL_COINS', p_student_id, v_student.teacher_id, v_milestone,
-      true, 'virtual_money', v_reward_details, p_coin_amount,
+      true, 'virtual_money', v_reward_details,
       now()
     )
     on conflict (student_id, milestone, type) do nothing;
@@ -1006,7 +993,7 @@ begin
 end;
 $$;
 
-grant execute on function public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text, int) to authenticated;
+grant execute on function public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text) to authenticated;
 
 -- Extinde send_overdue_diploma_alerts() (functia existenta, ruleaza deja zilnic prin pg_cron)
 -- ca, pe langa webhook-ul Pabbly de azi (neschimbat), sa deschida si task-ul de admin

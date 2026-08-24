@@ -384,9 +384,6 @@ export type UrgentTask = {
   /** Text liber introdus de profesor (ex: "500 Robux", "Superputerea de a controla timpul") -
    * NU presupunem/generăm noi conținutul, îl scrie mereu profesorul. */
   reward_details: string | null;
-  /** Numărul exact de monede virtuale - DOAR pe task-ul SEND_VIRTUAL_COINS, introdus explicit
-   * de profesor (niciodată presupus/inventat). Null pe celelalte tipuri de task. */
-  coin_amount: number | null;
   /** Mesajul generat automat pentru părinte (una din 8 variante, fără recompensă) - doar DIPLOMA_GENERATED. */
   parent_message: string | null;
   /** Snapshot al diplomei la momentul "Finalizează generarea diplomei" (doar DIPLOMA_GENERATED) -

@@ -192,7 +192,7 @@ export default function TaskUriUrgenteClient({
             {isOverdue ? (
               <Badge tone="lock"><span className="text-[#FF6B6B]">🔴 Urgent — Diplomă netrimisă</span></Badge>
             ) : isCoins ? (
-              <Badge tone="brand">🪙 Trimite monedele virtuale</Badge>
+              <Badge tone="brand">🪙 Trimite monedele virtuale lui {task.student_short_name?.trim() || task.student_name}</Badge>
             ) : (
               <Badge tone="brand">🎓 Trimite diploma părintelui</Badge>
             )}
@@ -215,7 +215,6 @@ export default function TaskUriUrgenteClient({
             </>
           ) : isCoins ? (
             <>
-              <div><span className="text-lock">🪙 Monede virtuale</span><p className="font-semibold">{task.coin_amount}</p></div>
               {task.reward_details && (
                 <div><span className="text-lock">📝 Detalii</span><p className="font-semibold">{task.reward_details}</p></div>
               )}
@@ -424,7 +423,7 @@ export default function TaskUriUrgenteClient({
         }
       >
         <p className="text-sm text-ink">
-          Ai trimis cele <span className="font-semibold">{coinsConfirmTarget?.coin_amount}</span> monede virtuale lui{' '}
+          Ai trimis monedele virtuale lui{' '}
           <span className="font-semibold">{coinsConfirmTarget?.student_short_name?.trim() || coinsConfirmTarget?.student_name}</span>?
         </p>
       </Modal>

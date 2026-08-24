@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
 import { DIPLOMA_REWARD_TYPES, type CourseId } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
-import { Modal, Button, Field, Textarea, Input } from '@/components/ui';
+import { Modal, Button, Field, Textarea } from '@/components/ui';
 import type { DiplomaGroupWithStudents } from './page';
 
 /** Pasul de dupa "Genereaza" pentru un elev real (mod "Din grupa") - cere confirmarea
@@ -60,10 +60,6 @@ export default function Diplome({
   const [rewardReceived, setRewardReceived] = useState<boolean | null>(null);
   const [rewardType, setRewardType] = useState('');
   const [rewardDetails, setRewardDetails] = useState('');
-  // Numarul exact de monede virtuale (doar cand rewardType === 'virtual_money') - camp separat,
-  // obligatoriu, introdus explicit de profesor (vezi "🪙 Trimite monedele virtuale" - task
-  // separat pentru admin, creat de finalize_diploma_with_reward doar in acest caz).
-  const [coinAmount, setCoinAmount] = useState('');
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
@@ -161,7 +157,6 @@ export default function Diplome({
       setRewardReceived(null);
       setRewardType('');
       setRewardDetails('');
-      setCoinAmount('');
       setFinalizeError(null);
       setFinalizeStep({ studentId: realStudentId, studentName, module: selectedModule });
     } else {
@@ -187,21 +182,15 @@ export default function Diplome({
   }
 
   // "Finalizeaza generarea diplomei" - vezi validarea din sectiunea 10 a cerintei: DA cere
-  // tip + detalii, NU nu cere nimic. Pentru "Bani virtuali" mai cere si numarul exact de monede
-  // (camp separat, obligatoriu - nu presupunem/inventam valoarea). RPC-ul reciteste el insusi
-  // numele elevului/cursul din DB (nu le trimitem din client) pentru mesajul catre parinte, si
-  // creeaza automat un al doilea task, separat, pentru admin ("🪙 Trimite monedele virtuale")
-  // doar in acest caz.
+  // tip + detalii, NU nu cere nimic. RPC-ul reciteste el insusi numele elevului/cursul din DB
+  // (nu le trimitem din client) pentru mesajul catre parinte, si creeaza automat un al doilea
+  // task, separat, pentru admin ("🪙 Trimite monedele virtuale") doar cand recompensa e bani
+  // virtuali.
   async function handleFinalizeDiploma() {
     if (!finalizeStep) return;
     if (rewardReceived === null) { setFinalizeError('Alege dacă a câștigat un premiu.'); return; }
     if (rewardReceived && (!rewardType || !rewardDetails.trim())) {
       setFinalizeError('Alege tipul de premiu și completează detaliile.');
-      return;
-    }
-    const coinAmountNumber = Number(coinAmount);
-    if (rewardReceived && rewardType === 'virtual_money' && (!coinAmount.trim() || !Number.isFinite(coinAmountNumber) || coinAmountNumber <= 0)) {
-      setFinalizeError('Introdu numărul exact de monede virtuale.');
       return;
     }
     setFinalizeError(null);
@@ -215,7 +204,6 @@ export default function Diplome({
       // Data locala a profesorului, inghetata pe diploma (vezi coloanele diploma_* din
       // urgent_tasks) - adminul o va vedea identic, indiferent cand deschide taskul.
       p_diploma_date: todayFormatted(),
-      p_coin_amount: rewardReceived && rewardType === 'virtual_money' ? Math.round(coinAmountNumber) : null,
     });
     setFinalizing(false);
     if (error) {
@@ -247,7 +235,7 @@ export default function Diplome({
   const canGenerate = mode === 'group' ? !!selectedStudentId : manualName.trim().length > 0;
   const canFinalize = rewardReceived !== null && (
     !rewardReceived
-    || (!!rewardType && rewardDetails.trim().length > 0 && (rewardType !== 'virtual_money' || (Number(coinAmount) > 0)))
+    || (!!rewardType && rewardDetails.trim().length > 0)
   );
 
   return (
@@ -348,14 +336,6 @@ export default function Diplome({
                     ))}
                   </div>
                 </Field>
-                {rewardType === 'virtual_money' && (
-                  <Field label="Câte monede virtuale?" hint="Numărul exact - creează automat un task separat pentru admin, „🪙 Trimite monedele virtuale”.">
-                    <Input
-                      type="number" min={1} value={coinAmount} onWheel={(e) => e.currentTarget.blur()}
-                      onChange={(e) => setCoinAmount(e.target.value)} placeholder="ex: 50"
-                    />
-                  </Field>
-                )}
                 <Field label="Detalii / Clarificare" hint="Scrie exact ce a câștigat copilul, ex: „500 Robux” sau „Superputerea de a controla timpul”.">
                   <Textarea
                     value={rewardDetails} onChange={(e) => setRewardDetails(e.target.value)} rows={3}
