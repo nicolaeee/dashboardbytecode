@@ -260,6 +260,14 @@ export type TrackerLessonTransaction = {
    * randuri cu package_tier completat are elevul (vezi handleRenewSubscription).
    */
   package_tier: SubscriptionType | null;
+  /**
+   * Mod de Studiu ales la aceasta tranzactie (Individual/Grup) - necesar pentru ca unele
+   * package_tier (integral_16/32/48) sunt comune ambelor moduri, deci nu se poate deduce doar
+   * din tier care mod era activ. Completat DOAR alaturi de package_tier (vezi comentariul lui) -
+   * folosit la restaurarea abonamentului anterior cand adminul sterge o tranzactie gresita din
+   * Istoricul Abonamentelor (StudentHistoryModal).
+   */
+  study_mode: StudyMode | null;
   note: string | null;
   created_by: string | null;
   created_at: string;
@@ -346,6 +354,69 @@ export type TrackerAttendance = {
 
 /** Categoriile de facturare afisate in Raportul Payslip din /registru. */
 export type PayslipCategory = 'grup' | 'individual' | 'recuperare';
+
+/**
+ * Task-uri urgente pentru admin (vezi "🚨 Task-uri Urgente" din dashboard-ul administratorului,
+ * supabase/migrations/add_urgent_tasks.sql): DIPLOMA_GENERATED = profesorul a generat diploma
+ * unui elev real din Diplome.tsx și a apăsat "Finalizează generarea diplomei" (vezi RPC-ul
+ * finalize_diploma_with_reward) - "🎓 Trimite diploma părintelui", mereu creat, indiferent de
+ * recompensă. DIPLOMA_NOT_SENT = elevul a ajuns la un prag de 16 prezențe și diploma n-a fost
+ * finalizată în 3 zile lucrătoare (vezi send_overdue_diploma_alerts). SEND_VIRTUAL_COINS =
+ * "🪙 Trimite monedele virtuale" - task SEPARAT, creat DOAR când recompensa e "Bani virtuali"
+ * (vezi supabase/migrations/add_virtual_coins_task.sql) - status independent de task-ul
+ * diplomei, vizibil DOAR adminului, fără mesaj pentru părinte. Tabelă separată de
+ * tracker_students - NU e vizibilă profesorului.
+ */
+export type UrgentTaskType = 'DIPLOMA_GENERATED' | 'DIPLOMA_NOT_SENT' | 'SEND_VIRTUAL_COINS';
+export type UrgentTaskStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED';
+
+export type UrgentTask = {
+  id: string;
+  type: UrgentTaskType;
+  status: UrgentTaskStatus;
+  student_id: string;
+  teacher_id: string | null;
+  milestone: number;
+  /** Doar DIPLOMA_GENERATED si SEND_VIRTUAL_COINS - vezi pasul "A câștigat copilul un premiu?"
+   * din Diplome.tsx. */
+  reward_received: boolean;
+  reward_type: string | null;
+  /** Text liber introdus de profesor (ex: "500 Robux", "Superputerea de a controla timpul") -
+   * NU presupunem/generăm noi conținutul, îl scrie mereu profesorul. */
+  reward_details: string | null;
+  /** Numărul exact de monede virtuale - DOAR pe task-ul SEND_VIRTUAL_COINS, introdus explicit
+   * de profesor (niciodată presupus/inventat). Null pe celelalte tipuri de task. */
+  coin_amount: number | null;
+  /** Mesajul generat automat pentru părinte (una din 8 variante, fără recompensă) - doar DIPLOMA_GENERATED. */
+  parent_message: string | null;
+  /** Snapshot al diplomei la momentul "Finalizează generarea diplomei" (doar DIPLOMA_GENERATED) -
+   * diploma e un șablon HTML + parametri în URL, nu un fișier binar, deci "aceeași diplomă"
+   * înseamnă aceiași parametri. Folosit de buildDiplomaUrl în TaskUriUrgenteClient.tsx, NU date
+   * live (care ar putea diferi dacă elevul progresează sau adminul deschide taskul altă zi).
+   * Null pentru DIPLOMA_NOT_SENT și SEND_VIRTUAL_COINS. */
+  diploma_student_name: string | null;
+  diploma_teacher_name: string | null;
+  diploma_course_id: CourseId | null;
+  diploma_date: string | null;
+  diploma_stars: number | null;
+  diploma_total_stars: number | null;
+  milestone_reached_at: string;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_at: string;
+};
+
+/** Recompensele oferibile la finalizarea unei diplome (vezi pasul "Ce tip de premiu a câștigat?"
+ * din Diplome.tsx) - concept separat de REWARD_TYPES (iconița decorativă per grupă din
+ * ProgressTracker.tsx, fără detalii text). */
+export const DIPLOMA_REWARD_TYPES: { id: string; label: string }[] = [
+  { id: 'virtual_money', label: '🪙 Bani virtuali' },
+  { id: 'super_power', label: '🦸 Superputere' },
+];
+export function diplomaRewardLabel(rewardType: string | null) {
+  if (!rewardType) return null;
+  return DIPLOMA_REWARD_TYPES.find((r) => r.id === rewardType)?.label ?? `🎁 ${rewardType}`;
+}
 
 export const ENTITY_LABELS = {
   platform: 'Platformă',

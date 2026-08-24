@@ -1,9 +1,17 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
-import type { CourseId } from '@/lib/types';
-import { Modal, Button, Field } from '@/components/ui';
+import { DIPLOMA_REWARD_TYPES, type CourseId } from '@/lib/types';
+import { createClient } from '@/lib/supabase/client';
+import { Modal, Button, Field, Textarea, Input } from '@/components/ui';
 import type { DiplomaGroupWithStudents } from './page';
+
+/** Pasul de dupa "Genereaza" pentru un elev real (mod "Din grupa") - cere confirmarea
+ * recompensei si trimite automat task-ul catre admin (vezi finalize_diploma_with_reward).
+ * Modul "Manual" (fara elev in DB) nu ajunge niciodata in acest pas - se inchide direct,
+ * ca inainte, pentru ca nu exista un student_id de care sa legam un task. */
+type FinalizeStep = { studentId: string; studentName: string; module: number };
 
 type TeacherOption = { id: string; label: string };
 
@@ -25,6 +33,12 @@ export default function Diplome({
   // Pre-completare venita din Progress Tracker ("🎓 Genereaza Diploma" din Task-uri Urgente).
   initialStudentId: string | null; initialTeacherId: string | null;
 }) {
+  const supabase = useMemo(() => createClient(), []);
+  // Folosit DOAR ca semnal de invalidare a Router Cache-ului Next.js dupa finalizarea unei
+  // diplome (vezi handleFinalizeDiploma) - acelasi tipar ca in ProgressTracker.tsx, ca
+  // navigarea inapoi la Progress Tracker sa arate imediat taskul inchis (pending_diploma_
+  // milestone = null), nu un instantaneu cache-uit de dinainte de finalizare.
+  const router = useRouter();
   const [selectedTeacherId, setSelectedTeacherId] = useState(viewerId);
   const [groups, setGroups] = useState<DiplomaGroupWithStudents[]>(initialGroups);
   const [loading, setLoading] = useState(false);
@@ -39,6 +53,19 @@ export default function Diplome({
   const [manualName, setManualName] = useState('');
   const [manualStars, setManualStars] = useState(16);
   const [selectedModule, setSelectedModule] = useState(1);
+
+  // Pasul 2 (dupa "Genereaza"): confirmarea recompensei si "Finalizeaza generarea diplomei" -
+  // vezi FinalizeStep mai sus. null = inca pe formularul de generare (pasul 1).
+  const [finalizeStep, setFinalizeStep] = useState<FinalizeStep | null>(null);
+  const [rewardReceived, setRewardReceived] = useState<boolean | null>(null);
+  const [rewardType, setRewardType] = useState('');
+  const [rewardDetails, setRewardDetails] = useState('');
+  // Numarul exact de monede virtuale (doar cand rewardType === 'virtual_money') - camp separat,
+  // obligatoriu, introdus explicit de profesor (vezi "🪙 Trimite monedele virtuale" - task
+  // separat pentru admin, creat de finalize_diploma_with_reward doar in acest caz).
+  const [coinAmount, setCoinAmount] = useState('');
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedTeacherId === viewerId) { setGroups(initialGroups); return; }
@@ -104,6 +131,7 @@ export default function Diplome({
     let studentName: string;
     let stars: number;
     let totalStars: number;
+    let realStudentId: string | null = null;
 
     if (mode === 'group') {
       const student = selectedGroup?.students.find((s) => s.id === selectedStudentId);
@@ -111,6 +139,7 @@ export default function Diplome({
       studentName = student.name;
       stars = starsForModule(student.progress);
       totalStars = student.progress;
+      realStudentId = student.id;
     } else {
       studentName = manualName.trim();
       if (!studentName) return;
@@ -118,21 +147,108 @@ export default function Diplome({
       totalStars = stars;
     }
 
+    // Verificam ca sablonul chiar exista (curs custom fara sablon -> null) INAINTE sa continuam,
+    // exact ca inainte - doar ca acum, pentru un elev real, nu mai deschidem tab-ul aici.
     const url = diplomaTemplateUrl(generatingCourse, selectedModule);
     if (!url) return;
-    const params = new URLSearchParams({
-      elev: studentName,
-      profesor: viewerName,
-      curs: `Modulul ${selectedModule} - ${course?.label ?? ''}`,
-      data: todayFormatted(),
-      stelute: String(stars),
-      totalStelute: String(totalStars),
-    });
-    window.open(`${url}?${params.toString()}`, '_blank');
+
+    if (realStudentId) {
+      // Diploma unui elev real (mod "Din grupa") NU se deschide/descarca aici - profesorul nu
+      // trebuie sa descarce nimic local (vezi cerinta). Trecem direct la pasul 2 - confirmarea
+      // recompensei si "Finalizeaza generarea diplomei" (finalize_diploma_with_reward), care
+      // trimite task-ul catre admin. Administratorul deschide/descarca diploma mai tarziu, din
+      // Task-uri Urgente, reconstruind acelasi URL (curs+modul+elev+profesor+stelute+data).
+      setRewardReceived(null);
+      setRewardType('');
+      setRewardDetails('');
+      setCoinAmount('');
+      setFinalizeError(null);
+      setFinalizeStep({ studentId: realStudentId, studentName, module: selectedModule });
+    } else {
+      // Modul "Manual" (fara elev in DB) ramane exact ca inainte - se deschide tab-ul cu
+      // sablonul, nu exista un student_id de care sa legam un task pentru admin.
+      const params = new URLSearchParams({
+        elev: studentName,
+        profesor: viewerName,
+        curs: `Modulul ${selectedModule} - ${course?.label ?? ''}`,
+        data: todayFormatted(),
+        stelute: String(stars),
+        totalStelute: String(totalStars),
+      });
+      window.open(`${url}?${params.toString()}`, '_blank');
+      setGeneratingCourse(null);
+    }
+  }
+
+  function closeModal() {
+    if (finalizing) return;
     setGeneratingCourse(null);
+    setFinalizeStep(null);
+  }
+
+  // "Finalizeaza generarea diplomei" - vezi validarea din sectiunea 10 a cerintei: DA cere
+  // tip + detalii, NU nu cere nimic. Pentru "Bani virtuali" mai cere si numarul exact de monede
+  // (camp separat, obligatoriu - nu presupunem/inventam valoarea). RPC-ul reciteste el insusi
+  // numele elevului/cursul din DB (nu le trimitem din client) pentru mesajul catre parinte, si
+  // creeaza automat un al doilea task, separat, pentru admin ("🪙 Trimite monedele virtuale")
+  // doar in acest caz.
+  async function handleFinalizeDiploma() {
+    if (!finalizeStep) return;
+    if (rewardReceived === null) { setFinalizeError('Alege dacă a câștigat un premiu.'); return; }
+    if (rewardReceived && (!rewardType || !rewardDetails.trim())) {
+      setFinalizeError('Alege tipul de premiu și completează detaliile.');
+      return;
+    }
+    const coinAmountNumber = Number(coinAmount);
+    if (rewardReceived && rewardType === 'virtual_money' && (!coinAmount.trim() || !Number.isFinite(coinAmountNumber) || coinAmountNumber <= 0)) {
+      setFinalizeError('Introdu numărul exact de monede virtuale.');
+      return;
+    }
+    setFinalizeError(null);
+    setFinalizing(true);
+    const { error } = await supabase.rpc('finalize_diploma_with_reward', {
+      p_student_id: finalizeStep.studentId,
+      p_module: finalizeStep.module,
+      p_reward_received: rewardReceived,
+      p_reward_type: rewardReceived ? rewardType : null,
+      p_reward_details: rewardReceived ? rewardDetails.trim() : null,
+      // Data locala a profesorului, inghetata pe diploma (vezi coloanele diploma_* din
+      // urgent_tasks) - adminul o va vedea identic, indiferent cand deschide taskul.
+      p_diploma_date: todayFormatted(),
+      p_coin_amount: rewardReceived && rewardType === 'virtual_money' ? Math.round(coinAmountNumber) : null,
+    });
+    setFinalizing(false);
+    if (error) {
+      console.error('FINALIZE DIPLOMA ERROR:', error);
+      setFinalizeError('A apărut o eroare. Încearcă din nou.');
+      return;
+    }
+    // Pastreaza alerta Pabbly existenta ("completed") - inainte se trimitea din butonul
+    // "Am trimis diploma" (Progress Tracker), acum de aici, la finalizarea reala a diplomei.
+    // Best-effort: daca da eroare, nu blocheaza fluxul (diploma e deja finalizata in DB).
+    try {
+      await fetch('/api/diploma-milestone-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: finalizeStep.studentId, milestone: finalizeStep.module * 16, status: 'completed' }),
+      });
+    } catch (alertError) {
+      console.error('DIPLOMA MILESTONE ALERT ERROR:', alertError);
+    }
+    setFinalizeStep(null);
+    setGeneratingCourse(null);
+    // Invalideaza Router Cache-ul Next.js DUPA ce backend-ul a confirmat finalizarea (RPC-ul
+    // de mai sus deja a inchis pending_diploma_milestone pentru acest prag, daca era exact
+    // pragul deschis) - altfel, la revenirea pe Progress Tracker, "🚨 Task-uri Urgente" ar putea
+    // arata inca vechiul instantaneu cache-uit, cu taskul de diploma inca deschis.
+    router.refresh();
   }
 
   const canGenerate = mode === 'group' ? !!selectedStudentId : manualName.trim().length > 0;
+  const canFinalize = rewardReceived !== null && (
+    !rewardReceived
+    || (!!rewardType && rewardDetails.trim().length > 0 && (rewardType !== 'virtual_money' || (Number(coinAmount) > 0)))
+  );
 
   return (
     <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white">
@@ -182,15 +298,77 @@ export default function Diplome({
 
       <Modal
         open={!!generatingCourse}
-        onClose={() => setGeneratingCourse(null)}
-        title={`🎓 Generează diplomă — ${course?.label ?? ''}`}
+        onClose={closeModal}
+        title={finalizeStep ? '🎁 Recompensă & finalizare' : `🎓 Generează diplomă — ${course?.label ?? ''}`}
         footer={
-          <>
-            <Button variant="outline" onClick={() => setGeneratingCourse(null)}>Anulează</Button>
-            <Button onClick={handleGenerate} disabled={!canGenerate}>Generează</Button>
-          </>
+          finalizeStep ? (
+            <>
+              <Button variant="outline" onClick={closeModal} disabled={finalizing}>Renunță</Button>
+              <Button onClick={handleFinalizeDiploma} disabled={finalizing || !canFinalize}>
+                {finalizing ? 'Se trimite...' : 'Finalizează generarea diplomei'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={closeModal}>Anulează</Button>
+              <Button onClick={handleGenerate} disabled={!canGenerate}>Generează</Button>
+            </>
+          )
         }
       >
+        {finalizeStep ? (
+          <>
+            <p className="text-sm text-lock">
+              Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e pregătită - nu trebuie să o descarci.
+              Confirmă recompensa și finalizează, ca administratorul să o poată descărca și trimite mai departe.
+            </p>
+
+            <Field label="A câștigat copilul un premiu?">
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" size="sm" variant={rewardReceived === true ? 'primary' : 'outline'} onClick={() => setRewardReceived(true)}>
+                  Da
+                </Button>
+                <Button type="button" size="sm" variant={rewardReceived === false ? 'primary' : 'outline'} onClick={() => setRewardReceived(false)}>
+                  Nu
+                </Button>
+              </div>
+            </Field>
+
+            {rewardReceived && (
+              <>
+                <Field label="Ce tip de premiu a câștigat?">
+                  <div className="grid grid-cols-2 gap-2">
+                    {DIPLOMA_REWARD_TYPES.map((r) => (
+                      <Button
+                        key={r.id} type="button" size="sm" variant={rewardType === r.id ? 'primary' : 'outline'}
+                        onClick={() => setRewardType(r.id)}
+                      >
+                        {r.label}
+                      </Button>
+                    ))}
+                  </div>
+                </Field>
+                {rewardType === 'virtual_money' && (
+                  <Field label="Câte monede virtuale?" hint="Numărul exact - creează automat un task separat pentru admin, „🪙 Trimite monedele virtuale”.">
+                    <Input
+                      type="number" min={1} value={coinAmount} onWheel={(e) => e.currentTarget.blur()}
+                      onChange={(e) => setCoinAmount(e.target.value)} placeholder="ex: 50"
+                    />
+                  </Field>
+                )}
+                <Field label="Detalii / Clarificare" hint="Scrie exact ce a câștigat copilul, ex: „500 Robux” sau „Superputerea de a controla timpul”.">
+                  <Textarea
+                    value={rewardDetails} onChange={(e) => setRewardDetails(e.target.value)} rows={3}
+                    placeholder="Detalii premiu..."
+                  />
+                </Field>
+              </>
+            )}
+
+            {finalizeError && <p className="text-xs text-[#FF6B6B]">{finalizeError}</p>}
+          </>
+        ) : (
+          <>
         <div className="grid grid-cols-2 gap-2">
           <Button type="button" size="sm" variant={mode === 'group' ? 'primary' : 'outline'} onClick={() => setMode('group')}>
             Din grupă
@@ -278,6 +456,8 @@ export default function Diplome({
           Se deschide șablonul de diplomă (curățat, fără feedback) într-un tab nou, precompletat cu numele elevului,
           profesorul, modulul și steluțele alese.
         </p>
+          </>
+        )}
       </Modal>
     </div>
   );

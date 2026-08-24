@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar, Star } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode } from '@/lib/types';
+import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode, TrackerLessonTransaction } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
 import { COURSES } from '@/lib/diplomas';
 import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
@@ -175,6 +175,14 @@ function packageButtonLabel(mode: StudyMode, tier: SubscriptionType): string {
   const n = PACKAGE_TIER_LESSONS[tier];
   return mode === 'individual' ? `Integral ${n} lecții` : `${n} lecții`;
 }
+
+/**
+ * O tranzactie de abonament din Istoricul Abonamentelor (panoul admin din Fisa Elevului) - un
+ * rand din tracker_lesson_transactions cu package_tier completat, in ordine cronologica
+ * (index 0 = cel mai vechi, ultimul = abonamentul curent/activ). Vezi fetchul din ProgressTracker
+ * si handleDeleteSubscriptionTransaction pentru logica de stergere (Scenariile A/B).
+ */
+type SubscriptionHistoryEntry = TrackerLessonTransaction & { package_tier: SubscriptionType };
 
 function rankStudents<T extends { progress: number }>(sorted: T[]): (T & { rank: number })[] {
   const ranked: (T & { rank: number })[] = [];
@@ -386,11 +394,12 @@ export default function ProgressTracker({
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState<ModalState>({ type: null });
-  // Numarul de reinnoiri de abonament ale elevului deschis in Fisa Elevului ("Abonamentul #N") -
-  // vezi efectul de mai jos si handleRenewSubscription. null = inca nu s-a incarcat (sau modalul
-  // nu e deschis / elevul curent nu e admin) - StudentHistoryModal afiseaza "Se încarcă…" pana
-  // atunci, ca sa nu clipeasca gresit "#0" inainte de raspunsul serverului.
-  const [subscriptionRenewalCount, setSubscriptionRenewalCount] = useState<number | null>(null);
+  // Istoricul Abonamentelor elevului deschis in Fisa Elevului (panoul admin) - toate tranzactiile
+  // cu package_tier completat, cronologic (ultima = abonamentul curent/activ, foloseste si pentru
+  // numaratoarea "Abonamentul #N"). Vezi efectul de mai jos, handleRenewSubscription si
+  // handleDeleteSubscriptionTransaction. null = inca in curs de incarcare (sau modalul nu e
+  // deschis / elevul curent nu e admin) - StudentHistoryModal afiseaza "Se încarcă…" pana atunci.
+  const [subscriptionHistory, setSubscriptionHistory] = useState<SubscriptionHistoryEntry[] | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [celebrations, setCelebrations] = useState<CelebrationItem[]>([]);
   const [confetti, setConfetti] = useState<ConfettiItem[]>([]);
@@ -415,11 +424,12 @@ export default function ProgressTracker({
   const [makeupCalendarLink, setMakeupCalendarLink] = useState(initialMakeupCalendarLink);
   const [makeupLinkDraft, setMakeupLinkDraft] = useState('');
   const [savingMakeupLink, setSavingMakeupLink] = useState(false);
-  // Previn dubla trimitere (dublu-click accidental) pe "Am inteles" si pe "Am trimis diploma" -
-  // butonul se dezactiveaza cat timp request-ul e in desfasurare.
+  // Previne dubla trimitere (dublu-click accidental) pe "Am inteles" - butonul se dezactiveaza
+  // cat timp request-ul e in desfasurare. Inchiderea efectiva a taskului de diploma (si
+  // trimiterea catre admin) se face acum din pagina Diplome ("Finalizeaza generarea
+  // diplomei", vezi finalize_diploma_with_reward) - nu mai exista un buton separat aici.
   const [acknowledgingMilestone, setAcknowledgingMilestone] = useState(false);
-  const [markingDiplomaSentIds, setMarkingDiplomaSentIds] = useState<Set<string>>(new Set());
-  // Acelasi rol ca markingDiplomaSentIds, dar pentru cardul de recuperare (pending_makeups)
+  // Acelasi rol ca acknowledgingMilestone, dar pentru cardul de recuperare (pending_makeups)
   // din Task-uri Urgente - previne dublu-click pe "Recuperare efectuata" / "Nu mai e nevoie".
   const [markingMakeupIds, setMarkingMakeupIds] = useState<Set<string>>(new Set());
   // Evita redeschiderea popup-ului pentru acelasi elev+prag in aceeasi sesiune daca profesorul
@@ -725,8 +735,9 @@ export default function ProgressTracker({
   // Butonul "+ Adaugă abonament" din panoul de Management Abonament (Fisa Elevului, admin -
   // folosit cand copilul termina pachetul si cumpara altul): seteaza pachetul curent
   // (study_mode/subscription_type/total_package_lessons), creste soldul cu numarul de lectii al
-  // pachetului ales si logheaza tranzactia in tracker_lesson_transactions CU package_tier
-  // completat - baza pentru numaratoarea "Abonamentul #N" (vezi fetchSubscriptionRenewalCount).
+  // pachetului ales si logheaza tranzactia in tracker_lesson_transactions CU package_tier +
+  // study_mode completate - baza pentru Istoricul Abonamentelor (vezi si
+  // handleDeleteSubscriptionTransaction, care poate "desface" exact aceasta tranzactie).
   async function handleRenewSubscription(studentId: string, mode: StudyMode, tier: SubscriptionType) {
     const student = students.find((s) => s.id === studentId);
     const amount = PACKAGE_TIER_LESSONS[tier];
@@ -736,13 +747,49 @@ export default function ProgressTracker({
       total_lessons_remaining: nextRemaining, study_mode: mode, subscription_type: tier, total_package_lessons: amount,
     });
     if (!updated) return;
-    const { error } = await supabase.from('tracker_lesson_transactions').insert({
+    const { data, error } = await supabase.from('tracker_lesson_transactions').insert({
       student_id: studentId, teacher_id: student.teacher_id, delta: amount, reason: 'purchase',
-      balance_after: nextRemaining, created_by: teacherId, package_tier: tier,
-    });
-    if (error) console.error('LESSON TRANSACTION LOG ERROR:', error);
-    setSubscriptionRenewalCount((c) => (c ?? 0) + 1);
+      balance_after: nextRemaining, created_by: teacherId, package_tier: tier, study_mode: mode,
+    }).select().single();
+    if (error || !data) console.error('LESSON TRANSACTION LOG ERROR:', error);
+    else setSubscriptionHistory((h) => (h ? [...h, data as SubscriptionHistoryEntry] : h));
     showToast(`Abonament reînnoit: +${amount} lecții`);
+  }
+
+  // Iconita de stergere din Istoricul Abonamentelor (Fisa Elevului, admin) - corectare erori
+  // umane (abonament adaugat din greseala). Doua scenarii:
+  // A) tranzactia stearsa NU e ultima (nu e abonamentul curent) - se elimina simplu din istoric,
+  //    fara alt efect (era deja "istorie", nu afecteaza starea curenta a elevului).
+  // B) tranzactia stearsa E ultima (abonamentul curent/activ) - abonamentul anterior din istoric
+  //    (daca exista) redevine activ; daca nu exista niciunul (era singurul), pachetul ramane gol
+  //    (null/0). Soldul se corecteaza scazand EXACT delta-ul tranzactiei sterse (nu se reseteaza
+  //    la valoarea "de fabrica" a pachetului anterior) - ca sa nu se piarda consumul real
+  //    intamplat intre timp, doar sa se anuleze exact greseala.
+  async function handleDeleteSubscriptionTransaction(studentId: string, transactionId: string) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student || !subscriptionHistory) return;
+    const idx = subscriptionHistory.findIndex((t) => t.id === transactionId);
+    if (idx === -1) return;
+    const deletedTx = subscriptionHistory[idx];
+    const isCurrent = idx === subscriptionHistory.length - 1;
+
+    const { error } = await supabase.from('tracker_lesson_transactions').delete().eq('id', transactionId);
+    if (error) { console.error('LESSON TRANSACTION DELETE ERROR:', error); showToast('Eroare la ștergere', 'error'); return; }
+
+    const nextHistory = subscriptionHistory.filter((t) => t.id !== transactionId);
+    setSubscriptionHistory(nextHistory);
+    if (!isCurrent) { showToast('Abonament șters din istoric'); return; }
+
+    const previous = nextHistory[nextHistory.length - 1] ?? null;
+    const nextRemaining = Math.max(0, (student.total_lessons_remaining ?? 0) - deletedTx.delta);
+    await patchStudent(studentId, previous
+      ? {
+          subscription_type: previous.package_tier, study_mode: previous.study_mode,
+          total_package_lessons: PACKAGE_TIER_LESSONS[previous.package_tier] ?? 0,
+          total_lessons_remaining: nextRemaining,
+        }
+      : { subscription_type: null, study_mode: null, total_package_lessons: 0, total_lessons_remaining: nextRemaining });
+    showToast(previous ? 'Abonament șters - s-a restaurat cel anterior' : 'Abonament șters');
   }
 
   // Incarca clasele profesorului ales in dropdown-ul modalului de transfer elev (vezi
@@ -1006,23 +1053,6 @@ export default function ProgressTracker({
     setDiplomaMilestonePopup(null);
   }
 
-  // "✅ Am trimis diploma" din dashboard - inchide taskul si marcheaza pragul ca finalizat,
-  // ca sa nu redeclansam popup-ul pentru acelasi multiplu de 16. patchStudent e deja optimist
-  // (actualizeaza local inainte de raspunsul serverului), deci elevul dispare instant din
-  // Task-uri Urgente; markingDiplomaSentIds blocheaza doar un eventual dublu-click pe acelasi buton.
-  async function handleMarkDiplomaSent(student: TrackerStudent) {
-    const milestone = student.pending_diploma_milestone;
-    if (!milestone || markingDiplomaSentIds.has(student.id)) return;
-    setMarkingDiplomaSentIds((s) => new Set(s).add(student.id));
-    const ok = await patchStudent(student.id, { last_diploma_issued_milestone: milestone, pending_diploma_milestone: null });
-    if (ok) {
-      await sendDiplomaMilestoneAlert(student, milestone, 'completed');
-      showToast('Diploma a fost marcată ca trimisă!');
-    }
-    setMarkingDiplomaSentIds((s) => { const next = new Set(s); next.delete(student.id); return next; });
-  }
-
-
   // "✅ Recuperat" / "❌ Nu mai e nevoie" pe cardul de recuperare din Task-uri Urgente - ambele
   // inchid complet alerta curenta (pending_makeups, absence_date, contorul/cooldown-ul de
   // notificari SI is_scheduled, toate la 0/null/false); patchStudent e deja optimist, deci
@@ -1187,7 +1217,7 @@ export default function ProgressTracker({
           student_id: studentId, teacher_id: ok.teacher_id,
           delta: patch.total_lessons_remaining - (editedStudent?.total_lessons_remaining ?? 0),
           reason: 'purchase', balance_after: patch.total_lessons_remaining,
-          created_by: teacherId, package_tier: editStudentSubscriptionType || null,
+          created_by: teacherId, package_tier: editStudentSubscriptionType || null, study_mode: editStudentStudyMode || null,
         });
         if (error) console.error('LESSON TRANSACTION LOG ERROR:', error);
       }
@@ -1590,22 +1620,24 @@ export default function ProgressTracker({
     setModal({ type: 'studentHistory', studentId });
   }
 
-  // Numaratoarea "Abonamentul #N" din panoul de Management Abonament (Fisa Elevului, admin) -
-  // cate tranzactii cu package_tier completat are elevul deschis (vezi handleRenewSubscription
-  // si handleEditStudent, singurele doua locuri care scriu package_tier). Interzis pentru
-  // profesor - nu doar ascuns in UI, ci nici macar interogat (acelasi tipar GDPR ca telefoanele
-  // parintelui): reseteaza la null de fiecare data cand modalul se inchide sau se schimba elevul,
-  // ca sa nu ramana afisat numarul elevului anterior cat timp se incarca cel nou.
+  // Istoricul Abonamentelor din panoul de Management Abonament (Fisa Elevului, admin) - toate
+  // tranzactiile cu package_tier completat ale elevului deschis, cronologic (vezi
+  // handleRenewSubscription si handleEditStudent, singurele doua locuri care scriu package_tier;
+  // handleDeleteSubscriptionTransaction pentru stergere). Interzis pentru profesor - nu doar
+  // ascuns in UI, ci nici macar interogat (acelasi tipar GDPR ca telefoanele parintelui):
+  // reseteaza la null de fiecare data cand modalul se inchide sau se schimba elevul, ca sa nu
+  // ramana afisat istoricul elevului anterior cat timp se incarca cel nou.
   useEffect(() => {
-    if (modal.type !== 'studentHistory' || !isAdmin) { setSubscriptionRenewalCount(null); return; }
+    if (modal.type !== 'studentHistory' || !isAdmin) { setSubscriptionHistory(null); return; }
     let cancelled = false;
-    setSubscriptionRenewalCount(null);
+    setSubscriptionHistory(null);
     (async () => {
-      const { count } = await supabase.from('tracker_lesson_transactions')
-        .select('id', { count: 'exact', head: true })
+      const { data } = await supabase.from('tracker_lesson_transactions')
+        .select('*')
         .eq('student_id', modal.studentId)
-        .not('package_tier', 'is', null);
-      if (!cancelled) setSubscriptionRenewalCount(count ?? 0);
+        .not('package_tier', 'is', null)
+        .order('created_at', { ascending: true });
+      if (!cancelled) setSubscriptionHistory((data ?? []) as SubscriptionHistoryEntry[]);
     })();
     return () => { cancelled = true; };
   }, [modal, isAdmin, supabase]);
@@ -1865,6 +1897,9 @@ export default function ProgressTracker({
                           {' '}(Grupa <span className="font-semibold">{getGroupById(s.group_id)?.group_name ?? '?'}</span>)
                           {' '}a ajuns la <span className="font-semibold">M{module} / L{lesson}</span>
                         </p>
+                        {/* Genereaza diploma + confirma recompensa + finalizeaza, TOTUL in pagina
+                            Diplome (vezi "Finalizeaza generarea diplomei") - taskul se inchide
+                            automat de acolo (finalize_diploma_with_reward), fara buton separat aici. */}
                         <div className="flex flex-col sm:flex-row gap-2 mt-3 w-full justify-end">
                           <Link
                             href={`/diplome?studentId=${s.id}&teacherId=${viewedTeacherId}`}
@@ -1873,17 +1908,6 @@ export default function ProgressTracker({
                           >
                             🎓 Generează Diplomă
                           </Link>
-                          <button
-                            onClick={() => handleMarkDiplomaSent(s)}
-                            disabled={markingDiplomaSentIds.has(s.id)}
-                            className="w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-2xl font-semibold text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                          >
-                            {markingDiplomaSentIds.has(s.id) ? (
-                              <span className="tracker-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                            ) : (
-                              '✅ Am trimis diploma'
-                            )}
-                          </button>
                         </div>
                       </div>
                     );
@@ -2722,10 +2746,11 @@ export default function ProgressTracker({
             group={group}
             history={history}
             isAdmin={isAdmin}
-            subscriptionRenewalCount={subscriptionRenewalCount}
+            subscriptionHistory={subscriptionHistory}
             onClose={() => setModal({ type: null })}
             onChangeStatus={(status) => handleChangeStudentStatus(student.id, status)}
             onRenewSubscription={(mode, tier) => handleRenewSubscription(student.id, mode, tier)}
+            onDeleteSubscriptionTransaction={(transactionId) => handleDeleteSubscriptionTransaction(student.id, transactionId)}
             onOpenTransfer={() => openTransferStudentModal(student.id)}
           />
         );
@@ -3152,16 +3177,17 @@ const HISTORY_STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: Rea
 const UNMARKED_HISTORY_CONFIG = { label: 'Nemarcat', icon: <span className="text-[10px] leading-none">–</span>, pill: 'bg-white/5 text-gray-400 border border-white/10', dot: 'bg-gray-500' };
 
 function StudentHistoryModal({
-  student, group, history, isAdmin, subscriptionRenewalCount, onClose, onChangeStatus, onRenewSubscription, onOpenTransfer,
+  student, group, history, isAdmin, subscriptionHistory, onClose, onChangeStatus, onRenewSubscription, onDeleteSubscriptionTransaction, onOpenTransfer,
 }: {
   student: TrackerStudent; group: TrackerGroup | null;
   history: { lesson: TrackerLesson; record: TrackerAttendance | null }[];
   isAdmin: boolean;
-  /** Cate reinnoiri de abonament are elevul (vezi efectul din ProgressTracker) - null = inca in curs de incarcare. */
-  subscriptionRenewalCount: number | null;
+  /** Istoricul Abonamentelor elevului (vezi efectul din ProgressTracker) - null = inca in curs de incarcare. */
+  subscriptionHistory: SubscriptionHistoryEntry[] | null;
   onClose: () => void;
   onChangeStatus: (status: StudentStatus) => void;
   onRenewSubscription: (mode: StudyMode, tier: SubscriptionType) => void;
+  onDeleteSubscriptionTransaction: (transactionId: string) => void;
   onOpenTransfer: () => void;
 }) {
   const rewardEmoji = group ? getRewardEmoji(group.reward_type) : '⭐';
@@ -3172,6 +3198,9 @@ function StudentHistoryModal({
   // Elev mai sus, si refolosite aici identic).
   const [renewPanelOpen, setRenewPanelOpen] = useState(false);
   const [renewMode, setRenewMode] = useState<StudyMode | ''>('');
+  // Panoul "Istoric Abonamente" (admin) - lista completa cu buton de stergere per rand, vezi
+  // handleDeleteSubscriptionTransaction (Scenariile A/B din cerinta de corectare a erorilor).
+  const [subscriptionHistoryOpen, setSubscriptionHistoryOpen] = useState(false);
   const remaining = student.total_lessons_remaining ?? 0;
   const statusOf = (r: TrackerAttendance | null): AttendanceStatus | undefined => r?.status;
   const filteredHistory = history.filter(({ lesson }) => {
@@ -3264,17 +3293,55 @@ function StudentHistoryModal({
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">💳 Abonament</span>
                 <span className={`text-sm font-bold ${remaining <= 2 ? 'text-red-400' : 'text-white'}`}>{remaining} lecții rămase</span>
               </div>
-              <p className="text-sm text-white">
-                {subscriptionRenewalCount === null ? (
-                  <span className="text-gray-400">Se încarcă…</span>
-                ) : student.subscription_type ? (
-                  <>Abonamentul <span className="font-bold text-[#C8F023]">#{subscriptionRenewalCount || 1}</span>: {SUBSCRIPTION_TYPE_LABELS[student.subscription_type]}</>
-                ) : (
-                  <span className="text-gray-400">Niciun abonament activ încă</span>
-                )}
-              </p>
+              {subscriptionHistory === null ? (
+                <p className="text-sm text-gray-400">Se încarcă…</p>
+              ) : subscriptionHistory.length === 0 ? (
+                <p className="text-sm text-gray-400">Niciun abonament activ încă</p>
+              ) : (
+                <button
+                  type="button" onClick={() => setSubscriptionHistoryOpen((o) => !o)}
+                  className="w-full flex items-center justify-between gap-2 text-left"
+                  title="Vezi Istoric Abonamente"
+                >
+                  <span className="text-sm text-white">
+                    Abonamentul <span className="font-bold text-[#C8F023]">#{subscriptionHistory.length}</span>: {SUBSCRIPTION_TYPE_LABELS[student.subscription_type!]}
+                  </span>
+                  <span className="shrink-0 text-[11px] font-semibold text-gray-400 flex items-center gap-1">
+                    Istoric <ChevronDown size={13} className={`transition-transform ${subscriptionHistoryOpen ? 'rotate-180' : ''}`} />
+                  </span>
+                </button>
+              )}
               {remaining <= 2 && (
                 <p className="text-[11px] text-red-400">⚠️ Abonamentul e aproape epuizat - a fost trimisă o alertă.</p>
+              )}
+
+              {/* Istoric Abonamente: toate reinnoirile elevului, cu buton de stergere pe fiecare
+                  rand - corectare erori umane (abonament adaugat din greseala). Vezi
+                  handleDeleteSubscriptionTransaction pentru Scenariile A (istoric) / B (curent). */}
+              {subscriptionHistoryOpen && subscriptionHistory && subscriptionHistory.length > 0 && (
+                <div className="space-y-1.5 border-t border-white/10 pt-2">
+                  {[...subscriptionHistory].reverse().map((tx, i) => {
+                    const n = subscriptionHistory.length - i;
+                    const label = tx.study_mode ? packageButtonLabel(tx.study_mode, tx.package_tier) : SUBSCRIPTION_TYPE_LABELS[tx.package_tier];
+                    return (
+                      <div key={tx.id} className="flex items-center justify-between gap-2 bg-black/20 rounded-xl px-2.5 py-1.5">
+                        <span className="text-[12px] text-gray-300 truncate">
+                          #{n} · {label} · {new Date(tx.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Ești sigur că vrei să ștergi acest abonament?')) onDeleteSubscriptionTransaction(tx.id);
+                          }}
+                          title="Șterge abonamentul"
+                          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-red-400 hover:bg-red-500/15 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
 
               {!renewPanelOpen ? (

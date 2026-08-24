@@ -690,5 +690,26 @@ inventar = [<span class="syntax-str">"Scut"</span>, <span class="syntax-str">"Sa
         });
     })();
     </script>
+
+    <!-- auto-download-v1: cand parametrul autoDownload=1 e prezent in URL (folosit de butonul
+         "⬇️ Descarcă diploma" din Task-uri Urgente, admin), genereaza si descarca automat PDF-ul
+         la incarcarea paginii, fara clickuri suplimentare - reutilizeaza functia downloadPDF()
+         de mai sus, neschimbata. Fara acest parametru (ex. "👁️ Vezi diploma"), comportamentul
+         paginii ramane identic ca inainte. -->
+    <script>
+    (function () {
+        var autoDownload = new URLSearchParams(window.location.search).get('autoDownload');
+        if (autoDownload !== '1') return;
+        function triggerDownload() {
+            if (typeof downloadPDF === 'function') downloadPDF();
+        }
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () { setTimeout(triggerDownload, 300); });
+        } else {
+            setTimeout(triggerDownload, 600);
+        }
+    })();
+    </script>
+
 </body>
 </html>
