@@ -6,7 +6,7 @@ import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, P
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode, TrackerLessonTransaction } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
-import { COURSES } from '@/lib/diplomas';
+import { COURSES, getCourse } from '@/lib/diplomas';
 import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
@@ -269,6 +269,20 @@ function TimeInput({
 function isKnownCourseId(id: CourseId | null): boolean {
   return id === null || COURSES.some((c) => c.id === id);
 }
+
+/** Emoji + accent de culoare per curs, pentru badge-ul de pe cardul clasei (vezi GroupCard) -
+ * aceleasi emoji ca in grila de generare diploma (Diplome.tsx -> GRID_COURSES), ca profesorul
+ * sa recunoasca vizual acelasi curs in ambele locuri. Cursurile custom (text liber, fara sablon
+ * de diploma) folosesc un badge neutru (fallback in GroupCard); "Nespecificat" (course = null)
+ * nu afiseaza deloc badge - nu are sens sa aglomeram fiecare clasa nesetata cu o eticheta goala.
+ */
+const COURSE_BADGE: Record<string, { emoji: string; className: string }> = {
+  alfabetizare: { emoji: '📖', className: 'bg-amber-100 text-amber-800' },
+  coblocks: { emoji: '🧩', className: 'bg-blue-100 text-blue-800' },
+  python: { emoji: '🐍', className: 'bg-emerald-100 text-emerald-800' },
+  roblox: { emoji: '🎮', className: 'bg-rose-100 text-rose-800' },
+  unity: { emoji: '🕹️', className: 'bg-purple-100 text-purple-800' },
+};
 
 /**
  * Selector de curs: grid de butoane pentru cursurile cunoscute (cu sablon de diploma) +
@@ -3609,9 +3623,15 @@ function GroupCard({
 }: { group: TrackerGroup; studentCount: number; avgProgress: number; onOpen: () => void; onEdit: () => void }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
   const day = dayLabel(group.day_of_week);
+  const courseBadge = group.course ? COURSE_BADGE[group.course] : null;
   return (
     <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
       <h3 className="text-lg font-bold mb-2">📖 {group.group_name}</h3>
+      {group.course && (
+        <p className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 mb-2 ${courseBadge?.className ?? 'bg-black/5 text-black/70'}`}>
+          {courseBadge?.emoji ?? '📚'} {getCourse(group.course)?.label ?? group.course}
+        </p>
+      )}
       {(day || group.time_of_day) && (
         <p className="inline-flex items-center gap-1 text-xs font-semibold text-black/70 bg-black/5 rounded-full px-2.5 py-1 mb-2">
           🗓️ {day ?? 'Fara zi'}{group.time_of_day ? ` · ${group.time_of_day}` : ''}
