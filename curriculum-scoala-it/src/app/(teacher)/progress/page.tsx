@@ -3,8 +3,15 @@ import { createClient } from '@/lib/supabase/server';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance } from '@/lib/types';
 import ProgressTracker from './ProgressTracker';
 
-export default async function ProgressTrackerPage() {
+export default async function ProgressTrackerPage({
+  searchParams,
+}: {
+  // Revenire din /diplome dupa "Finalizeaza generarea diplomei" (vezi Diplome.tsx) - cand
+  // adminul rasfoia clasele altui profesor, pastram acel profesor selectat.
+  searchParams: Promise<{ teacherId?: string }>;
+}) {
   const profile = await requireUser();
+  const { teacherId: viewedTeacherIdParam } = await searchParams;
   const supabase = await createClient();
   const isAdmin = profile.role === 'admin';
 
@@ -37,6 +44,7 @@ export default async function ProgressTrackerPage() {
       initialStudents={(students ?? []) as TrackerStudent[]}
       initialLessons={(lessons ?? []) as TrackerLesson[]}
       initialAttendance={(attendance ?? []) as TrackerAttendance[]}
+      initialViewedTeacherId={viewedTeacherIdParam ?? null}
     />
   );
 }

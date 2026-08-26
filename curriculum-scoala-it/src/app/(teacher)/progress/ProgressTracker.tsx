@@ -369,12 +369,16 @@ type ModalState =
 
 export default function ProgressTracker({
   teacherId, teacherName, teacherPhone, makeupCalendarLink: initialMakeupCalendarLink, isAdmin, teacherOptions,
-  initialGroups, initialStudents, initialLessons, initialAttendance,
+  initialGroups, initialStudents, initialLessons, initialAttendance, initialViewedTeacherId,
 }: {
   teacherId: string; teacherName: string; teacherPhone: string | null; makeupCalendarLink: string | null;
   isAdmin: boolean; teacherOptions: { id: string; label: string }[];
   initialGroups: TrackerGroup[]; initialStudents: TrackerStudent[];
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[];
+  // Revenire din /diplome dupa "Finalizeaza generarea diplomei" (vezi Diplome.tsx) - cand
+  // adminul rasfoia clasele altui profesor, pastram acel profesor selectat si dupa
+  // round-trip-ul de generare diplomă, in loc sa cadem inapoi pe propriul cont.
+  initialViewedTeacherId?: string | null;
 }) {
   const supabase = useMemo(() => createClient(), []);
   // Folosit DOAR ca semnal de invalidare a Router Cache-ului Next.js dupa o mutatie de
@@ -384,7 +388,9 @@ export default function ProgressTracker({
 
   // Profesorul ale carui date sunt afisate acum - implicit propriul cont; adminul il
   // poate schimba din dropdown-ul de mai jos, ceea ce reincarca totul pentru acel profesor.
-  const [viewedTeacherId, setViewedTeacherId] = useState(teacherId);
+  const [viewedTeacherId, setViewedTeacherId] = useState(
+    (isAdmin && initialViewedTeacherId) || teacherId
+  );
   const [teacherSwitchLoading, setTeacherSwitchLoading] = useState(false);
   const [groups, setGroups] = useState<TrackerGroup[]>(initialGroups);
   const [students, setStudents] = useState<TrackerStudent[]>(initialStudents);

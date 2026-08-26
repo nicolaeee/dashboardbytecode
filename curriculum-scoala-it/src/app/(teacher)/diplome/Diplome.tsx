@@ -223,8 +223,18 @@ export default function Diplome({
     } catch (alertError) {
       console.error('DIPLOMA MILESTONE ALERT ERROR:', alertError);
     }
+    // Daca profesorul a ajuns aici din "🚨 Task-uri Urgente" (Progress Tracker → "🎓 Genereaza
+    // Diploma"), taskul respectiv tocmai s-a inchis in DB (RPC-ul de mai sus a golit
+    // pending_diploma_milestone) - il trimitem direct inapoi acolo, ca sa vada instant lista
+    // fara acel task, in loc sa ramana pe /diplome nestiind daca actiunea a avut efect si sa
+    // riste sa apese din nou. Generarea "ad-hoc" (din grila de cursuri, fara task de pornit)
+    // ramane pe loc, ca inainte - profesorul poate genera diplome pentru mai multi elevi la rand.
+    const cameFromUrgentTask = finalizeStep.studentId === initialStudentId;
     setFinalizeStep(null);
     setGeneratingCourse(null);
+    if (cameFromUrgentTask) {
+      router.push(initialTeacherId ? `/progress?teacherId=${initialTeacherId}` : '/progress');
+    }
     // Invalideaza Router Cache-ul Next.js DUPA ce backend-ul a confirmat finalizarea (RPC-ul
     // de mai sus deja a inchis pending_diploma_milestone pentru acest prag, daca era exact
     // pragul deschis) - altfel, la revenirea pe Progress Tracker, "🚨 Task-uri Urgente" ar putea
