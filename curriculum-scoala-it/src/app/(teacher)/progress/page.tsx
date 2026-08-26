@@ -21,7 +21,10 @@ export default async function ProgressTrackerPage({
   // primeste deloc aceste valori in payload-ul paginii (nu doar ascunse in UI, ci absente
   // din raspuns).
   const [{ data: groups }, { data: students }, { data: lessons }, { data: attendance }, teachersRes] = await Promise.all([
-    supabase.from('tracker_groups').select('*').eq('teacher_id', profile.id).order('created_at'),
+    // Clasele arhivate (is_archived - vezi sync_group_archive_status) dispar complet din
+    // contul profesorului, aici la sursa - nu doar ascunse in UI. Vizibile doar in "Arhivă
+    // Clase" (Admin), vezi src/app/admin/clase-arhivate.
+    supabase.from('tracker_groups').select('*').eq('teacher_id', profile.id).eq('is_archived', false).order('created_at'),
     isAdmin
       ? supabase.from('tracker_students').select('*').eq('teacher_id', profile.id).order('created_at')
       : supabase.from('tracker_students').select('id,teacher_id,group_id,name,short_name,progress,lesson_offset,presence_count,absence_count,pending_diploma_milestone,last_diploma_issued_milestone,pending_makeups,absence_date,makeup_notification_count,last_makeup_notification,is_scheduled,status,status_changed_at,status_changed_by,status_note,subscription_type,total_lessons_remaining,deleted_at,created_at').eq('teacher_id', profile.id).order('created_at'),

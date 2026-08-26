@@ -561,7 +561,7 @@ export default function ProgressTracker({
     setTeacherSwitchLoading(true);
     (async () => {
       const [{ data: g }, { data: s }, { data: l }, { data: a }, { data: p }] = await Promise.all([
-        supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
+        supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).eq('is_archived', false).order('created_at'),
         supabase.from('tracker_students').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
         supabase.from('tracker_lessons').select('*').eq('teacher_id', viewedTeacherId).order('session_number'),
         supabase.from('tracker_attendance').select('*').eq('teacher_id', viewedTeacherId),
@@ -593,7 +593,7 @@ export default function ProgressTracker({
       return;
     }
     const [{ data: g }, { data: s }, { data: l }, { data: a }, { data: p }] = await Promise.all([
-      supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
+      supabase.from('tracker_groups').select('*').eq('teacher_id', viewedTeacherId).eq('is_archived', false).order('created_at'),
       supabase.from('tracker_students').select('*').eq('teacher_id', viewedTeacherId).order('created_at'),
       supabase.from('tracker_lessons').select('*').eq('teacher_id', viewedTeacherId).order('session_number'),
       supabase.from('tracker_attendance').select('*').eq('teacher_id', viewedTeacherId),
@@ -744,12 +744,21 @@ export default function ProgressTracker({
   // StudentHistoryModal. Independent de transfer (transferStudentTeacher mai jos): un elev
   // transferat la alt profesor RAMANE 'active', doar teacher_id/group_id se schimba.
   async function handleChangeStudentStatus(studentId: string, status: StudentStatus, note?: string) {
-    await patchStudent(studentId, {
+    const updated = await patchStudent(studentId, {
       status, status_changed_at: new Date().toISOString(), status_changed_by: teacherId, status_note: note ?? null,
     });
     showToast(
       status === 'dropped_out' ? 'Elev marcat ca abandon' : status === 'paused' ? 'Abonament întrerupt (Pauză)' : 'Elev reactivat (Activ)'
     );
+    // Arhivare automata (vezi trigger-ul SQL sync_group_archive_status): daca acest Abandon a
+    // lasat clasa fara niciun elev activ, ea tocmai a devenit is_archived in DB - o scoatem
+    // instant si din lista locala, ca profesorul sa nu mai vada un card "fantoma" pana la
+    // urmatoarea reincarcare a paginii (acelasi tipar ca la transferul unui elev, mai sus).
+    if (status === 'dropped_out' && updated) {
+      const groupId = updated.group_id;
+      const stillActive = students.some((s) => s.id !== studentId && s.group_id === groupId && !s.deleted_at && s.status !== 'dropped_out');
+      if (!stillActive) setGroups((gs) => gs.filter((g) => g.id !== groupId));
+    }
   }
 
   // Butonul "+ Adaugă abonament" din panoul de Management Abonament (Fisa Elevului, admin -
@@ -819,7 +828,7 @@ export default function ProgressTracker({
     setTransferGroupId('');
     if (!newTeacherId) { setTransferGroupOptions([]); return; }
     const { data } = await supabase.from('tracker_groups')
-      .select('id, group_name').eq('teacher_id', newTeacherId).is('deleted_at', null).order('group_name');
+      .select('id, group_name').eq('teacher_id', newTeacherId).is('deleted_at', null).eq('is_archived', false).order('group_name');
     setTransferGroupOptions((data ?? []) as { id: string; group_name: string }[]);
   }
 

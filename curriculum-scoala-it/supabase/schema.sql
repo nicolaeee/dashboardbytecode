@@ -1056,3 +1056,48 @@ select cron.schedule(
   '0 4 * * *',
   $$select public.cleanup_old_urgent_tasks();$$
 );
+
+-- ----------------------------------------------------------------------------
+-- 17. ARHIVARE AUTOMATA CLASE FARA NICIUN ELEV ACTIV
+--    Vezi supabase/migrations/add_group_zero_active_students_archive.sql pentru comentariul
+--    complet de business. DIFERITA de sectiunea 10 (arhivare prin inactivitate, deleted_at/
+--    Urna) - is_archived ascunde clasa COMPLET din contul profesorului (nu apare in Urna),
+--    vizibila doar in "Arhivă Clase" (Admin), de indata ce ultimul elev activ pleaca.
+-- ----------------------------------------------------------------------------
+alter table public.tracker_groups add column if not exists is_archived boolean not null default false;
+
+create index if not exists tracker_groups_is_archived_idx on public.tracker_groups (teacher_id, is_archived);
+
+create or replace function public.sync_group_archive_status(p_group_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.tracker_groups g
+  set is_archived = not exists (
+    select 1 from public.tracker_students s
+    where s.group_id = p_group_id and s.deleted_at is null and s.status <> 'dropped_out'
+  )
+  where g.id = p_group_id and g.deleted_at is null;
+end;
+$$;
+
+grant execute on function public.sync_group_archive_status(uuid) to authenticated;
+
+create or replace function public.trg_sync_group_archive_status()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if TG_OP = 'INSERT' then
+    perform public.sync_group_archive_status(new.group_id);
+    return new;
+  end if;
+  if old.group_id is distinct from new.group_id then
+    perform public.sync_group_archive_status(old.group_id);
+  end if;
+  perform public.sync_group_archive_status(new.group_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists tracker_students_sync_archive on public.tracker_students;
+create trigger tracker_students_sync_archive
+  after insert or update of group_id, status, deleted_at on public.tracker_students
+  for each row execute function public.trg_sync_group_archive_status();

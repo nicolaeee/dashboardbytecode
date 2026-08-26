@@ -68,6 +68,15 @@ export type TrackerGroup = {
   course: CourseId | null;
   /** Link-ul Google Meet al clasei (editabil din antetul clasei in Tracker). */
   meet_link: string | null;
+  /**
+   * true = clasa nu mai are niciun elev activ (toti au Abandon sau au fost transferati la alta
+   * clasa) - intretinut automat de un trigger SQL (sync_group_archive_status, vezi supabase/
+   * migrations/add_group_zero_active_students_archive.sql), NU de cod din ProgressTracker.tsx.
+   * Clasa arhivata dispare complet din contul profesorului (nu doar din Urna) - vizibila
+   * DOAR in "Arhivă Clase" (Admin). Diferit de `deleted_at` (stergere manuala, restaurabila
+   * din Urna) - cele doua flag-uri au cicluri de viata separate.
+   */
+  is_archived: boolean;
   deleted_at: string | null;
   created_at: string;
 };
@@ -271,6 +280,24 @@ export type TrackerLessonTransaction = {
   note: string | null;
   created_by: string | null;
   created_at: string;
+};
+
+/**
+ * O intrare din jurnalul de transferuri de elevi (vezi tracker_student_transfers în schema.sql) -
+ * scrisă automat de transfer_student_teacher la fiecare mutare a unui elev la alt profesor/clasă.
+ * Folosită de "Arhivă Clase" (Admin) ca să reconstruiască ce elevi au plecat dintr-o clasă
+ * arhivată prin transfer (spre deosebire de Abandon, care rămâne legat de group_id).
+ */
+export type TrackerStudentTransfer = {
+  id: string;
+  student_id: string;
+  from_teacher_id: string | null;
+  to_teacher_id: string;
+  from_group_id: string | null;
+  to_group_id: string;
+  transferred_by: string | null;
+  transferred_at: string;
+  note: string | null;
 };
 
 /** Module noi, activabile per profesor de către Super Admin (vezi feature_access în schema.sql). */
