@@ -833,10 +833,13 @@ export default function ProgressTracker({
   }
 
   function openTransferStudentModal(studentId: string) {
-    setTransferTeacherId('');
-    setTransferGroupOptions([]);
-    setTransferGroupId('');
     setModal({ type: 'transferStudent', studentId });
+    // Precompletam cu profesorul curent al elevului (cel mai frecvent caz: mutarea intr-o
+    // alta clasa a ACELUIASI profesor) - profesorul poate schimba oricand dropdown-ul daca
+    // vrea sa mute elevul la altcineva. loadTransferGroupOptions seteaza si incarca clasele.
+    const student = students.find((s) => s.id === studentId);
+    if (student) loadTransferGroupOptions(student.teacher_id);
+    else { setTransferTeacherId(''); setTransferGroupOptions([]); setTransferGroupId(''); }
   }
 
   async function handleSubmitTransferStudent(e: React.FormEvent, studentId: string) {
@@ -848,7 +851,10 @@ export default function ProgressTracker({
     if (!result.ok) return showToast(result.error, 'error');
     setModal({ type: null });
     showToast('Elev transferat cu succes!');
-    // Elevul a plecat la alt profesor - dispare din lista profesorului vizualizat curent.
+    // Elevul a plecat din clasa veche (la alt profesor SAU la alta clasa a aceluiasi profesor) -
+    // dispare instant de sub clasa veche; router.refresh() de mai jos resincronizeaza local
+    // (vezi efectul care reseteaza `students` din `initialStudents`), aducandu-l inapoi corect
+    // sub clasa noua daca a ramas la acelasi profesor vizualizat.
     setStudents((ss) => ss.filter((s) => s.id !== studentId));
     router.refresh();
   }
@@ -2790,21 +2796,24 @@ export default function ProgressTracker({
         if (!student) return null;
         return (
           <ModalShell onClose={() => setModal({ type: null })}>
-            <h3 className="text-xl font-bold mb-1 text-[#C8F023]">🔀 Transferă la alt profesor</h3>
+            <h3 className="text-xl font-bold mb-1 text-[#C8F023]">🔀 Mută elevul în altă clasă</h3>
             <p className="text-sm text-gray-400 mb-4">
-              Muți pe <span className="text-white font-semibold">{student.name}</span> la un alt profesor - o mutare internă,
-              nu contează ca abandon. Istoricul de lecții/prezență rămâne la clasa veche.
+              Muți pe <span className="text-white font-semibold">{student.name}</span> într-o altă clasă - a aceluiași
+              profesor sau a altcuiva. O mutare internă, nu contează ca abandon. Toate datele lui (steluțe, prezențe,
+              lecții efectuate) se mută odată cu el; istoricul lecțiilor deja ținute rămâne la clasa veche.
             </p>
             <form onSubmit={(e) => handleSubmitTransferStudent(e, student.id)} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Profesor nou</label>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1">Profesor</label>
                 <select
                   required value={transferTeacherId} onChange={(e) => loadTransferGroupOptions(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
                 >
                   <option value="" className="bg-gray-900">Alege profesorul...</option>
-                  {teacherOptions.filter((t) => t.id !== student.teacher_id).map((t) => (
-                    <option key={t.id} value={t.id} className="bg-gray-900">{t.label}</option>
+                  {teacherOptions.map((t) => (
+                    <option key={t.id} value={t.id} className="bg-gray-900">
+                      {t.label}{t.id === student.teacher_id ? ' (profesorul actual - altă clasă)' : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -2816,12 +2825,16 @@ export default function ProgressTracker({
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
                   >
                     <option value="" className="bg-gray-900">Alege clasa...</option>
-                    {transferGroupOptions.map((g) => (
+                    {transferGroupOptions.filter((g) => g.id !== student.group_id).map((g) => (
                       <option key={g.id} value={g.id} className="bg-gray-900">{g.group_name}</option>
                     ))}
                   </select>
-                  {transferGroupOptions.length === 0 && (
-                    <p className="text-[11px] text-amber-400 mt-1">Acest profesor nu are nicio clasă activă.</p>
+                  {transferGroupOptions.filter((g) => g.id !== student.group_id).length === 0 && (
+                    <p className="text-[11px] text-amber-400 mt-1">
+                      {transferTeacherId === student.teacher_id
+                        ? 'Acest profesor nu are altă clasă activă în afară de cea curentă.'
+                        : 'Acest profesor nu are nicio clasă activă.'}
+                    </p>
                   )}
                 </div>
               )}
