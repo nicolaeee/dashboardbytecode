@@ -842,50 +842,46 @@ alter table public.urgent_tasks enable row level security;
 create policy "adminul gestioneaza task-urile urgente" on public.urgent_tasks
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+-- Mesaj mai amplu (vezi supabase/migrations/update_diploma_parent_message_template.sql):
+-- salut in functie de ora locala (Buna ziua/Buna seara), continut celebrator randomizat
+-- (aceleasi 8 variante), apoi o incheiere unica (scuze pentru asteptare, diploma atasata,
+-- semnatura echipei) - nu mai repetata separat in fiecare varianta.
 create or replace function public.random_diploma_parent_message(p_first_name text, p_course_label text)
 returns text language sql volatile as $$
-  select (array[
-    format('🎉 Felicitări, %1$s! Suntem tare mândri de el pentru această reușită! A finalizat cu succes o nouă etapă din aventura lui la %2$s și ne bucurăm enorm să îl vedem cum evoluează, învață și prinde tot mai multă încredere. 🌟
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+  select
+    (case when extract(hour from (now() at time zone 'Europe/Bucharest')) < 18
+       then 'Bună ziua,' else 'Bună seara,' end)
+    || E'\n\n' ||
+    (array[
+      format('🎉 Felicitări, %1$s! Suntem tare mândri de el pentru această reușită! A finalizat cu succes o nouă etapă din aventura lui la %2$s și ne bucurăm enorm să îl vedem cum evoluează, învață și prinde tot mai multă încredere. 🌟
 
 Este o bucurie să îl avem alături de noi și abia așteptăm să vedem ce lucruri minunate va descoperi în continuare! 🚀', p_first_name, p_course_label),
-    format('🌟 Vești minunate despre %1$s! A dus la capăt cu brio o nouă etapă din călătoria lui la %2$s. Suntem atât de mândri de progresul și determinarea lui! 🎉
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('🌟 Vești minunate despre %1$s! A dus la capăt cu brio o nouă etapă din călătoria lui la %2$s. Suntem atât de mândri de progresul și determinarea lui! 🎉
 
 Mulțumim că ne sunteți alături - abia așteptăm să vedem ce va cuceri în continuare! 💫', p_first_name, p_course_label),
-    format('🚀 %1$s tocmai a bifat un nou pas important la %2$s! Ne umple de bucurie să îl vedem cum crește, învață lucruri noi și capătă din ce în ce mai multă încredere în el. 🎉
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('🚀 %1$s tocmai a bifat un nou pas important la %2$s! Ne umple de bucurie să îl vedem cum crește, învață lucruri noi și capătă din ce în ce mai multă încredere în el. 🎉
 
 Suntem recunoscători că face parte din povestea noastră și abia așteptăm continuarea aventurii lui! 🌟', p_first_name, p_course_label),
-    format('🎊 O reușită minunată pentru %1$s! A finalizat cu succes o nouă etapă la %2$s și e clar că progresul lui e uriaș. Suntem tare mândri de el! 🌈
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('🎊 O reușită minunată pentru %1$s! A finalizat cu succes o nouă etapă la %2$s și e clar că progresul lui e uriaș. Suntem tare mândri de el! 🌈
 
 Mulțumim că sunteți alături de noi în această călătorie - urmează lucruri și mai frumoase! ✨', p_first_name, p_course_label),
-    format('🌈 Vești superbe despre %1$s! A trecut cu bine de o nouă etapă din aventura lui la %2$s, iar entuziasmul și implicarea lui ne bucură enorm. 🎉
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('🌈 Vești superbe despre %1$s! A trecut cu bine de o nouă etapă din aventura lui la %2$s, iar entuziasmul și implicarea lui ne bucură enorm. 🎉
 
 Este o plăcere să îl vedem evoluând - abia așteptăm să vedem ce urmează! 🚀', p_first_name, p_course_label),
-    format('✨ %1$s a mai făcut un pas mare înainte la %2$s! Suntem tare mândri de reușita lui și de tot progresul făcut până acum. 🎉
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('✨ %1$s a mai făcut un pas mare înainte la %2$s! Suntem tare mândri de reușita lui și de tot progresul făcut până acum. 🎉
 
 Vă mulțumim că sunteți alături de noi în această călătorie - urmează lucruri minunate! 🌟', p_first_name, p_course_label),
-    format('🎉 Ce reușită frumoasă pentru %1$s! A încheiat cu succes o nouă etapă la %2$s și îl vedem din ce în ce mai încrezător și entuziasmat. 🌟
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('🎉 Ce reușită frumoasă pentru %1$s! A încheiat cu succes o nouă etapă la %2$s și îl vedem din ce în ce mai încrezător și entuziasmat. 🌟
 
 Ne bucurăm enorm să facem parte din parcursul lui - abia așteptăm continuarea! 🚀', p_first_name, p_course_label),
-    format('🌟 Felicitări din suflet, %1$s! A dus la bun sfârșit o nouă etapă din aventura lui la %2$s, iar progresul lui ne umple de mândrie. 🎉
-
-📎 Vă atașăm diploma lui %1$s pentru această frumoasă reușită.
+      format('🌟 Felicitări din suflet, %1$s! A dus la bun sfârșit o nouă etapă din aventura lui la %2$s, iar progresul lui ne umple de mândrie. 🎉
 
 Mulțumim că sunteți alături de noi - urmează multe momente minunate! ✨', p_first_name, p_course_label)
-  ])[1 + floor(random() * 8)::int];
+    ])[1 + floor(random() * 8)::int]
+    || E'\n\n' ||
+    format('Ne cerem scuze pentru orice mic deranj cauzat de timpul de așteptare până la primirea acesteia - vă mulțumim pentru răbdare! 📎 Atașăm aici și diploma lui %1$s.
+
+O zi minunată vă dorim, din partea întregii echipe ByteCode School! 💛', p_first_name);
 $$;
 
 create or replace function public.finalize_diploma_with_reward(

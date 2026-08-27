@@ -1,9 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { AlertTriangle, Check, Clock, Copy, Download, Eye, MessageCircle, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { diplomaRewardLabel, type UrgentTaskStatus } from '@/lib/types';
-import { diplomaTemplateUrl, getCourse } from '@/lib/diplomas';
+import { buildDiplomaUrl, getCourse } from '@/lib/diplomas';
 import { computeModuleLesson } from '@/lib/lessonNumbering';
 import { Badge, Button, Card, EmptyState, Input, Modal } from '@/components/ui';
 import type { UrgentTaskWithDetails } from './page';
@@ -33,43 +34,16 @@ function waDigits(phone: string) {
   return phone.replace(/[^0-9]/g, '');
 }
 
-/**
- * Diploma nu e un fisier stocat - e un sablon HTML din public/diplome/ deschis cu parametri in
- * URL. Reconstruim aici EXACT acelasi URL pe care l-a "generat" profesorul, din snapshot-ul
- * inghetat la "Finalizeaza generarea diplomei" (coloanele diploma_* din urgent_tasks) - NU din
- * date live (numele/stelutele elevului se pot schimba intre timp, iar adminul poate deschide
- * taskul in alta zi decat cea a finalizarii).
- *
- * Doua motive DISTINCTE pentru care butonul poate lipsi - afisate diferit in UI (vezi
- * renderTask), ca sa nu se confunde o problema reala cu o limitare cunoscuta:
- *  - 'missing-snapshot': coloanele diploma_* sunt goale pe task (migrarea SQL
- *    add_diploma_snapshot_to_urgent_tasks.sql nu a rulat inca, sau schema cache-ul PostgREST
- *    nu s-a reincarcat dupa ALTER TABLE) - task-ul exista, dar snapshot-ul nu s-a salvat.
- *  - 'no-template': cursul grupei e unul custom (text liber), fara sablon in public/diplome/.
- */
-function buildDiplomaUrl(task: UrgentTaskWithDetails, module: number): { url: string; reason: null } | { url: null; reason: 'missing-snapshot' | 'no-template' } {
-  if (!task.diploma_course_id || !task.diploma_student_name || !task.diploma_teacher_name || !task.diploma_date) {
-    return { url: null, reason: 'missing-snapshot' };
-  }
-  const base = diplomaTemplateUrl(task.diploma_course_id, module);
-  if (!base) return { url: null, reason: 'no-template' };
-  const params = new URLSearchParams({
-    elev: task.diploma_student_name,
-    profesor: task.diploma_teacher_name,
-    curs: `Modulul ${module} - ${getCourse(task.diploma_course_id)?.label ?? task.diploma_course_id}`,
-    data: task.diploma_date,
-    stelute: String(task.diploma_stars ?? 0),
-    totalStelute: String(task.diploma_total_stars ?? 0),
-  });
-  return { url: `${base}?${params.toString()}`, reason: null };
-}
-
 type TeacherOption = { id: string; label: string };
-type StatusFilter = 'all' | UrgentTaskStatus;
+// Fara COMPLETED - pagina primeste de la server STRICT task-uri NEW/IN_PROGRESS (vezi
+// admin/task-uri-urgente/page.tsx); un task finalizat dispare instant din `tasks` (vezi
+// updateStatus) si se muta in "Arhivă → Diplome Trimise" (admin/arhiva), nu mai ramane
+// niciodata de filtrat aici.
+type StatusFilter = 'all' | Exclude<UrgentTaskStatus, 'COMPLETED'>;
 type SortBy = 'recent' | 'oldest' | 'teacher' | 'child' | 'module';
 
 const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
-  all: 'Toate', NEW: 'Noi', IN_PROGRESS: 'În lucru', COMPLETED: 'Finalizate',
+  all: 'Toate', NEW: 'Noi', IN_PROGRESS: 'În lucru',
 };
 const SORT_LABELS: Record<SortBy, string> = {
   recent: 'Cea mai recentă', oldest: 'Cea mai veche', teacher: 'Profesor', child: 'Copil', module: 'Modul',
@@ -136,7 +110,15 @@ export default function TaskUriUrgenteClient({
     const patch = status === 'COMPLETED' ? { status, completed_at: new Date().toISOString(), completed_by: viewerId } : { status };
     const { error } = await supabase.from('urgent_tasks').update(patch).eq('id', task.id);
     if (!error) {
-      setTasks((ts) => ts.map((t) => (t.id === task.id ? { ...t, ...patch } : t)));
+      // Optimistic UI: un task finalizat (diploma trimisa / monedele trimise) nu mai are ce
+      // cauta in Task-uri Urgente - dispare instant, nu doar isi schimba badge-ul de status.
+      // Ramane vizibil ca istoric in "Arhivă → Diplome Trimise" (admin/arhiva), citit direct
+      // din DB (status = COMPLETED), fara sa fie nevoie sa-l tinem si aici local.
+      if (status === 'COMPLETED') {
+        setTasks((ts) => ts.filter((t) => t.id !== task.id));
+      } else {
+        setTasks((ts) => ts.map((t) => (t.id === task.id ? { ...t, ...patch } : t)));
+      }
     } else {
       console.error('URGENT TASK UPDATE ERROR:', error);
     }
@@ -325,6 +307,8 @@ export default function TaskUriUrgenteClient({
         </h1>
         <p className="mt-1 text-sm text-lock">
           Diplome de trimis părinților, monede virtuale de trimis și diplome netrimise la 3 zile de la atingerea pragului de prezențe.
+          Task-urile finalizate dispar de aici și apar în{' '}
+          <Link href="/admin/arhiva" className="text-brand-500 underline underline-offset-2 hover:text-brand-600">Arhivă → Diplome Trimise</Link>.
         </p>
       </div>
 

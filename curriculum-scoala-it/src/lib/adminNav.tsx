@@ -20,7 +20,7 @@ export function getAdminNavItems(newTaskCount: number): NavItem[] {
     },
     { href: '/admin/curriculum', label: 'Curriculum', icon: <Library size={16} /> },
     { href: '/admin/teachers', label: 'Profesori', icon: <Users size={16} /> },
-    { href: '/admin/clase-arhivate', label: 'Arhivă Clase', icon: <Archive size={16} /> },
+    { href: '/admin/arhiva', label: 'Arhivă', icon: <Archive size={16} /> },
     { href: '/progress', label: 'Progress Tracker', icon: <Rocket size={16} /> },
     { href: '/registru', label: 'Registru', icon: <ClipboardList size={16} /> },
     { href: '/diplome', label: 'Diplome', icon: <GraduationCap size={16} /> },
