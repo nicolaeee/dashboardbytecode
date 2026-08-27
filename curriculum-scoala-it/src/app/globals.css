@@ -33,6 +33,11 @@ body {
   backdrop-filter: blur(24px) saturate(180%);
 }
 
+/* Ascunde scrollbar-ul vizual (zona de navigare a Sidebar-ului, vezi Shell.tsx) - scroll-ul
+   ramane complet functional (tastatura/rotita/atingere), doar bara nu mai e desenata. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Eticheta mono folosită pentru numerotarea reală a curriculumului (M1, L3) */
 .tag {
   @apply font-mono text-[11px] uppercase tracking-[0.14em] text-lock;

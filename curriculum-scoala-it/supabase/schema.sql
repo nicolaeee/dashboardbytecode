@@ -90,6 +90,7 @@ create table public.lessons (
   title                text not null,
   objective            text default '',   -- Obiectivul lectiei
   video_url            text default '',   -- YouTube / embed video explicativ
+  example_video_url    text default '',   -- Video optional cu rezultatul final ("Lecție Exemplu")
   teacher_project_url  text default '',   -- Proiect profesor
   student_project_url  text default '',   -- Proiect copil
   notes                text default '',   -- Observatii importante

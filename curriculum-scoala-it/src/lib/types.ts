@@ -32,6 +32,10 @@ export type Lesson = {
   title: string;
   objective: string;
   video_url: string;
+  /** Video optional cu rezultatul final al lectiei ("🎬 Lecție Exemplu") - randat cu EXACT
+   * acelasi player ca video_url (vezi (teacher)/lectie/[id]/page.tsx), doar sub el, cu propriul
+   * titlu. Aceeasi conventie ca video_url: string gol ('') = nesetat, nu null. */
+  example_video_url: string;
   notes: string;
   homework: string;
   homework_url: string;

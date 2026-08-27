@@ -7,7 +7,9 @@ import { lessonUnlocked } from '@/lib/access';
 import type { AccessMap, Tree } from '@/lib/types';
 
 export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; access: AccessMap }) {
-  const [open, setOpen] = useState<Set<string>>(new Set(tree.slice(0, 1).map((p) => p.id)));
+  // Totul pornește pliat (platforme/cursuri/module) - la prima încărcare nu aglomerează
+  // vizual pagina; profesorul deschide manual, la click, exact ca înainte (toggle neatins).
+  const [open, setOpen] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) =>
     setOpen((prev) => {

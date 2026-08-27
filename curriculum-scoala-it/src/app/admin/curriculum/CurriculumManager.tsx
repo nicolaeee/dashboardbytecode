@@ -26,7 +26,7 @@ const EMPTY: Record<EntityKind, Record<string, string>> = {
   course: { title: '', description: '' },
   module: { title: '', description: '' },
   lesson: {
-    title: '', objective: '', video_url: '',
+    title: '', objective: '', video_url: '', example_video_url: '',
     notes: '', homework: '', homework_url: '',
   },
 };
@@ -52,7 +52,9 @@ const EMPTY_NAME_ERROR: Record<EntityKind, string> = {
 
 export default function CurriculumManager({ tree }: { tree: Tree }) {
   const router = useRouter();
-  const [open, setOpen] = useState<Set<string>>(new Set(tree.slice(0, 1).map((p) => p.id)));
+  // Totul pornește pliat (platforme/cursuri/module) - la prima încărcare nu aglomerează
+  // vizual pagina; adminul deschide manual, la click, exact ca înainte (toggle neatins).
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -76,6 +78,7 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
         kind, id, parentId,
         values: {
           title: l.title, objective: l.objective ?? '', video_url: l.video_url ?? '',
+          example_video_url: l.example_video_url ?? '',
           notes: l.notes ?? '', homework: l.homework ?? '', homework_url: l.homework_url ?? '',
         },
       });
@@ -356,6 +359,9 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
             </Field>
             <Field label="Video explicativ" hint="Link YouTube sau Vimeo — se afișează integrat în pagină.">
               <Input value={draft.values.video_url} onChange={(e) => set('video_url', e.target.value)} placeholder="https://youtube.com/watch?v=…" />
+            </Field>
+            <Field label="Link Lecție Exemplu (Opțional)" hint="Video cu rezultatul final — se afișează sub cel explicativ, cu propria etichetă.">
+              <Input value={draft.values.example_video_url} onChange={(e) => set('example_video_url', e.target.value)} placeholder="https://youtube.com/watch?v=…" />
             </Field>
             <Field label="Observații importante">
               <Textarea rows={3} value={draft.values.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Instrucțiuni pentru clasă, capcane frecvente…" />

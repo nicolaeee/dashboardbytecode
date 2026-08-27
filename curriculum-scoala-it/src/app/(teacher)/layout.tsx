@@ -1,4 +1,4 @@
-import { ClipboardList, GraduationCap, Library, Map, PiggyBank, Rocket, Star, TrendingDown } from 'lucide-react';
+import { ClipboardList, Library, Map, PiggyBank, Rocket, Star, TrendingDown } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { getEnabledFeatureModules } from '@/lib/featureAccess';
 import { getNewUrgentTaskCount } from '@/lib/urgentTasks';
@@ -19,11 +19,14 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   }
 
   const enabledModules = await getEnabledFeatureModules(profile);
+  // ⚠️ "Diplome" e ascuns intentionat pentru profesor (cerinta explicita) - generarea diplomei
+  // ramane accesibila DOAR din "🚨 Task-uri Urgente" (Progress Tracker), la momentul potrivit
+  // (elevul a atins pragul), nu ca sectiune libera de navigat oricand. Adminul pastreaza accesul
+  // (vezi getAdminNavItems, categoria MOTIVAȚIE) - ei folosesc /diplome si pentru generare ad-hoc.
   const nav = [
     { href: '/curriculum', label: 'Curriculum', icon: <Library size={16} /> },
     { href: '/progress', label: 'Progress Tracker', icon: <Rocket size={16} /> },
     { href: '/registru', label: 'Registru', icon: <ClipboardList size={16} /> },
-    { href: '/diplome', label: 'Diplome', icon: <GraduationCap size={16} /> },
     { href: '/recompense', label: 'Recompense', icon: <Star size={16} /> },
     { href: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },
     // Module noi, randate condiționat - activate per profesor de Super Admin

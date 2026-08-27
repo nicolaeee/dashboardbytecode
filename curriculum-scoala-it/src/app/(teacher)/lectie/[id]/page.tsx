@@ -18,6 +18,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
 
   const { lesson, module: mod, course, platform } = ctx;
   const embed = toEmbedUrl(lesson.video_url);
+  const exampleEmbed = lesson.example_video_url ? toEmbedUrl(lesson.example_video_url) : null;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -65,6 +66,32 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
             )}
           </div>
         </section>
+
+        {/* Video "rezultat final" - optional, randat cu EXACT acelasi player ca cel de mai
+            sus, doar cu propria eticheta ("🎬 Lecție Exemplu") - vezi lesson.example_video_url. */}
+        {lesson.example_video_url && (
+          <section>
+            <h2 className="flex items-center gap-2 font-display text-[15px] font-semibold">
+              <Video size={16} className="text-brand-500" /> 🎬 Lecție Exemplu
+            </h2>
+            <div className="mt-2 overflow-hidden rounded-2xl border border-line bg-black">
+              {exampleEmbed ? (
+                <div className="aspect-video">
+                  <iframe
+                    src={exampleEmbed} title={`Lecție Exemplu: ${lesson.title}`} className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                    sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="flex aspect-video items-center justify-center text-sm text-white/50">
+                  Link video invalid.
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Observații + temă */}
         <div className="grid gap-4 sm:grid-cols-2">

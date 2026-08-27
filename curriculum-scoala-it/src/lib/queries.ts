@@ -88,7 +88,7 @@ export async function getLessonContext(lessonId: string): Promise<LessonContext 
   const { data: row } = await supabase
     .from('lessons')
     .select(`
-      id, module_id, title, objective, video_url,
+      id, module_id, title, objective, video_url, example_video_url,
       notes, homework, homework_url, position,
       module:modules(
         id, course_id, title, description, position,
