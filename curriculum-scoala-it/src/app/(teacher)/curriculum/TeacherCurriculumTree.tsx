@@ -1,12 +1,11 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, Lock, PlayCircle } from 'lucide-react';
-import { Badge, Card, EmptyState } from '@/components/ui';
-import { lessonUnlocked } from '@/lib/access';
-import type { AccessMap, Tree } from '@/lib/types';
+import { ChevronDown, ChevronRight, PlayCircle } from 'lucide-react';
+import { Card, EmptyState } from '@/components/ui';
+import type { Tree } from '@/lib/types';
 
-export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; access: AccessMap }) {
+export default function TeacherCurriculumTree({ tree }: { tree: Tree }) {
   // Totul pornește pliat (platforme/cursuri/module) - la prima încărcare nu aglomerează
   // vizual pagina; profesorul deschide manual, la click, exact ca înainte (toggle neatins).
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -69,8 +68,7 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
                       {course.modules.length === 0 && <li className="text-sm text-lock">Niciun modul publicat.</li>}
 
                       {course.modules.map((mod) => (
-                        <li key={mod.id}
-                          className={`glass rounded-xl border px-4 py-3 ${mod.unlocked ? 'border-line' : 'border-dashed border-line opacity-70'}`}>
+                        <li key={mod.id} className="glass rounded-xl border border-line px-4 py-3">
                           <div
                             onClick={() => toggle(mod.id)}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(mod.id); } }}
@@ -80,44 +78,23 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
                             <span className="text-lock">
                               {open.has(mod.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                             </span>
-                            <span className={`min-w-0 flex-1 truncate text-[15px] ${mod.unlocked ? '' : 'text-lock'}`}>
-                              {mod.title}
-                            </span>
-                            {mod.unlocked
-                              ? <Badge tone="ok">Acces</Badge>
-                              : <span className="inline-flex items-center gap-1.5 text-[12px] text-lock">
-                                  <Lock size={13} /> Blocat
-                                </span>}
+                            <span className="min-w-0 flex-1 truncate text-[15px]">{mod.title}</span>
                           </div>
 
                           {open.has(mod.id) && (
                             <ul className="mt-2 space-y-0.5 border-t border-line pt-2">
                               {mod.lessons.length === 0 && <li className="text-[13px] text-lock">Fără lecții.</li>}
 
-                              {mod.lessons.map((lesson) => {
-                                const canOpen = lessonUnlocked(access, lesson);
-                                const label = (
-                                  <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
-                                );
-                                return (
-                                  <li key={lesson.id}>
-                                    {canOpen ? (
-                                      <Link href={`/lectie/${lesson.id}`}
-                                        className="flex items-center gap-2 rounded-lg px-1.5 py-2 transition hover:bg-brand-50">
-                                        <PlayCircle size={15} className="shrink-0 text-brand-500" />
-                                        {label}
-                                        <ChevronRight size={15} className="shrink-0 text-lock" />
-                                      </Link>
-                                    ) : (
-                                      <div className="flex items-center gap-2 px-1.5 py-2 text-lock"
-                                        title="Nu ai permisiunea de a accesa acest conținut.">
-                                        <Lock size={14} className="shrink-0" />
-                                        {label}
-                                      </div>
-                                    )}
-                                  </li>
-                                );
-                              })}
+                              {mod.lessons.map((lesson) => (
+                                <li key={lesson.id}>
+                                  <Link href={`/lectie/${lesson.id}`}
+                                    className="flex items-center gap-2 rounded-lg px-1.5 py-2 transition hover:bg-brand-50">
+                                    <PlayCircle size={15} className="shrink-0 text-brand-500" />
+                                    <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
+                                    <ChevronRight size={15} className="shrink-0 text-lock" />
+                                  </Link>
+                                </li>
+                              ))}
                             </ul>
                           )}
                         </li>
