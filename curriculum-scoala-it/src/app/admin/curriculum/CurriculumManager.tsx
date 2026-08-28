@@ -241,9 +241,7 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                                 {open.has(mod.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className="flex items-center gap-2 text-[15px] font-medium">
-                                  <span className="tag">M{mi + 1}</span> {mod.title}
-                                </p>
+                                <p className="text-[15px] font-medium">{mod.title}</p>
                                 {mod.description && <p className="text-[13px] text-ink/50">{mod.description}</p>}
                               </div>
                             </div>
@@ -276,7 +274,6 @@ export default function CurriculumManager({ tree }: { tree: Tree }) {
                                   className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-1.5 transition hover:bg-slate-25"
                                 >
                                   <PlayCircle size={15} className="shrink-0 text-lock" />
-                                  <span className="tag w-8 shrink-0">L{li + 1}</span>
                                   <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
                                   <div onClick={(e) => e.stopPropagation()} className="shrink-0">
                                     <RowActions

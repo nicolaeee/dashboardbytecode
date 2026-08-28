@@ -68,7 +68,7 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
                     <ul className="mt-3 space-y-2 pl-6">
                       {course.modules.length === 0 && <li className="text-sm text-lock">Niciun modul publicat.</li>}
 
-                      {course.modules.map((mod, mi) => (
+                      {course.modules.map((mod) => (
                         <li key={mod.id}
                           className={`glass rounded-xl border px-4 py-3 ${mod.unlocked ? 'border-line' : 'border-dashed border-line opacity-70'}`}>
                           <div
@@ -80,7 +80,6 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
                             <span className="text-lock">
                               {open.has(mod.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                             </span>
-                            <span className="tag w-7 shrink-0">M{mi + 1}</span>
                             <span className={`min-w-0 flex-1 truncate text-[15px] ${mod.unlocked ? '' : 'text-lock'}`}>
                               {mod.title}
                             </span>
@@ -95,13 +94,10 @@ export default function TeacherCurriculumTree({ tree, access }: { tree: Tree; ac
                             <ul className="mt-2 space-y-0.5 border-t border-line pt-2">
                               {mod.lessons.length === 0 && <li className="text-[13px] text-lock">Fără lecții.</li>}
 
-                              {mod.lessons.map((lesson, li) => {
+                              {mod.lessons.map((lesson) => {
                                 const canOpen = lessonUnlocked(access, lesson);
                                 const label = (
-                                  <>
-                                    <span className="tag w-7 shrink-0">L{li + 1}</span>
-                                    <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
-                                  </>
+                                  <span className="min-w-0 flex-1 truncate text-sm">{lesson.title}</span>
                                 );
                                 return (
                                   <li key={lesson.id}>
