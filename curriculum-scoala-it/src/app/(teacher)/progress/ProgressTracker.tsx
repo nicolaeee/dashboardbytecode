@@ -379,7 +379,14 @@ type ModalState =
   // opțiuni se încarcă la cerere (vezi loadTransferGroupOptions) - nu fac parte din state-ul
   // deja încărcat (grupele altui profesor decât cel vizualizat).
   | { type: 'transferStudent'; studentId: string }
-  | { type: 'editMakeupLink' };
+  | { type: 'editMakeupLink' }
+  // Rollback modul (steluțe): scaderea unei stelute readuce progresul sub varful curent al
+  // modulelor grupei, exact pragul pentru care fusese adaugat ultimul modul - vezi cycleStar.
+  | { type: 'confirmStarModuleRollback'; studentId: string; lessonId: string; groupId: string; newModuleCount: number }
+  // Rollback diploma (prezente): anularea unei prezente scade numarul total sub un prag de 16
+  // pentru care exista deja o alerta de diploma (in asteptare sau deja generata) - vezi
+  // setAttendanceStatus/confirmDiplomaMilestoneRollback.
+  | { type: 'confirmDiplomaRollback'; studentId: string; lessonId: string; status: AttendanceStatus; recoveryDate?: string; recoveryTime?: string; milestone: number };
 
 export default function ProgressTracker({
   teacherId, teacherName, teacherPhone, makeupCalendarLink: initialMakeupCalendarLink, isAdmin, teacherOptions,
@@ -1420,9 +1427,33 @@ export default function ProgressTracker({
     }
   }
 
+  // Executa efectiv ciclarea stelutei (scriere in DB + ajustarea progresului) - separata de
+  // cycleStar ca sa poata fi reapelata si din confirmStarModuleRollback, dupa ce profesorul
+  // confirma explicit revenirea la modulul anterior (vezi cycleStar mai jos).
+  async function performCycleStar(studentId: string, lessonId: string, group: TrackerGroup) {
+    const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
+    if (!current || current.status === 'absent') return;
+    const prevCount = current.star_count ?? 0;
+    const nextCount = (prevCount + 1) % 4;
+    const delta = nextCount - prevCount;
+
+    const previousAttendance = attendance;
+    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, star_count: nextCount } : a)));
+    const { data, error } = await supabase.from('tracker_attendance')
+      .update({ star_count: nextCount }).eq('id', current.id).select().single();
+    if (error || !data) {
+      setAttendance(previousAttendance);
+      return showToast('Eroare', 'error');
+    }
+    setAttendance((as) => as.map((a) => (a.id === current.id ? (data as TrackerAttendance) : a)));
+    await applyStarDelta(studentId, delta, group);
+  }
+
   // Steluta se acorda strict daca elevul a fost prezent sau a recuperat lectia - niciodata
   // pentru o lectie marcata "absent". Profesorul cicleaza valoarea (0 -> 1 -> 2 -> 3 -> 0)
-  // din click pe iconita - e un multiplicator, nu doar o bifa facuta/nefacuta.
+  // din click pe iconita - e un multiplicator, nu doar o bifa facuta/nefacuta. Singurul sens in
+  // care "scade" progresul e wrap-ul 3 -> 0 (delta -3, vezi mai jos) - de aceea pragul verificat
+  // pentru rollback e cel traversat descrescator de acest wrap, nu un "-1" separat (nu exista).
   async function cycleStar(studentId: string, lessonId: string) {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
@@ -1438,16 +1469,42 @@ export default function ProgressTracker({
     const maxSteps = (group.module_count || 1) * 16;
     if (delta > 0 && student.progress >= maxSteps) return showToast('Adauga un modul nou pentru a continua!', 'error');
 
-    const previousAttendance = attendance;
-    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, star_count: nextCount } : a)));
-    const { data, error } = await supabase.from('tracker_attendance')
-      .update({ star_count: nextCount }).eq('id', current.id).select().single();
-    if (error || !data) {
-      setAttendance(previousAttendance);
-      return showToast('Eroare', 'error');
+    // Rollback de modul: verificam daca acest wrap descrescator traverseaza in jos un prag de
+    // 16 care e EXACT motivul pentru care modulul curent al grupei a fost creat (module_count
+    // == prag/16 + 1) SI daca, dupa scadere, elevul nu mai are nevoie deloc de acel modul
+    // (noul progres incape in plafonul modulului anterior). Fara aceasta a doua conditie am
+    // risca sa stergem un modul de care elevul tot mai are nevoie (progres construit din multe
+    // lectii anterioare, nu doar din steluta tocmai anulata) - vezi ModalState.confirmStarModuleRollback.
+    if (delta < 0) {
+      const oldProgress = student.progress;
+      const newProgress = Math.max(0, oldProgress + delta);
+      const topMultiple = Math.floor(oldProgress / 16) * 16;
+      if (topMultiple > 0 && topMultiple > newProgress) {
+        const moduleCount = group.module_count || 1;
+        const moduleCreatedForThisThreshold = topMultiple / 16 + 1;
+        const newModuleCount = moduleCount - 1;
+        if (moduleCount === moduleCreatedForThisThreshold && newProgress <= newModuleCount * 16) {
+          setModal({ type: 'confirmStarModuleRollback', studentId, lessonId, groupId: group.id, newModuleCount });
+          return;
+        }
+      }
     }
-    setAttendance((as) => as.map((a) => (a.id === current.id ? (data as TrackerAttendance) : a)));
-    await applyStarDelta(studentId, delta, group);
+
+    await performCycleStar(studentId, lessonId, group);
+  }
+
+  // "Da, revin la modulul anterior" pe popup-ul de rollback - aplica efectiv scaderea stelutei
+  // SI sterge modulul nou-creat (module_count - 1), fara sa atinga in vreun fel alerta de
+  // diploma (sisteme complet separate - vezi comentariul din setAttendanceStatus).
+  async function confirmStarModuleRollback() {
+    if (modal.type !== 'confirmStarModuleRollback') return;
+    const { studentId, lessonId, groupId, newModuleCount } = modal;
+    const group = getGroupById(groupId);
+    setModal({ type: null });
+    if (!group) return;
+    await performCycleStar(studentId, lessonId, group);
+    await patchGroup(groupId, { module_count: newModuleCount });
+    showToast('Modulul a fost anulat - ai revenit la modulul anterior');
   }
 
   // Creeaza o lectie noua (sedinta) pentru o grupa. Tipul se deduce AUTOMAT din numarul de
@@ -1524,7 +1581,11 @@ export default function ProgressTracker({
   // regula de business. recoveryDate/recoveryTime se completeaza doar cand status =
   // 'made_up' (sesiune 1-la-1) - aceasta data alimenteaza automat coloana "Recuperari"
   // din Payslip-ul din /registru.
-  async function setAttendanceStatus(
+  //
+  // Executa efectiv schimbarea de status - separata de setAttendanceStatus (mai jos) ca sa
+  // poata fi reapelata si din confirmDiplomaMilestoneRollback, dupa ce profesorul confirma
+  // explicit anularea alertei de diploma.
+  async function performSetAttendanceStatus(
     studentId: string, lessonId: string, status: AttendanceStatus, recoveryDate?: string, recoveryTime?: string
   ): Promise<TrackerAttendance | undefined> {
     const student = students.find((s) => s.id === studentId);
@@ -1620,6 +1681,68 @@ export default function ProgressTracker({
     if (lessonDelta !== 0) await applyLessonBalanceDelta(studentId, lessonDelta);
 
     return data as TrackerAttendance;
+  }
+
+  // Punct unic de intrare pentru schimbarea statusului - intercepteaza EXACT tranzitia care ar
+  // scadea numarul total de prezente sub un prag de 16 pentru care exista deja o alerta de
+  // diploma (pending_diploma_milestone == prag) sau diploma a fost deja generata dar nu e inca
+  // marcata COMPLETED de admin (last_diploma_issued_milestone == prag) - cere confirmare
+  // explicita inainte sa schimbe orice. Sistem complet separat de rollback-ul de modul din
+  // cycleStar (acela e legat de progress/stelute, asta e legat strict de prezente).
+  async function setAttendanceStatus(
+    studentId: string, lessonId: string, status: AttendanceStatus, recoveryDate?: string, recoveryTime?: string
+  ): Promise<TrackerAttendance | undefined> {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return undefined;
+    const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
+    const wasCounted = current?.status === 'present' || current?.status === 'made_up';
+    const willBeCounted = status === 'present' || status === 'made_up';
+
+    if (wasCounted && !willBeCounted) {
+      const oldTotal = totalPresencesFor(studentId);
+      const crossesMilestone = oldTotal > 0 && oldTotal % 16 === 0
+        && (student.pending_diploma_milestone === oldTotal || student.last_diploma_issued_milestone === oldTotal);
+      if (crossesMilestone) {
+        setModal({ type: 'confirmDiplomaRollback', studentId, lessonId, status, recoveryDate, recoveryTime, milestone: oldTotal });
+        return undefined;
+      }
+    }
+
+    return performSetAttendanceStatus(studentId, lessonId, status, recoveryDate, recoveryTime);
+  }
+
+  // "Da, anulează" pe popup-ul de rollback diploma - aplica efectiv schimbarea de status, apoi
+  // cere backend-ului (RPC security definer, teacherii nu au drept direct pe urgent_tasks) sa
+  // stearga task-ul/alerta nefinalizata din Task-uri Urgente si sa resteze
+  // pending_diploma_milestone/last_diploma_issued_milestone. Daca diploma fusese deja trimisa
+  // efectiv (task COMPLETED), RPC-ul intoarce already_sent=true si NU schimba nimic legat de
+  // diploma - doar prezenta ramane corectata.
+  async function confirmDiplomaMilestoneRollback() {
+    if (modal.type !== 'confirmDiplomaRollback') return;
+    const { studentId, lessonId, status, recoveryDate, recoveryTime, milestone } = modal;
+    setModal({ type: null });
+    await performSetAttendanceStatus(studentId, lessonId, status, recoveryDate, recoveryTime);
+
+    const { data, error } = await supabase.rpc('rollback_diploma_milestone', {
+      p_student_id: studentId, p_milestone: milestone,
+    });
+    if (error) {
+      console.error('ROLLBACK DIPLOMA MILESTONE ERROR:', error);
+      return showToast('Prezența a fost corectată, dar alerta de diplomă nu a putut fi anulată automat. Anunță un admin.', 'error');
+    }
+    const result = data as { ok: boolean; already_sent?: boolean } | null;
+    if (result?.already_sent) {
+      return showToast('Prezența a fost corectată. Diploma fusese deja trimisă, deci alerta rămâne.', 'error');
+    }
+    // Optimistic UI: taskul dispare instant din Task-uri Urgente (sters deja in DB de RPC) -
+    // reflectam local si resetarea pending_diploma_milestone/last_diploma_issued_milestone, ca
+    // pragul de {milestone} prezente sa fie cerut din nou de la zero.
+    setStudents((ss) => ss.map((s) => (s.id === studentId ? {
+      ...s,
+      pending_diploma_milestone: s.pending_diploma_milestone === milestone ? null : s.pending_diploma_milestone,
+      last_diploma_issued_milestone: s.last_diploma_issued_milestone === milestone ? milestone - 16 : s.last_diploma_issued_milestone,
+    } : s)));
+    showToast('Prezența corectată - alerta de diplomă a fost anulată.');
   }
 
   // Butonul "+" (lectie noua) e blocat STRICT daca ultima lectie a clasei mai are elevi
@@ -2602,6 +2725,49 @@ export default function ProgressTracker({
                 className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors"
               >
                 🗑️ Șterge
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {modal.type === 'confirmStarModuleRollback' && (
+        <ModalShell onClose={() => setModal({ type: null })}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h3 className="text-xl font-bold mb-2">Atenție!</h3>
+            <p className="text-gray-400 mb-6">
+              Prin ștergerea acestei steluțe, modulul curent va fi marcat ca nefinalizat. Ești
+              sigur că vrei să revii la modulul anterior?
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                Nu
+              </button>
+              <button onClick={confirmStarModuleRollback} className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors">
+                Da, revin la modulul anterior
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {modal.type === 'confirmDiplomaRollback' && (
+        <ModalShell onClose={() => setModal({ type: null })}>
+          <div className="text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h3 className="text-xl font-bold mb-2">Atenție!</h3>
+            <p className="text-gray-400 mb-6">
+              Prin anularea acestei prezențe, elevul scade sub pragul de {modal.milestone} prezențe
+              pentru care există deja o alertă de diplomă. Ești sigur că vrei să anulezi alerta de
+              diplomă din Task-uri Urgente?
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+                Nu
+              </button>
+              <button onClick={confirmDiplomaMilestoneRollback} className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors">
+                Da, anulează
               </button>
             </div>
           </div>

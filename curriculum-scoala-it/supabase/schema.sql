@@ -1034,6 +1034,67 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- 15b. ROLLBACK PRAG DIPLOMA (profesorul anuleaza din greseala o prezenta care scade
+--    numarul total sub un prag deja atins - vezi supabase/migrations/add_diploma_milestone_rollback.sql
+--    pentru comentariul complet de business.)
+-- ----------------------------------------------------------------------------
+create or replace function public.rollback_diploma_milestone(p_student_id uuid, p_milestone int)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_student record;
+  v_already_sent boolean;
+begin
+  select id, pending_diploma_milestone, last_diploma_issued_milestone
+    into v_student
+    from public.tracker_students
+    where id = p_student_id and (teacher_id = auth.uid() or public.is_admin())
+    for update;
+
+  if v_student.id is null then
+    return jsonb_build_object('ok', false, 'reason', 'not_found');
+  end if;
+  if p_milestone is null or p_milestone <= 0 or p_milestone % 16 <> 0 then
+    return jsonb_build_object('ok', false, 'reason', 'invalid_milestone');
+  end if;
+
+  select exists(
+    select 1 from public.urgent_tasks
+    where student_id = p_student_id and milestone = p_milestone
+      and type in ('DIPLOMA_GENERATED', 'DIPLOMA_NOT_SENT', 'SEND_VIRTUAL_COINS')
+      and status = 'COMPLETED'
+  ) into v_already_sent;
+
+  if v_already_sent then
+    return jsonb_build_object('ok', true, 'already_sent', true);
+  end if;
+
+  delete from public.urgent_tasks
+    where student_id = p_student_id and milestone = p_milestone
+      and type in ('DIPLOMA_GENERATED', 'DIPLOMA_NOT_SENT', 'SEND_VIRTUAL_COINS')
+      and status <> 'COMPLETED';
+
+  update public.tracker_students
+    set
+      pending_diploma_milestone = case when pending_diploma_milestone = p_milestone then null else pending_diploma_milestone end,
+      last_diploma_issued_milestone = case when last_diploma_issued_milestone = p_milestone then p_milestone - 16 else last_diploma_issued_milestone end
+    where id = p_student_id
+    returning id, pending_diploma_milestone, last_diploma_issued_milestone into v_student;
+
+  return jsonb_build_object(
+    'ok', true, 'already_sent', false,
+    'pending_diploma_milestone', v_student.pending_diploma_milestone,
+    'last_diploma_issued_milestone', v_student.last_diploma_issued_milestone
+  );
+end;
+$$;
+
+grant execute on function public.rollback_diploma_milestone(uuid, int) to authenticated;
+
+-- ----------------------------------------------------------------------------
 -- 16. CURATARE AUTOMATA URGENT_TASKS (4 LUNI)
 --    Vezi supabase/migrations/add_urgent_tasks_cleanup_cron.sql pentru comentariul complet.
 -- ----------------------------------------------------------------------------
