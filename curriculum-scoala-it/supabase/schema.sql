@@ -994,7 +994,14 @@ create or replace function public.finalize_diploma_with_reward(
   p_manual_student_name text default null,
   p_manual_course_id text default null,
   p_manual_stars int default null,
-  p_manual_total_stars int default null
+  p_manual_total_stars int default null,
+  -- Elevul REAL din spatele unei generari Manual pornite dintr-un task real (Task-uri Urgente ->
+  -- "🎓 Generează Diplomă" -> profesorul comuta pe "Manual" ca sa editeze numele/stelutele).
+  -- Diploma insasi ramane legata de datele manuale (student_id NULL mai sus), dar pragul lui de
+  -- prezente TREBUIE inchis la fel ca la o generare normala - altfel taskul lui ramane agatat la
+  -- nesfarsit, desi diploma (cu datele editate) a fost deja trimisa catre admin. Ignorat cand
+  -- p_student_id nu e null (nu are sens sa existe amandoi deodata).
+  p_origin_student_id uuid default null
 )
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -1068,6 +1075,17 @@ begin
     v_stars := greatest(0, least(16, coalesce(p_manual_stars, 0)));
     v_total_stars := greatest(0, coalesce(p_manual_total_stars, 0));
     v_teacher_id := auth.uid();
+
+    -- Inchide pragul elevului REAL de origine, daca exista si chiar mai are deschis EXACT acest
+    -- prag (aceeasi conditie de siguranta ca la elevul real de mai sus - nu inchidem orbeste un
+    -- prag care nu mai corespunde, ex. elevul a mai avansat intre timp).
+    if p_origin_student_id is not null then
+      update public.tracker_students
+        set last_diploma_issued_milestone = v_milestone, pending_diploma_milestone = null
+        where id = p_origin_student_id
+          and (teacher_id = auth.uid() or public.is_admin())
+          and pending_diploma_milestone = v_milestone;
+    end if;
   end if;
 
   select coalesce(nullif(trim(p.full_name), ''), p.email) into v_teacher_name
@@ -1111,7 +1129,7 @@ begin
 end;
 $$;
 
-grant execute on function public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text, text, text, int, int) to authenticated;
+grant execute on function public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text, text, text, int, int, uuid) to authenticated;
 
 -- Extinde send_overdue_diploma_alerts() (functia existenta, ruleaza deja zilnic prin pg_cron)
 -- ca, pe langa webhook-ul Pabbly de azi (neschimbat), sa deschida si task-ul de admin

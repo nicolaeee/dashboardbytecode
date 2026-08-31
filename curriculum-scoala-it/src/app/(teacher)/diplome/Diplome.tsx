@@ -267,6 +267,12 @@ export default function Diplome({
       p_manual_course_id: studentId ? null : generatingCourse,
       p_manual_stars: studentId ? null : (finalizeStep.manualStars ?? null),
       p_manual_total_stars: studentId ? null : (finalizeStep.manualTotalStars ?? null),
+      // Mod Manual pornit dintr-un task real (Task-uri Urgente -> "🎓 Generează Diplomă", apoi
+      // profesorul a comutat pe "Manual" ca sa editeze numele/stelutele) - diploma foloseste
+      // datele manuale, dar pragul elevului REAL de origine tot trebuie inchis, altfel taskul lui
+      // ramane agatat la nesfarsit. Ignorat de RPC cand studentId e real (n-are sens sa existe
+      // amandoi deodata).
+      p_origin_student_id: studentId ? null : initialStudentId,
     });
     setFinalizing(false);
     if (error) {
@@ -274,15 +280,17 @@ export default function Diplome({
       setFinalizeError('A apărut o eroare. Încearcă din nou.');
       return;
     }
-    // Pastreaza alerta Pabbly existenta ("completed") - doar pentru un elev real, care are un
-    // prag de prezente in tracker. Un elev Manual nu exista in tracker, deci nu exista niciun
-    // prag de recalculat pentru el.
-    if (studentId) {
+    // Elevul real al carui prag tocmai s-a inchis (daca vreunul) - fie elevul insusi (mod "Din
+    // grupă"), fie originea reala din spatele unei generari Manual pornite dintr-un task real
+    // (p_origin_student_id mai sus). Pastreaza alerta Pabbly existenta ("completed") - un elev
+    // Manual FARA origine reala nu exista in tracker, deci nu exista niciun prag de recalculat.
+    const resolvedRealStudentId = studentId ?? initialStudentId;
+    if (resolvedRealStudentId) {
       try {
         await fetch('/api/diploma-milestone-alerts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId, milestone: finalizeStep.module * 16, status: 'completed' }),
+          body: JSON.stringify({ studentId: resolvedRealStudentId, milestone: finalizeStep.module * 16, status: 'completed' }),
         });
       } catch (alertError) {
         console.error('DIPLOMA MILESTONE ALERT ERROR:', alertError);
@@ -290,11 +298,12 @@ export default function Diplome({
     }
     // Daca profesorul a ajuns aici din "🚨 Task-uri Urgente" (Progress Tracker → "🎓 Genereaza
     // Diploma"), taskul respectiv tocmai s-a inchis in DB (RPC-ul de mai sus a golit
-    // pending_diploma_milestone) - il trimitem direct inapoi acolo, ca sa vada instant lista
-    // fara acel task, in loc sa ramana pe /diplome nestiind daca actiunea a avut efect si sa
-    // riste sa apese din nou. Generarea "ad-hoc" (din grila de cursuri, fara task de pornit)
-    // ramane pe loc, ca inainte - profesorul poate genera diplome pentru mai multi elevi la rand.
-    const cameFromUrgentTask = studentId !== null && studentId === initialStudentId;
+    // pending_diploma_milestone - fie direct, fie prin p_origin_student_id in mod Manual) - il
+    // trimitem direct inapoi acolo, ca sa vada instant lista fara acel task, in loc sa ramana pe
+    // /diplome nestiind daca actiunea a avut efect si sa riste sa apese din nou. Generarea
+    // "ad-hoc" (din grila de cursuri, fara task de pornit) ramane pe loc, ca inainte - profesorul
+    // poate genera diplome pentru mai multi elevi la rand.
+    const cameFromUrgentTask = resolvedRealStudentId !== null && resolvedRealStudentId === initialStudentId;
     setFinalizeStep(null);
     setGeneratingCourse(null);
     // BUG REPARAT: cardul din Task-uri Urgente nu disparea la revenire, pentru ca router.push()
