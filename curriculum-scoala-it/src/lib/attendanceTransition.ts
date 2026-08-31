@@ -5,6 +5,7 @@ export type MakeupPatch = {
   absence_date?: string | null;
   makeup_notification_count?: number;
   last_makeup_notification?: string | null;
+  is_scheduled?: boolean;
 };
 
 /**
@@ -28,7 +29,16 @@ export function computeMakeupPatch(
   if (willBeAbsent && !wasAbsent) {
     const nextPending = pendingMakeups + 1;
     const patch: MakeupPatch = { pending_makeups: nextPending };
-    if (nextPending === 1) patch.absence_date = nowDateStr;
+    // O absenta NOUA (primul rand dintr-un ciclu de recuperare) trebuie tratata ca o pagina
+    // goala - inclusiv `is_scheduled`, care altfel poate ramane agatat pe `true` dintr-un ciclu
+    // anterior deja inchis prin schimbarea directa a statusului randului vechi in 'made_up'
+    // (nu prin butoanele "Recuperat"/"Nu mai e nevoie" din Task-uri Urgente, care il reseteaza
+    // deja explicit - vezi handleMakeupResolved). Fara asta, saptamana 2 mostenea vizual
+    // "✅ Programat" de la saptamana 1 si nu mai cerea trimiterea notificarii catre parinte.
+    if (nextPending === 1) {
+      patch.absence_date = nowDateStr;
+      patch.is_scheduled = false;
+    }
     return patch;
   }
 
@@ -39,6 +49,7 @@ export function computeMakeupPatch(
       patch.absence_date = null;
       patch.makeup_notification_count = 0;
       patch.last_makeup_notification = null;
+      patch.is_scheduled = false;
     }
     return patch;
   }

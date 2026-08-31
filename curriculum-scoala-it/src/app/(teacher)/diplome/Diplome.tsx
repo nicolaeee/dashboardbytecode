@@ -232,14 +232,19 @@ export default function Diplome({
     const cameFromUrgentTask = finalizeStep.studentId === initialStudentId;
     setFinalizeStep(null);
     setGeneratingCourse(null);
-    if (cameFromUrgentTask) {
-      router.push(initialTeacherId ? `/progress?teacherId=${initialTeacherId}` : '/progress');
-    }
-    // Invalideaza Router Cache-ul Next.js DUPA ce backend-ul a confirmat finalizarea (RPC-ul
-    // de mai sus deja a inchis pending_diploma_milestone pentru acest prag, daca era exact
-    // pragul deschis) - altfel, la revenirea pe Progress Tracker, "🚨 Task-uri Urgente" ar putea
-    // arata inca vechiul instantaneu cache-uit, cu taskul de diploma inca deschis.
+    // BUG REPARAT: cardul din Task-uri Urgente nu disparea la revenire, pentru ca router.push()
+    // pornea navigarea (si putea rezolva din Client Router Cache-ul Next.js, care tine
+    // instantanee "stale" ale rutelor vizitate recent) INAINTE ca router.refresh() de mai jos sa
+    // apuce sa invalideze acel cache - profesorul se intorcea pe /progress cu acelasi instantaneu
+    // vechi, dinainte de finalizare. Invalidam cache-ul INTAI, apoi navigam - push() foloseste
+    // astfel garantat datele proaspete din DB (pending_diploma_milestone deja golit de RPC).
     router.refresh();
+    if (cameFromUrgentTask) {
+      // Flag citit o singura data de ProgressTracker la sosire, ca sa arate explicit
+      // "Diplomă generată cu succes!" - lista de Task-uri Urgente insasi se corecteaza automat
+      // din props-urile proaspete (vezi efectul de resincronizare din ProgressTracker.tsx).
+      router.push(`/progress?${new URLSearchParams({ ...(initialTeacherId ? { teacherId: initialTeacherId } : {}), diplomaSent: '1' }).toString()}`);
+    }
   }
 
   const canGenerate = mode === 'group' ? !!selectedStudentId : manualName.trim().length > 0;

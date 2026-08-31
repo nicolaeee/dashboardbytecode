@@ -7,11 +7,12 @@ export default async function ProgressTrackerPage({
   searchParams,
 }: {
   // Revenire din /diplome dupa "Finalizeaza generarea diplomei" (vezi Diplome.tsx) - cand
-  // adminul rasfoia clasele altui profesor, pastram acel profesor selectat.
-  searchParams: Promise<{ teacherId?: string }>;
+  // adminul rasfoia clasele altui profesor, pastram acel profesor selectat. `diplomaSent`
+  // declanseaza toast-ul de succes din ProgressTracker (vezi initialDiplomaSent).
+  searchParams: Promise<{ teacherId?: string; diplomaSent?: string }>;
 }) {
   const profile = await requireUser();
-  const { teacherId: viewedTeacherIdParam } = await searchParams;
+  const { teacherId: viewedTeacherIdParam, diplomaSent } = await searchParams;
   const supabase = await createClient();
   const isAdmin = profile.role === 'admin';
 
@@ -48,6 +49,7 @@ export default async function ProgressTrackerPage({
       initialLessons={(lessons ?? []) as TrackerLesson[]}
       initialAttendance={(attendance ?? []) as TrackerAttendance[]}
       initialViewedTeacherId={viewedTeacherIdParam ?? null}
+      initialDiplomaSent={diplomaSent === '1'}
     />
   );
 }

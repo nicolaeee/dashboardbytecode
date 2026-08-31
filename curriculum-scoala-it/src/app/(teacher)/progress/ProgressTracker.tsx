@@ -6,7 +6,7 @@ import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, P
 import { createClient } from '@/lib/supabase/client';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode, TrackerLessonTransaction } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
-import { COURSES, getCourse } from '@/lib/diplomas';
+import { COURSES, getCourse, starsForModule } from '@/lib/diplomas';
 import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
 import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
@@ -390,7 +390,7 @@ type ModalState =
 
 export default function ProgressTracker({
   teacherId, teacherName, teacherPhone, makeupCalendarLink: initialMakeupCalendarLink, isAdmin, teacherOptions,
-  initialGroups, initialStudents, initialLessons, initialAttendance, initialViewedTeacherId,
+  initialGroups, initialStudents, initialLessons, initialAttendance, initialViewedTeacherId, initialDiplomaSent,
 }: {
   teacherId: string; teacherName: string; teacherPhone: string | null; makeupCalendarLink: string | null;
   isAdmin: boolean; teacherOptions: { id: string; label: string }[];
@@ -400,6 +400,9 @@ export default function ProgressTracker({
   // adminul rasfoia clasele altui profesor, pastram acel profesor selectat si dupa
   // round-trip-ul de generare diplomă, in loc sa cadem inapoi pe propriul cont.
   initialViewedTeacherId?: string | null;
+  // Vine din acelasi round-trip (?diplomaSent=1 in URL, parsat server-side in page.tsx) -
+  // declanseaza toast-ul "Diplomă generată cu succes!" o singura data la sosire.
+  initialDiplomaSent?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   // Folosit DOAR ca semnal de invalidare a Router Cache-ului Next.js dupa o mutatie de
@@ -588,6 +591,23 @@ export default function ProgressTracker({
     })();
     return () => { cancelled = true; };
   }, [viewedTeacherId, teacherId, initialGroups, initialStudents, initialLessons, initialAttendance, initialMakeupCalendarLink, supabase]);
+
+  // Revenire din /diplome dupa "Finalizeaza generarea diplomei" pornita din "🚨 Task-uri
+  // Urgente" (vezi Diplome.tsx -> handleFinalizeDiploma) - taskul insusi dispare deja din
+  // lista pentru ca `initialStudents` a sosit proaspat de la server (router.refresh() acolo,
+  // ÎNAINTE de navigare, invalideaza Client Router Cache-ul); mai ramane doar sa confirmam
+  // explicit succesul profesorului, printr-un toast, exact cum a fost cerut. Citit dintr-un
+  // prop (parsat server-side in page.tsx din searchParams), NU din useSearchParams() aici -
+  // acesta din urma ar cere un Suspense boundary dedicat (Next.js 15). Golim flag-ul din URL
+  // imediat dupa afisare, ca un refresh manual al paginii sa nu retrigger-uiasca acelasi toast.
+  const shownDiplomaSentRef = useRef(false);
+  useEffect(() => {
+    if (!initialDiplomaSent || shownDiplomaSentRef.current) return;
+    shownDiplomaSentRef.current = true;
+    showToast('Diplomă generată cu succes!');
+    router.replace(viewedTeacherId !== teacherId ? `/progress?teacherId=${viewedTeacherId}` : '/progress');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDiplomaSent]);
 
   // Reincarca manual datele profesorului vizualizat curent - acelasi fetch ca in efectul de
   // schimbare a profesorului de mai sus, dar apelabil oricand (ex. dupa un transfer de clasa
@@ -4361,7 +4381,15 @@ function StudentCard({
   const progressInLevel = student.progress % 16;
   const progressPercent = (progressInLevel / 16) * 100;
   const studentColor = PROGRESS_COLORS[index % PROGRESS_COLORS.length];
-  const maxSteps = moduleCount * 16;
+  // Contorul de steluțe AFISAT trebuie sa se resetezeze la 0 de fiecare data cand incepe un
+  // modul nou - `student.progress` ramane cumulativ pe toata durata (istoricul general, folosit
+  // in continuare pentru Nivel/Insigne mai sus, neschimbat), dar afisarea "curenta" nu trebuie
+  // sa arate niciodata suma acumulata peste modulele anterioare (bug raportat: elevul parea sa
+  // porneasca noul modul cu stelutele vechi inca "in cont"). Aceeasi formula (16 la un multiplu
+  // exact, altfel modulo) ca `starsForModule` din lib/diplomas.ts, folosita deja la generarea
+  // diplomei - ramane consistenta cu ce vede adminul acolo.
+  const starsInCurrentModule = starsForModule(student.progress);
+  const currentModuleNumber = Math.min(Math.floor(student.progress / 16) + 1, moduleCount);
 
   return (
     <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
@@ -4394,7 +4422,9 @@ function StudentCard({
           </div>
         </div>
         <div className="text-right">
-          <span className="text-2xl font-bold text-[#C8F023]">{student.progress}/{maxSteps}</span>
+          <span className="text-2xl font-bold text-[#C8F023]" title={`Steluțe în modulul ${currentModuleNumber} - se resetează la 0 la fiecare modul nou`}>
+            {starsInCurrentModule}/16
+          </span>
         </div>
       </div>
 

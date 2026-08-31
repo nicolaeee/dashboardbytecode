@@ -8,8 +8,8 @@ describe('computeMakeupPatch (alerta "Recuperare necesara")', () => {
     const fromEmpty = computeMakeupPatch(undefined, 'absent', 0, TODAY);
     const fromPresent = computeMakeupPatch('present', 'absent', 0, TODAY);
 
-    expect(fromEmpty).toEqual({ pending_makeups: 1, absence_date: TODAY });
-    expect(fromPresent).toEqual({ pending_makeups: 1, absence_date: TODAY });
+    expect(fromEmpty).toEqual({ pending_makeups: 1, absence_date: TODAY, is_scheduled: false });
+    expect(fromPresent).toEqual({ pending_makeups: 1, absence_date: TODAY, is_scheduled: false });
   });
 
   it('a doua absenta consecutiva (deja 1 in asteptare) incrementeaza pending_makeups fara sa resetezeze absence_date', () => {
@@ -20,7 +20,7 @@ describe('computeMakeupPatch (alerta "Recuperare necesara")', () => {
   it('Absent -> Prezent scade restanta si, la 0, inchide complet alerta', () => {
     const patch = computeMakeupPatch('absent', 'present', 1, TODAY);
     expect(patch).toEqual({
-      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null,
+      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null, is_scheduled: false,
     });
   });
 
@@ -32,13 +32,26 @@ describe('computeMakeupPatch (alerta "Recuperare necesara")', () => {
   it('pending_makeups nu scade sub 0 chiar daca starea locala era deja inconsistenta', () => {
     const patch = computeMakeupPatch('absent', 'present', 0, TODAY);
     expect(patch).toEqual({
-      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null,
+      pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null, is_scheduled: false,
     });
   });
 
   it('nicio tranzitie reala (Gol -> Prezent, sau Absent -> Absent) nu produce niciun patch', () => {
     expect(computeMakeupPatch(undefined, 'present', 0, TODAY)).toBeNull();
     expect(computeMakeupPatch('absent', 'absent', 1, TODAY)).toBeNull();
+  });
+
+  it('BUG REPARAT: o absenta NOUA, intr-o saptamana ulterioara, nu mosteneste "is_scheduled" ramas de la un ciclu anterior deja inchis prin schimbarea directa a statusului (nu prin butoanele din Task-uri Urgente) - trebuie tratata ca pagina goala si sa ceara din nou notificarea', () => {
+    // Saptamana 1: absenta -> programata (is_scheduled=true, gestionat separat de handleMarkMakeupScheduled,
+    // in afara acestei functii) -> recuperata DIRECT (schimbare status 'absent' -> 'made_up' pe randul
+    // din lectie, nu prin "✅ Recuperat" din Task-uri Urgente).
+    const week1Resolved = computeMakeupPatch('absent', 'made_up', 1, TODAY);
+    expect(week1Resolved).toEqual({ pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null, is_scheduled: false });
+
+    // Saptamana 2: o absenta noua, la o data noua - trebuie sa forteze is_scheduled=false
+    // explicit (pagina goala), nu doar sa lase campul neatins.
+    const week2New = computeMakeupPatch('present', 'absent', 0, '2026-08-20');
+    expect(week2New).toEqual({ pending_makeups: 1, absence_date: '2026-08-20', is_scheduled: false });
   });
 });
 
