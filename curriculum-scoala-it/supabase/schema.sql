@@ -843,46 +843,135 @@ alter table public.urgent_tasks enable row level security;
 create policy "adminul gestioneaza task-urile urgente" on public.urgent_tasks
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
--- Mesaj mai amplu (vezi supabase/migrations/update_diploma_parent_message_template.sql):
--- salut in functie de ora locala (Buna ziua/Buna seara), continut celebrator randomizat
--- (aceleasi 8 variante), apoi o incheiere unica (scuze pentru asteptare, diploma atasata,
--- semnatura echipei) - nu mai repetata separat in fiecare varianta.
-create or replace function public.random_diploma_parent_message(p_first_name text, p_course_label text)
-returns text language sql volatile as $$
-  select
-    (case when extract(hour from (now() at time zone 'Europe/Bucharest')) < 18
-       then 'Bună ziua,' else 'Bună seara,' end)
-    || E'\n\n' ||
-    (array[
-      format('🎉 Felicitări, %1$s! Suntem tare mândri de el pentru această reușită! A finalizat cu succes o nouă etapă din aventura lui la %2$s și ne bucurăm enorm să îl vedem cum evoluează, învață și prinde tot mai multă încredere. 🌟
+-- Indexul (1-based) variantei de mesaj trimisa la ULTIMA diploma a elevului - vezi
+-- random_diploma_parent_message mai jos (update_diploma_parent_message_variants.sql).
+alter table public.tracker_students
+  add column last_diploma_message_variant smallint;
 
-Este o bucurie să îl avem alături de noi și abia așteptăm să vedem ce lucruri minunate va descoperi în continuare! 🚀', p_first_name, p_course_label),
-      format('🌟 Vești minunate despre %1$s! A dus la capăt cu brio o nouă etapă din călătoria lui la %2$s. Suntem atât de mândri de progresul și determinarea lui! 🎉
+-- Mesaje complete catre parinte (vezi supabase/migrations/update_diploma_parent_message_variants.sql):
+-- 10 variante, fiecare deja completa (salut + continut + mentiune diploma + semnatura, fara
+-- compunere separata ca in versiunea anterioara). Alege aleator, dar EVITA sa repete exact
+-- aceeasi varianta trimisa data trecuta ACELUIASI elev (last_diploma_message_variant, actualizat
+-- de aceasta functie la fiecare apel) - un copil care avanseaza de la un modul la altul nu mai
+-- primeste de doua ori la rand acelasi text.
+create or replace function public.random_diploma_parent_message(p_student_id uuid, p_first_name text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_messages text[] := array[
+    format('Bună ziua! 👋
 
-Mulțumim că ne sunteți alături - abia așteptăm să vedem ce va cuceri în continuare! 💫', p_first_name, p_course_label),
-      format('🚀 %1$s tocmai a bifat un nou pas important la %2$s! Ne umple de bucurie să îl vedem cum crește, învață lucruri noi și capătă din ce în ce mai multă încredere în el. 🎉
+Astăzi sărbătorim o reușită deosebită! %1$s a finalizat cu succes încă un modul din aventura programării. 🚀
 
-Suntem recunoscători că face parte din povestea noastră și abia așteptăm continuarea aventurii lui! 🌟', p_first_name, p_course_label),
-      format('🎊 O reușită minunată pentru %1$s! A finalizat cu succes o nouă etapă la %2$s și e clar că progresul lui e uriaș. Suntem tare mândri de el! 🌈
+Am urmărit cu mare bucurie creativitatea și dorința de a descoperi lucruri noi la fiecare lecție.
 
-Mulțumim că sunteți alături de noi în această călătorie - urmează lucruri și mai frumoase! ✨', p_first_name, p_course_label),
-      format('🌈 Vești superbe despre %1$s! A trecut cu bine de o nouă etapă din aventura lui la %2$s, iar entuziasmul și implicarea lui ne bucură enorm. 🎉
+🎓 Găsiți atașată diploma de merit — vă invităm să o descărcați și să vă bucurați împreună de acest moment special. Vă mulțumim că ne sunteți alături!
 
-Este o plăcere să îl vedem evoluând - abia așteptăm să vedem ce urmează! 🚀', p_first_name, p_course_label),
-      format('✨ %1$s a mai făcut un pas mare înainte la %2$s! Suntem tare mândri de reușita lui și de tot progresul făcut până acum. 🎉
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Salutare! 🎉
 
-Vă mulțumim că sunteți alături de noi în această călătorie - urmează lucruri minunate! 🌟', p_first_name, p_course_label),
-      format('🎉 Ce reușită frumoasă pentru %1$s! A încheiat cu succes o nouă etapă la %2$s și îl vedem din ce în ce mai încrezător și entuziasmat. 🌟
+Avem motive de mare bucurie astăzi. %1$s tocmai a absolvit o nouă etapă importantă la cursurile noastre!
 
-Ne bucurăm enorm să facem parte din parcursul lui - abia așteptăm continuarea! 🚀', p_first_name, p_course_label),
-      format('🌟 Felicitări din suflet, %1$s! A dus la bun sfârșit o nouă etapă din aventura lui la %2$s, iar progresul lui ne umple de mândrie. 🎉
+A demonstrat foarte multă ambiție, concentrare și o minte ascuțită în rezolvarea provocărilor digitale. 💡
 
-Mulțumim că sunteți alături de noi - urmează multe momente minunate! ✨', p_first_name, p_course_label)
-    ])[1 + floor(random() * 8)::int]
-    || E'\n\n' ||
-    format('Ne cerem scuze pentru orice mic deranj cauzat de timpul de așteptare până la primirea acesteia - vă mulțumim pentru răbdare! 📎 Atașăm aici și diploma lui %1$s.
+🏆 V-am atașat diploma care atestă această muncă minunată. Merită toate felicitările!
 
-O zi minunată vă dorim, din partea întregii echipe ByteCode School! 💛', p_first_name);
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Vești minunate de la ByteCode! ✨
+
+Suntem extrem de încântați să vă anunțăm că %1$s a trecut cu brio la nivelul următor!
+
+Este o plăcere să îi urmărim evoluția și să vedem cum ideile prind viață pe ecran, pas cu pas. 💻
+
+🏅 Vă transmitem atașat diploma de absolvire, o dovadă clară a efortului depus. Sărbătoriți cu zâmbete această reușită!
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Bună ziua! 🌟
+
+Evoluția la clasă ne umple mereu de energie pozitivă! %1$s a finalizat încă un modul cu rezultate excelente.
+
+A dat dovadă de multă curiozitate și o pasiune reală pentru tehnologie pe tot parcursul orelor. 🚀
+
+🎓 Diploma atașată acestui mesaj este mica noastră recunoaștere pentru o muncă uriașă. Vă mulțumim pentru încredere!
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Salutare! 🎯
+
+Călătoria în lumea programării continuă cu un nou succes! %1$s a finalizat cu brio modulul curent.
+
+Ne bucură enorm să vedem capacitatea de a transforma fiecare lecție într-o experiență captivantă și plină de învățături. 💡
+
+🏆 V-am atașat diploma de merit — vă invităm să o deschideți și să transmiteți felicitările noastre! Abia așteptăm următoarele proiecte.
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Bună ziua! ✨
+
+Când pasiunea întâlnește munca, apar rezultate magice! Suntem fericiți să vă anunțăm încheierea cu succes a unei noi etape de curs.
+
+Nivelul de implicare pe care %1$s l-a arătat la fiecare proiect a fost o adevărată bucurie pentru noi. 💻
+
+🎓 Găsiți diploma atașată mai jos, gata să fie descărcată și pusă în ramă. Vă dorim o zi minunată!
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Vești excelente pentru familia dumneavoastră! 🎉
+
+%1$s a reușit să finalizeze încă un modul plin de provocări tehnice și proiecte creative.
+
+Ne-a impresionat profund modul în care a asimilat informațiile noi. 🚀
+
+🏅 V-am atașat diploma care marchează această victorie educațională. Vă mulțumim că îi susțineți visurile digitale acasă!
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Salutare! 💡
+
+Suntem tare bucuroși să vă împărtășim o veste grozavă: %1$s a trecut cu bine de un nou modul!
+
+Logica și răbdarea cu care a construit fiecare proiect ne-au inspirat la fiecare oră petrecută împreună. 🧩
+
+🏆 Aveți atașată diploma de absolvire pentru a celebra acest moment special. Să ne auzim cu bine!
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Bună ziua! 🌟
+
+Efortul dă mereu roade, iar %1$s ne-a demonstrat asta din plin finalizând cu succes încă o etapă din programare!
+
+Ne bucurăm enorm să fim ghizi în această aventură a cunoașterii. 💻
+
+🎓 Diploma atașată este simbolul muncii fantastice din ultima perioadă. Vă felicităm și pe dumneavoastră pentru susținerea necondiționată!
+
+Cu drag, echipa ByteCode.', p_first_name),
+    format('Salutare! 🚀
+
+Mai facem un pas uriaș în lumea tehnologiei! %1$s tocmai a absolvit o nouă etapă a cursurilor noastre.
+
+Fiecare lecție a fost o dovadă clară de perseverență și imaginație fără limite. ✨
+
+🏅 Vă lăsăm atașată diploma de merit, perfectă pentru a vă bucura de acest progres minunat. Vă mulțumim că sunteți alături de noi!
+
+Cu drag, echipa ByteCode.', p_first_name)
+  ];
+  v_count int := array_length(v_messages, 1);
+  v_prev int;
+  v_choice int;
+begin
+  select last_diploma_message_variant into v_prev
+    from public.tracker_students where id = p_student_id;
+
+  v_choice := 1 + floor(random() * v_count)::int;
+  -- Daca a picat exact pe varianta trimisa data trecuta acestui copil, trece deterministic la
+  -- urmatoarea (ciclic) - garanteaza ca NU se repeta niciodata consecutiv, fara bucla/risc de
+  -- blocare, ramanand in continuare aleator la fiecare apel.
+  if v_prev is not null and v_choice = v_prev then
+    v_choice := 1 + (v_choice % v_count);
+  end if;
+
+  update public.tracker_students set last_diploma_message_variant = v_choice where id = p_student_id;
+
+  return v_messages[v_choice];
+end;
 $$;
 
 create or replace function public.finalize_diploma_with_reward(
@@ -897,7 +986,6 @@ declare
   v_teacher_name text;
   v_milestone int;
   v_first_name text;
-  v_course_label text;
   v_reward_type text;
   v_reward_details text;
 begin
@@ -932,17 +1020,6 @@ begin
   v_first_name := coalesce(nullif(trim(v_student.short_name), ''), split_part(v_student.name, ' ', 1));
 
   select group_name, course into v_group from public.tracker_groups where id = v_student.group_id;
-  v_course_label := coalesce(
-    case v_group.course
-      when 'coblocks' then 'Blocuri de cod'
-      when 'python' then 'Python'
-      when 'roblox' then 'Roblox'
-      when 'alfabetizare' then 'Alfabetizare'
-      when 'unity' then 'Unity'
-      else v_group.course
-    end,
-    'IT'
-  );
 
   select coalesce(nullif(trim(p.full_name), ''), p.email) into v_teacher_name
     from public.profiles p where p.id = v_student.teacher_id;
@@ -961,7 +1038,7 @@ begin
   values (
     'DIPLOMA_GENERATED', p_student_id, v_student.teacher_id, v_milestone,
     p_reward_received, v_reward_type, v_reward_details,
-    public.random_diploma_parent_message(v_first_name, v_course_label),
+    public.random_diploma_parent_message(p_student_id, v_first_name),
     v_student.name, v_teacher_name, v_group.course, p_diploma_date,
     case when v_student.progress > 0 and v_student.progress % 16 = 0 then 16 else v_student.progress % 16 end,
     v_student.progress,

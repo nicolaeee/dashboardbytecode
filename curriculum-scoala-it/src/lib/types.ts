@@ -120,6 +120,13 @@ export type TrackerStudent = {
    * se schimba - dedup pentru send_overdue_diploma_alerts (o singura alerta per task deschis). */
   diploma_overdue_alert_sent_at: string | null;
   /**
+   * Indexul (1-based) variantei de mesaj catre parinte trimisa la ULTIMA diploma a acestui elev
+   * (vezi random_diploma_parent_message in schema.sql) - folosit doar server-side, ca sa nu
+   * trimitem de doua ori la rand exact acelasi mesaj aceluiasi copil cand avanseaza la un modul
+   * nou. Niciun cod din client nu citeste/scrie campul acesta direct.
+   */
+  last_diploma_message_variant: number | null;
+  /**
    * Numar de recuperari neefectuate (vezi "🚨 Task-uri Urgente" din dashboard-ul profesorului):
    * crescut cu 1 cand elevul e marcat "Absent" la o lectie, scazut cu 1 (fara sa scada sub 0)
    * cand absenta e anulata sau cand recuperarea e rezolvata din dashboard.
