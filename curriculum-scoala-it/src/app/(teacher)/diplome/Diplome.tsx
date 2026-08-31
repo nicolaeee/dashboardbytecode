@@ -82,6 +82,18 @@ export default function Diplome({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // BRESA DE NAVIGARE REPARATA: "/diplome" e ascuns intentionat din meniul profesorului (vezi
+  // (teacher)/layout.tsx) - accesibil DOAR prin link-ul ghidat din "🚨 Task-uri Urgente"
+  // (?studentId=...), niciodata ca sectiune libera de navigat. Un profesor (non-admin) care
+  // ajunge aici FARA acel studentId - fie scriind /diplome direct in bara de adrese, fie
+  // (cazul raportat) apasand "X"/"Anuleaza" pe modalul deschis din task, ceea ce il lasa pe
+  // grila goala de cursuri - trebuie redirectionat instant inapoi la Progress Tracker. Adminul
+  // ramane neafectat - el foloseste /diplome si liber, pentru generare ad-hoc (vezi layout-ul).
+  useEffect(() => {
+    if (!isAdmin && !initialStudentId) router.replace('/progress');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Odata ce grupele profesorului corect sunt incarcate, gasim elevul dupa initialStudentId
   // si deschidem direct modalul pe cursul/grupa/elevul/MODULUL lui.
   //
@@ -213,6 +225,15 @@ export default function Diplome({
 
   function closeModal() {
     if (finalizing) return;
+    // BRESA DE NAVIGARE REPARATA: inchiderea modalului ("X"/"Anulează") FARA sa fi finalizat NU
+    // trebuie sa lase profesorul (non-admin) pe /diplome gol (grila mare de cursuri) - o pagina
+    // la care nu ar trebui sa aiba acces liber deloc (vezi (teacher)/layout.tsx si efectul de
+    // mai sus, care acopera si accesul direct pe URL). Il trimitem inapoi la Task-uri Urgente,
+    // de unde a pornit. Adminul ramane neafectat - inchide modalul normal, ramane pe /diplome.
+    if (!isAdmin && initialStudentId) {
+      router.replace(initialTeacherId ? `/progress?teacherId=${initialTeacherId}` : '/progress');
+      return;
+    }
     setGeneratingCourse(null);
     setFinalizeStep(null);
   }
