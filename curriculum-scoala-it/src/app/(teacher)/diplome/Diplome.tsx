@@ -9,14 +9,13 @@ import { Modal, Button, Field, Textarea } from '@/components/ui';
 import type { DiplomaGroupWithStudents } from './page';
 
 /**
- * Pasul de dupa "Genereaza" - cere confirmarea recompensei, identic pentru ambele moduri.
- * La "Finalizează" trimite catre acelasi RPC (finalize_diploma_with_reward), care creeaza
- * task-ul pentru admin - un profesor (non-admin) NU trebuie sa vada/descarce diploma direct
- * NICIODATA, indiferent de mod (regula explicita de business). "Manual" (studentId == null,
- * elev fara cont in DB) trimite in loc numele/stelutele introduse manual (manualStars/
- * manualTotalStars) - RPC-ul real reciteste totul din DB pentru un elev real, dar unul manual nu
- * exista acolo. SINGURA exceptie: adminul insusi, in mod Manual, pastreaza accesul direct
- * (self-service ad-hoc) - vezi handleFinalizeDiploma.
+ * Pasul de dupa "Genereaza" - cere confirmarea recompensei, identic pentru ambele moduri si
+ * pentru toata lumea (inclusiv admin - fara exceptii, vezi handleFinalizeDiploma). La
+ * "Finalizează" trimite catre acelasi RPC (finalize_diploma_with_reward), care creeaza task-ul
+ * pentru admin - NIMENI nu vede/descarca diploma direct, indiferent de mod sau rol (regula
+ * explicita de business). "Manual" (studentId == null, elev fara cont in DB) trimite in loc
+ * numele/stelutele introduse manual (manualStars/manualTotalStars) - RPC-ul real reciteste totul
+ * din DB pentru un elev real, dar unul manual nu exista acolo.
  */
 type FinalizeStep = {
   studentId: string | null; studentName: string; module: number;
@@ -248,30 +247,10 @@ export default function Diplome({
 
     const studentId = finalizeStep.studentId;
 
-    // SINGURA excepție: adminul, în mod Manual (elev fără cont în DB) - fără student real, n-are
-    // niciun sens să-și creeze lui însuși un task ("Task-uri Urgente" e o coadă pentru admin, nu
-    // o listă pe care s-o gestioneze singur) - rămâne accesul direct, ca înainte. Un profesor
-    // obișnuit NU intră niciodată pe această ramură - regula "nu trebuie să vadă/descarce
-    // diploma direct" se aplică STRICT lui, indiferent de mod (vezi RPC-ul mai jos, care rutează
-    // acum orice altă combinație - elev real SAU Manual generat de un profesor - prin admin).
-    if (isAdmin && studentId === null) {
-      const url = diplomaTemplateUrl(generatingCourse, finalizeStep.module);
-      if (url) {
-        const params = new URLSearchParams({
-          elev: finalizeStep.studentName,
-          profesor: viewerName,
-          curs: `Modulul ${finalizeStep.module} - ${course?.label ?? ''}`,
-          data: todayFormatted(),
-          stelute: String(finalizeStep.manualStars ?? 0),
-          totalStelute: String(finalizeStep.manualTotalStars ?? 0),
-        });
-        window.open(`${url}?${params.toString()}`, '_blank');
-      }
-      setFinalizeStep(null);
-      setGeneratingCourse(null);
-      return;
-    }
-
+    // FARA EXCEPTIE - nici macar adminul nu mai deschide diploma direct in mod Manual (raportat
+    // explicit: "imi apare diploma in alt tab chiar daca am rulat migrarea" - exceptia anterioara
+    // pentru admin se declansa exact in acest caz si contrazicea cerinta). Orice finalizare, in
+    // orice mod, pentru oricine, trece STRICT prin acelasi RPC/task pentru admin de mai jos.
     setFinalizing(true);
     const { error } = await supabase.rpc('finalize_diploma_with_reward', {
       p_student_id: studentId,
@@ -415,13 +394,8 @@ export default function Diplome({
         {finalizeStep ? (
           <>
             <p className="text-sm text-lock">
-              {isAdmin && !finalizeStep.studentId ? (
-                <>Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e gata de generat.
-                Confirmă recompensa și finalizează - se deschide șablonul diplomei într-un tab nou, gata de descărcat sau trimis.</>
-              ) : (
-                <>Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e pregătită - nu trebuie să o descarci.
-                Confirmă recompensa și finalizează, ca administratorul să o poată descărca și trimite mai departe.</>
-              )}
+              Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e pregătită - nu trebuie să o descarci.
+              Confirmă recompensa și finalizează, ca administratorul să o poată descărca și trimite mai departe.
             </p>
 
             <Field label="A câștigat copilul un premiu?">
