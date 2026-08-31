@@ -129,16 +129,33 @@ export default function Diplome({
   const usingFallbackGroups = generatingCourse && relevantGroups.length > 0 && relevantGroups[0]?.course !== generatingCourse;
   const selectedGroup = relevantGroups.find((g) => g.id === selectedGroupId) ?? null;
 
+  // BUG REPARAT (raportat pentru Daniel Tăbăcaru, la 3 elevi diferiti): pragul de mai jos
+  // (finalize_diploma_with_reward, RPC) goleste pending_diploma_milestone STRICT cand
+  // p_module*16 == pragul real al elevului. Fixul anterior acoperea DOAR intrarea din link-ul
+  // "🎓 Genereaza Diploma" (Task-uri Urgente -> initialStudentId) - dar un profesor care alege
+  // "Din grupă" direct din grila de cursuri (fara sa vina dintr-un task) sau care schimba
+  // manual Grupa/Elevul din dropdown-uri, gasea mereu Modulul precompletat/ramas la 1 (sau la
+  // valoarea elevului anterior selectat) si il trimitea nemodificat - diploma se genera, dar
+  // pentru modulul gresit, iar taskul "🚨 Diplomă necesară" ramanea agatat la nesfarsit. Acum
+  // orice selectare a unui elev REAL (indiferent de cale) recalculeaza automat Modulul din
+  // pragul lui real - profesorul poate in continuare sa il schimbe manual daca chiar vrea sa
+  // regenereze o diploma pentru un modul anterior.
+  function moduleForStudent(student: { pending_diploma_milestone: number | null } | undefined | null): number {
+    if (!student?.pending_diploma_milestone) return 1;
+    return Math.min(computeModuleLesson(student.pending_diploma_milestone).module, Math.max(...DIPLOMA_MODULES));
+  }
+
   function openModal(courseId: CourseId) {
     const matching = groups.filter((g) => g.course === courseId);
     const list = matching.length > 0 ? matching : groups;
+    const firstStudent = list[0]?.students[0];
     setGeneratingCourse(courseId);
     setMode('group');
     setSelectedGroupId(list[0]?.id ?? '');
-    setSelectedStudentId(list[0]?.students[0]?.id ?? '');
+    setSelectedStudentId(firstStudent?.id ?? '');
     setManualName('');
     setManualStars(16);
-    setSelectedModule(1);
+    setSelectedModule(moduleForStudent(firstStudent));
   }
 
   function handleGenerate() {
@@ -410,6 +427,7 @@ export default function Diplome({
                       const g = relevantGroups.find((rg) => rg.id === e.target.value);
                       setSelectedGroupId(e.target.value);
                       setSelectedStudentId(g?.students[0]?.id ?? '');
+                      setSelectedModule(moduleForStudent(g?.students[0]));
                     }}
                     className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
                   >
@@ -421,7 +439,10 @@ export default function Diplome({
                 <Field label="Elev">
                   <select
                     value={selectedStudentId}
-                    onChange={(e) => setSelectedStudentId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedStudentId(e.target.value);
+                      setSelectedModule(moduleForStudent(selectedGroup?.students.find((s) => s.id === e.target.value)));
+                    }}
                     className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
                   >
                     {(selectedGroup?.students.length ?? 0) === 0 && <option value="" className="bg-night text-ink">Niciun elev în grupă</option>}
