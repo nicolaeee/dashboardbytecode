@@ -814,7 +814,10 @@ create table public.urgent_tasks (
   id                   uuid primary key default gen_random_uuid(),
   type                 text not null check (type in ('DIPLOMA_GENERATED', 'DIPLOMA_NOT_SENT', 'SEND_VIRTUAL_COINS')),
   status               text not null default 'NEW' check (status in ('NEW', 'IN_PROGRESS', 'COMPLETED')),
-  student_id           uuid not null references public.tracker_students(id) on delete cascade,
+  -- Nullable: un elev "Manual" (fara cont in tracker_students, generat din Diplome.tsx -> mod
+  -- "Manual") nu are niciun student_id de legat - task-ul se bazeaza atunci integral pe
+  -- snapshot-ul diploma_* de mai jos (vezi finalize_diploma_with_reward, buildDiplomaUrl).
+  student_id           uuid references public.tracker_students(id) on delete cascade,
   teacher_id           uuid references public.profiles(id) on delete set null,
   milestone            int not null,
   reward_received      boolean not null default false,
@@ -957,8 +960,12 @@ Cu drag, echipa ByteCode.', p_first_name)
   v_prev int;
   v_choice int;
 begin
-  select last_diploma_message_variant into v_prev
-    from public.tracker_students where id = p_student_id;
+  -- p_student_id poate fi null (elev "Manual", fara cont in tracker_students) - nu exista
+  -- niciun rand de citit/actualizat pentru anti-repetare, alegerea ramane pur aleatoare.
+  if p_student_id is not null then
+    select last_diploma_message_variant into v_prev
+      from public.tracker_students where id = p_student_id;
+  end if;
 
   v_choice := 1 + floor(random() * v_count)::int;
   -- Daca a picat exact pe varianta trimisa data trecuta acestui copil, trece deterministic la
@@ -968,36 +975,42 @@ begin
     v_choice := 1 + (v_choice % v_count);
   end if;
 
-  update public.tracker_students set last_diploma_message_variant = v_choice where id = p_student_id;
+  if p_student_id is not null then
+    update public.tracker_students set last_diploma_message_variant = v_choice where id = p_student_id;
+  end if;
 
   return v_messages[v_choice];
 end;
 $$;
 
+-- p_student_id NULL = elev "Manual" (fara cont in tracker_students, mod "Manual" din Diplome.tsx)
+-- - profesorul NU trebuie sa vada/descarce diploma direct in acest caz (aceeasi regula ca la un
+-- elev real - decizie explicita de business), deci si un elev Manual trece prin acelasi task
+-- pentru admin, folosind STRICT parametrii p_manual_* (nimic de citit din tracker_students).
 create or replace function public.finalize_diploma_with_reward(
   p_student_id uuid, p_module int, p_reward_received boolean,
   p_reward_type text default null, p_reward_details text default null,
-  p_diploma_date text default null
+  p_diploma_date text default null,
+  p_manual_student_name text default null,
+  p_manual_course_id text default null,
+  p_manual_stars int default null,
+  p_manual_total_stars int default null
 )
 returns void language plpgsql security definer set search_path = public as $$
 declare
   v_student record;
   v_group record;
   v_teacher_name text;
+  v_teacher_id uuid;
   v_milestone int;
   v_first_name text;
   v_reward_type text;
   v_reward_details text;
+  v_student_name text;
+  v_course_id text;
+  v_stars int;
+  v_total_stars int;
 begin
-  select s.id, s.name, s.short_name, s.teacher_id, s.group_id, s.pending_diploma_milestone, s.progress
-    into v_student
-    from public.tracker_students s
-    where s.id = p_student_id and (s.teacher_id = auth.uid() or public.is_admin())
-    for update;
-
-  if v_student.id is null then
-    raise exception 'Elevul nu a fost găsit.';
-  end if;
   if p_module is null or p_module < 1 then
     raise exception 'Modul invalid.';
   end if;
@@ -1017,18 +1030,48 @@ begin
   end if;
 
   v_milestone := p_module * 16;
-  v_first_name := coalesce(nullif(trim(v_student.short_name), ''), split_part(v_student.name, ' ', 1));
 
-  select group_name, course into v_group from public.tracker_groups where id = v_student.group_id;
+  if p_student_id is not null then
+    select s.id, s.name, s.short_name, s.teacher_id, s.group_id, s.pending_diploma_milestone, s.progress
+      into v_student
+      from public.tracker_students s
+      where s.id = p_student_id and (s.teacher_id = auth.uid() or public.is_admin())
+      for update;
+
+    if v_student.id is null then
+      raise exception 'Elevul nu a fost găsit.';
+    end if;
+
+    v_first_name := coalesce(nullif(trim(v_student.short_name), ''), split_part(v_student.name, ' ', 1));
+    select group_name, course into v_group from public.tracker_groups where id = v_student.group_id;
+
+    if v_student.pending_diploma_milestone = v_milestone then
+      update public.tracker_students
+        set last_diploma_issued_milestone = v_milestone, pending_diploma_milestone = null
+        where id = p_student_id;
+    end if;
+
+    v_student_name := v_student.name;
+    v_course_id := v_group.course;
+    v_stars := case when v_student.progress > 0 and v_student.progress % 16 = 0 then 16 else v_student.progress % 16 end;
+    v_total_stars := v_student.progress;
+    v_teacher_id := v_student.teacher_id;
+  else
+    -- Elev "Manual": nimic de citit/actualizat in tracker_students - profesorul a introdus
+    -- numele/cursul/stelutele direct din formular (nu are cont in aplicatie).
+    if nullif(trim(coalesce(p_manual_student_name, '')), '') is null then
+      raise exception 'Numele elevului este obligatoriu.';
+    end if;
+    v_student_name := trim(p_manual_student_name);
+    v_first_name := split_part(v_student_name, ' ', 1);
+    v_course_id := p_manual_course_id;
+    v_stars := greatest(0, least(16, coalesce(p_manual_stars, 0)));
+    v_total_stars := greatest(0, coalesce(p_manual_total_stars, 0));
+    v_teacher_id := auth.uid();
+  end if;
 
   select coalesce(nullif(trim(p.full_name), ''), p.email) into v_teacher_name
-    from public.profiles p where p.id = v_student.teacher_id;
-
-  if v_student.pending_diploma_milestone = v_milestone then
-    update public.tracker_students
-      set last_diploma_issued_milestone = v_milestone, pending_diploma_milestone = null
-      where id = p_student_id;
-  end if;
+    from public.profiles p where p.id = v_teacher_id;
 
   -- Task 1 - "🎓 Trimite diploma părintelui": mereu creat, indiferent de recompensa.
   insert into public.urgent_tasks
@@ -1036,12 +1079,11 @@ begin
      diploma_student_name, diploma_teacher_name, diploma_course_id, diploma_date, diploma_stars, diploma_total_stars,
      milestone_reached_at)
   values (
-    'DIPLOMA_GENERATED', p_student_id, v_student.teacher_id, v_milestone,
+    'DIPLOMA_GENERATED', p_student_id, v_teacher_id, v_milestone,
     p_reward_received, v_reward_type, v_reward_details,
     public.random_diploma_parent_message(p_student_id, v_first_name),
-    v_student.name, v_teacher_name, v_group.course, p_diploma_date,
-    case when v_student.progress > 0 and v_student.progress % 16 = 0 then 16 else v_student.progress % 16 end,
-    v_student.progress,
+    v_student_name, v_teacher_name, v_course_id, p_diploma_date,
+    v_stars, v_total_stars,
     now()
   )
   on conflict (student_id, milestone, type) do nothing;
@@ -1054,20 +1096,22 @@ begin
     insert into public.urgent_tasks
       (type, student_id, teacher_id, milestone, reward_received, reward_type, reward_details, milestone_reached_at)
     values (
-      'SEND_VIRTUAL_COINS', p_student_id, v_student.teacher_id, v_milestone,
+      'SEND_VIRTUAL_COINS', p_student_id, v_teacher_id, v_milestone,
       true, 'virtual_money', v_reward_details,
       now()
     )
     on conflict (student_id, milestone, type) do nothing;
   end if;
 
-  update public.urgent_tasks
-    set status = 'COMPLETED', completed_at = now(), completed_by = auth.uid()
-    where student_id = p_student_id and milestone = v_milestone and type = 'DIPLOMA_NOT_SENT' and status <> 'COMPLETED';
+  if p_student_id is not null then
+    update public.urgent_tasks
+      set status = 'COMPLETED', completed_at = now(), completed_by = auth.uid()
+      where student_id = p_student_id and milestone = v_milestone and type = 'DIPLOMA_NOT_SENT' and status <> 'COMPLETED';
+  end if;
 end;
 $$;
 
-grant execute on function public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text) to authenticated;
+grant execute on function public.finalize_diploma_with_reward(uuid, int, boolean, text, text, text, text, text, int, int) to authenticated;
 
 -- Extinde send_overdue_diploma_alerts() (functia existenta, ruleaza deja zilnic prin pg_cron)
 -- ca, pe langa webhook-ul Pabbly de azi (neschimbat), sa deschida si task-ul de admin

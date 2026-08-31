@@ -37,7 +37,9 @@ export type UrgentTaskWithDetails = UrgentTask & {
 export async function attachUrgentTaskDetails(
   supabase: Awaited<ReturnType<typeof createClient>>, tasks: UrgentTask[]
 ): Promise<UrgentTaskWithDetails[]> {
-  const studentIds = [...new Set(tasks.map((t) => t.student_id))];
+  // student_id poate fi null (elev "Manual", fara cont in tracker_students - vezi Diplome.tsx) -
+  // filtrat inainte de `.in()`, ca sa nu trimitem un `null` in lista de id-uri catre Supabase.
+  const studentIds = [...new Set(tasks.map((t) => t.student_id).filter((id): id is string => !!id))];
   const teacherIds = [...new Set(tasks.map((t) => t.teacher_id).filter((id): id is string => !!id))];
 
   const [{ data: students }, { data: teachers }] = await Promise.all([
@@ -59,18 +61,21 @@ export async function attachUrgentTaskDetails(
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
 
   return tasks.map((t) => {
-    const student = studentById.get(t.student_id);
+    const student = t.student_id ? studentById.get(t.student_id) : undefined;
     const group = student ? groupById.get(student.group_id) : undefined;
     const teacher = t.teacher_id ? teacherById.get(t.teacher_id) : undefined;
     return {
       ...t,
-      student_name: student?.name ?? 'Elev șters',
+      // student_id null (elev "Manual") NU e "Elev șters" (n-a existat niciodata un cont) -
+      // afisam numele/cursul introduse manual, inghetate deja pe snapshot-ul diploma_* (acelasi
+      // snapshot care reconstruieste URL-ul diplomei - vezi buildDiplomaUrl).
+      student_name: student?.name ?? t.diploma_student_name ?? 'Elev șters',
       student_short_name: student?.short_name ?? null,
       parent_phones: student?.parent_phones ?? [],
       parent_emails: student?.parent_emails ?? [],
       teacher_name: teacher ? (teacher.full_name || teacher.email) : 'Profesor șters',
       group_name: group?.group_name ?? null,
-      course: group?.course ?? null,
+      course: group?.course ?? t.diploma_course_id ?? null,
     };
   });
 }

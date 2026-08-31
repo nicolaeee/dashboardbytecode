@@ -10,12 +10,13 @@ import type { DiplomaGroupWithStudents } from './page';
 
 /**
  * Pasul de dupa "Genereaza" - cere confirmarea recompensei, identic pentru ambele moduri.
- * - "Din grupa" (studentId != null): trimite automat task-ul catre admin (RPC
- *   finalize_diploma_with_reward) - nu se deschide/descarca nimic aici.
- * - "Manual" (studentId == null, elev fara cont in DB): nu exista niciun student_id de care sa
- *   legam un task pentru admin, deci la "Finalizează" se deschide direct sablonul diplomei
- *   intr-un tab nou (manualStars/manualTotalStars, capturate din formular la "Genereaza" -
- *   RPC-ul real reciteste stelutele din DB pentru un elev real, dar unul manual nu exista acolo).
+ * La "Finalizează" trimite catre acelasi RPC (finalize_diploma_with_reward), care creeaza
+ * task-ul pentru admin - un profesor (non-admin) NU trebuie sa vada/descarce diploma direct
+ * NICIODATA, indiferent de mod (regula explicita de business). "Manual" (studentId == null,
+ * elev fara cont in DB) trimite in loc numele/stelutele introduse manual (manualStars/
+ * manualTotalStars) - RPC-ul real reciteste totul din DB pentru un elev real, dar unul manual nu
+ * exista acolo. SINGURA exceptie: adminul insusi, in mod Manual, pastreaza accesul direct
+ * (self-service ad-hoc) - vezi handleFinalizeDiploma.
  */
 type FinalizeStep = {
   studentId: string | null; studentName: string; module: number;
@@ -246,11 +247,14 @@ export default function Diplome({
     setFinalizeError(null);
 
     const studentId = finalizeStep.studentId;
-    if (studentId === null) {
-      // Mod Manual: elevul nu exista in DB, deci nu exista niciun student_id de care sa legam
-      // un RPC/task pentru admin - raspunsul despre premiu ramane doar informativ in acest flux
-      // (simetric cu "Din grupă" ca experienta), iar profesorul deschide chiar el sablonul
-      // diplomei, precompletat cu ce a introdus la pasul 1.
+
+    // SINGURA excepție: adminul, în mod Manual (elev fără cont în DB) - fără student real, n-are
+    // niciun sens să-și creeze lui însuși un task ("Task-uri Urgente" e o coadă pentru admin, nu
+    // o listă pe care s-o gestioneze singur) - rămâne accesul direct, ca înainte. Un profesor
+    // obișnuit NU intră niciodată pe această ramură - regula "nu trebuie să vadă/descarce
+    // diploma direct" se aplică STRICT lui, indiferent de mod (vezi RPC-ul mai jos, care rutează
+    // acum orice altă combinație - elev real SAU Manual generat de un profesor - prin admin).
+    if (isAdmin && studentId === null) {
       const url = diplomaTemplateUrl(generatingCourse, finalizeStep.module);
       if (url) {
         const params = new URLSearchParams({
@@ -265,11 +269,6 @@ export default function Diplome({
       }
       setFinalizeStep(null);
       setGeneratingCourse(null);
-      // BRESA DE NAVIGARE REPARATA: identic cu modul "Din grupă" (vezi mai jos) - un profesor
-      // non-admin nu trebuie lasat pe /diplome gol dupa ce a terminat, se intoarce la Task-uri
-      // Urgente. Fara flag "diplomaSent" aici - taskul deschis (initialStudentId) e al elevului
-      // real din urgent task, nu al acestei diplome manuale separate, deci nu se inchide nimic.
-      if (!isAdmin) router.replace(initialTeacherId ? `/progress?teacherId=${initialTeacherId}` : '/progress');
       return;
     }
 
@@ -283,6 +282,12 @@ export default function Diplome({
       // Data locala a profesorului, inghetata pe diploma (vezi coloanele diploma_* din
       // urgent_tasks) - adminul o va vedea identic, indiferent cand deschide taskul.
       p_diploma_date: todayFormatted(),
+      // Ignorate complet de RPC cand studentId e real (reciteste el insusi totul din
+      // tracker_students) - folosite STRICT pentru mod Manual (elev fara cont in DB).
+      p_manual_student_name: studentId ? null : finalizeStep.studentName,
+      p_manual_course_id: studentId ? null : generatingCourse,
+      p_manual_stars: studentId ? null : (finalizeStep.manualStars ?? null),
+      p_manual_total_stars: studentId ? null : (finalizeStep.manualTotalStars ?? null),
     });
     setFinalizing(false);
     if (error) {
@@ -290,17 +295,19 @@ export default function Diplome({
       setFinalizeError('A apărut o eroare. Încearcă din nou.');
       return;
     }
-    // Pastreaza alerta Pabbly existenta ("completed") - inainte se trimitea din butonul
-    // "Am trimis diploma" (Progress Tracker), acum de aici, la finalizarea reala a diplomei.
-    // Best-effort: daca da eroare, nu blocheaza fluxul (diploma e deja finalizata in DB).
-    try {
-      await fetch('/api/diploma-milestone-alerts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, milestone: finalizeStep.module * 16, status: 'completed' }),
-      });
-    } catch (alertError) {
-      console.error('DIPLOMA MILESTONE ALERT ERROR:', alertError);
+    // Pastreaza alerta Pabbly existenta ("completed") - doar pentru un elev real, care are un
+    // prag de prezente in tracker. Un elev Manual nu exista in tracker, deci nu exista niciun
+    // prag de recalculat pentru el.
+    if (studentId) {
+      try {
+        await fetch('/api/diploma-milestone-alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId, milestone: finalizeStep.module * 16, status: 'completed' }),
+        });
+      } catch (alertError) {
+        console.error('DIPLOMA MILESTONE ALERT ERROR:', alertError);
+      }
     }
     // Daca profesorul a ajuns aici din "🚨 Task-uri Urgente" (Progress Tracker → "🎓 Genereaza
     // Diploma"), taskul respectiv tocmai s-a inchis in DB (RPC-ul de mai sus a golit
@@ -308,7 +315,7 @@ export default function Diplome({
     // fara acel task, in loc sa ramana pe /diplome nestiind daca actiunea a avut efect si sa
     // riste sa apese din nou. Generarea "ad-hoc" (din grila de cursuri, fara task de pornit)
     // ramane pe loc, ca inainte - profesorul poate genera diplome pentru mai multi elevi la rand.
-    const cameFromUrgentTask = studentId === initialStudentId;
+    const cameFromUrgentTask = studentId !== null && studentId === initialStudentId;
     setFinalizeStep(null);
     setGeneratingCourse(null);
     // BUG REPARAT: cardul din Task-uri Urgente nu disparea la revenire, pentru ca router.push()
@@ -324,9 +331,9 @@ export default function Diplome({
       // din props-urile proaspete (vezi efectul de resincronizare din ProgressTracker.tsx).
       router.push(`/progress?${new URLSearchParams({ ...(initialTeacherId ? { teacherId: initialTeacherId } : {}), diplomaSent: '1' }).toString()}`);
     } else if (!isAdmin) {
-      // BRESA DE NAVIGARE: si un profesor (non-admin) care a schimbat manual Elevul din
-      // dropdown (deci a generat pentru un ALT elev decat cel din task-ul de pornire) tot nu
-      // trebuie lasat pe /diplome gol - aceeasi regula ca la modul Manual mai sus si la
+      // BRESA DE NAVIGARE: si un profesor (non-admin) care a generat pentru un elev Manual, sau
+      // care a schimbat manual Elevul din dropdown (deci a generat pentru un ALT elev decat cel
+      // din task-ul de pornire), tot nu trebuie lasat pe /diplome gol - aceeasi regula ca la
       // closeModal(). Fara flag "diplomaSent" - niciun task specific din lista initiala nu s-a
       // inchis, deci nu declansam acel toast.
       router.push(initialTeacherId ? `/progress?teacherId=${initialTeacherId}` : '/progress');
@@ -408,12 +415,12 @@ export default function Diplome({
         {finalizeStep ? (
           <>
             <p className="text-sm text-lock">
-              {finalizeStep.studentId ? (
-                <>Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e pregătită - nu trebuie să o descarci.
-                Confirmă recompensa și finalizează, ca administratorul să o poată descărca și trimite mai departe.</>
-              ) : (
+              {isAdmin && !finalizeStep.studentId ? (
                 <>Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e gata de generat.
                 Confirmă recompensa și finalizează - se deschide șablonul diplomei într-un tab nou, gata de descărcat sau trimis.</>
+              ) : (
+                <>Diploma pentru <span className="font-semibold text-ink">{finalizeStep.studentName}</span> e pregătită - nu trebuie să o descarci.
+                Confirmă recompensa și finalizează, ca administratorul să o poată descărca și trimite mai departe.</>
               )}
             </p>
 

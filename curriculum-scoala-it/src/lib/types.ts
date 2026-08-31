@@ -412,7 +412,10 @@ export type UrgentTask = {
   id: string;
   type: UrgentTaskType;
   status: UrgentTaskStatus;
-  student_id: string;
+  /** Null STRICT pentru un elev "Manual" (fara cont in tracker_students, generat din Diplome.tsx
+   * -> mod "Manual") - task-ul se bazeaza atunci integral pe snapshot-ul diploma_* de mai jos
+   * (vezi buildDiplomaUrl in lib/diplomas.ts), care nu are nevoie de un elev real. */
+  student_id: string | null;
   teacher_id: string | null;
   milestone: number;
   /** Doar DIPLOMA_GENERATED si SEND_VIRTUAL_COINS - vezi pasul "A câștigat copilul un premiu?"
