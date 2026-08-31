@@ -5,7 +5,7 @@ import Diplome from './Diplome';
 
 export type DiplomaGroupWithStudents = {
   id: string; group_name: string; course: TrackerGroup['course'];
-  students: Pick<TrackerStudent, 'id' | 'name' | 'progress'>[];
+  students: Pick<TrackerStudent, 'id' | 'name' | 'progress' | 'pending_diploma_milestone'>[];
 };
 
 export default async function DiplomePage({
@@ -23,16 +23,16 @@ export default async function DiplomePage({
 
   const [{ data: groups }, { data: students }, teachersRes] = await Promise.all([
     supabase.from('tracker_groups').select('id, group_name, course').eq('teacher_id', profile.id).is('deleted_at', null).order('group_name'),
-    supabase.from('tracker_students').select('id, group_id, name, progress').eq('teacher_id', profile.id).is('deleted_at', null).order('name'),
+    supabase.from('tracker_students').select('id, group_id, name, progress, pending_diploma_milestone').eq('teacher_id', profile.id).is('deleted_at', null).order('name'),
     isAdmin
       ? supabase.from('profiles').select('id, full_name, email').order('full_name')
       : Promise.resolve({ data: null as { id: string; full_name: string; email: string }[] | null }),
   ]);
 
-  const studentsByGroup = new Map<string, Pick<TrackerStudent, 'id' | 'name' | 'progress'>[]>();
+  const studentsByGroup = new Map<string, Pick<TrackerStudent, 'id' | 'name' | 'progress' | 'pending_diploma_milestone'>[]>();
   for (const s of students ?? []) {
     const list = studentsByGroup.get(s.group_id) ?? [];
-    list.push({ id: s.id, name: s.name, progress: s.progress });
+    list.push({ id: s.id, name: s.name, progress: s.progress, pending_diploma_milestone: s.pending_diploma_milestone });
     studentsByGroup.set(s.group_id, list);
   }
   const initialGroups: DiplomaGroupWithStudents[] = (groups ?? []).map((g) => ({

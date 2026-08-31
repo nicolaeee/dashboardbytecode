@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
+import { computeModuleLesson } from '@/lib/lessonNumbering';
 import { DIPLOMA_REWARD_TYPES, type CourseId } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { Modal, Button, Field, Textarea } from '@/components/ui';
@@ -82,7 +83,17 @@ export default function Diplome({
   }, []);
 
   // Odata ce grupele profesorului corect sunt incarcate, gasim elevul dupa initialStudentId
-  // si deschidem direct modalul pe cursul/grupa/elevul lui - profesorul mai alege doar Modulul.
+  // si deschidem direct modalul pe cursul/grupa/elevul/MODULUL lui.
+  //
+  // BUG REPARAT (raportat pentru mai multi profesori, ex. Daniel Tăbăcaru): modulul era
+  // INTOTDEAUNA precompletat cu 1, indiferent de pragul real aflat in asteptare
+  // (pending_diploma_milestone). Pentru al doilea/al treilea modul al unui elev, profesorul nu
+  // observa (restul formularului - elev, curs, grupa - era deja corect completat) si genera din
+  // greseala diploma pentru Modulul 1. finalize_diploma_with_reward (RPC) goleste
+  // pending_diploma_milestone STRICT cand p_module*16 == pragul real - la o nepotrivire, taskul
+  // "🚨 Diplomă necesară" din Task-uri Urgente ramanea agatat la nesfarsit, desi o diploma
+  // (gresita) tocmai fusese generata si trimisa. Acum modulul se deduce din pragul real (vezi
+  // computeModuleLesson), nu mai e niciodata ghicit.
   useEffect(() => {
     if (appliedPrefillRef.current || loading || !initialStudentId) return;
     for (const g of groups) {
@@ -95,7 +106,15 @@ export default function Diplome({
         setSelectedStudentId(student.id);
         setManualName(student.name);
         setManualStars(16);
-        setSelectedModule(1);
+        setSelectedModule(
+          student.pending_diploma_milestone
+            // Clampat la ultimul modul cu sablon de diploma (DIPLOMA_MODULES, momentan 1-4) -
+            // un elev putea avansa in Tracker peste modulul 4 (module_count merge pana la 30),
+            // dar nu exista sablon de diploma dincolo de 4, deci precompletarea nu trebuie sa
+            // aleaga un modul inexistent in dropdown.
+            ? Math.min(computeModuleLesson(student.pending_diploma_milestone).module, Math.max(...DIPLOMA_MODULES))
+            : 1
+        );
         break;
       }
     }
