@@ -201,6 +201,14 @@ export type TrackerStudent = {
    * inregistrate ulterior direct in aplicatie (vezi history in StudentHistoryModal).
    */
   already_completed_lessons: number;
+  /**
+   * true = exista deja un task "💳 Abonament finalizat" deschis pentru acest elev (vezi trigger-ul
+   * SQL touch_subscription_finished_alert in schema.sql) - previne alerte duplicate cat timp
+   * soldul ramane la 0. Resetat automat la false de acelasi trigger de indata ce soldul redevine
+   * pozitiv (reinnoire), ca urmatorul ciclu de epuizare sa poata declansa din nou alerta. Niciun
+   * cod din client nu citeste/scrie campul acesta direct.
+   */
+  pending_subscription_alert: boolean;
   deleted_at: string | null;
   created_at: string;
 };
@@ -222,7 +230,12 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
  */
 export type SubscriptionType =
   | 'individual_lunar' | 'individual_integral' | 'grup_lunar' | 'grup_integral'
-  | 'lunar_4' | 'integral_16' | 'integral_32' | 'integral_48';
+  | 'lunar_4' | 'integral_16' | 'integral_32' | 'integral_48'
+  // Pachet cu numar de lectii ales liber (input numeric) - pentru elevi vechi cu abonamente
+  // personalizate, care nu se incadreaza in niciun pachet cu numar fix. Absent DELIBERAT din
+  // PACKAGE_TIER_LESSONS mai jos (nu are un numar fix asociat) - vezi editStudentCustomLessons
+  // in ProgressTracker.tsx, unde numarul e preluat direct din formular, nu din acea harta.
+  | 'custom';
 export const SUBSCRIPTION_TYPE_LABELS: Record<SubscriptionType, string> = {
   individual_lunar: 'Individual Lunar',
   individual_integral: 'Individual Integral',
@@ -232,6 +245,7 @@ export const SUBSCRIPTION_TYPE_LABELS: Record<SubscriptionType, string> = {
   integral_16: 'Integral - 16 Lecții',
   integral_32: 'Integral - 32 Lecții',
   integral_48: 'Integral - 48 Lecții',
+  custom: 'Personalizat',
 };
 
 /** Vezi comentariul câmpului `study_mode` de pe TrackerStudent mai sus. */
@@ -402,10 +416,13 @@ export type PayslipCategory = 'grup' | 'individual' | 'recuperare';
  * finalizată în 3 zile lucrătoare (vezi send_overdue_diploma_alerts). SEND_VIRTUAL_COINS =
  * "🪙 Trimite monedele virtuale" - task SEPARAT, creat DOAR când recompensa e "Bani virtuali"
  * (vezi supabase/migrations/add_virtual_coins_task.sql) - status independent de task-ul
- * diplomei, vizibil DOAR adminului, fără mesaj pentru părinte. Tabelă separată de
- * tracker_students - NU e vizibilă profesorului.
+ * diplomei, vizibil DOAR adminului, fără mesaj pentru părinte. SUBSCRIPTION_FINISHED =
+ * "💳 Abonament finalizat" - soldul de lecții (total_lessons_remaining) al elevului a ajuns la 0
+ * (vezi trigger-ul SQL touch_subscription_finished_alert) - milestone rămâne mereu 0 pentru
+ * acest tip (nu are sens conceptul de "prag" ca la diplome). Tabelă separată de
+ * tracker_students - NU e vizibilă profesorului (RLS: doar adminul citește urgent_tasks).
  */
-export type UrgentTaskType = 'DIPLOMA_GENERATED' | 'DIPLOMA_NOT_SENT' | 'SEND_VIRTUAL_COINS';
+export type UrgentTaskType = 'DIPLOMA_GENERATED' | 'DIPLOMA_NOT_SENT' | 'SEND_VIRTUAL_COINS' | 'SUBSCRIPTION_FINISHED';
 export type UrgentTaskStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED';
 
 export type UrgentTask = {

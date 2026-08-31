@@ -171,6 +171,10 @@ const PACKAGE_BUTTON_OPTIONS: Record<StudyMode, SubscriptionType[]> = {
   grup: ['integral_16', 'integral_32', 'integral_48'],
 };
 function packageButtonLabel(mode: StudyMode, tier: SubscriptionType): string {
+  // 'custom' nu are un numar fix in PACKAGE_TIER_LESSONS (DELIBERAT - vine din input-ul liber
+  // "Personalizat") - fara acest caz special, ar afisa "undefined lecții" atat pe butonul live
+  // cat si la o tranzactie istorica salvata cu acest pachet (Istoricul Abonamentelor).
+  if (tier === 'custom') return 'Personalizat';
   if (tier === 'lunar_4') return 'Lunar (4 lecții)';
   const n = PACKAGE_TIER_LESSONS[tier];
   return mode === 'individual' ? `Integral ${n} lecții` : `${n} lecții`;
@@ -547,6 +551,10 @@ export default function ProgressTracker({
   // vezi handleEditStudent, unde soldul se recalculeaza ca diferenta fata de Deja efectuate.
   const [editStudentStudyMode, setEditStudentStudyMode] = useState<StudyMode | ''>('');
   const [editStudentSubscriptionType, setEditStudentSubscriptionType] = useState<SubscriptionType | ''>('');
+  // Numarul total de lectii cand editStudentSubscriptionType === 'custom' (buton "Personalizat")
+  // - pentru elevi vechi cu abonamente care nu se incadreaza in niciun pachet cu numar fix.
+  // Folosit in loc de PACKAGE_TIER_LESSONS[tier] (care nu are o valoare pt. 'custom', DELIBERAT).
+  const [editStudentCustomLessons, setEditStudentCustomLessons] = useState<number | ''>('');
   const [editStudentAlreadyCompleted, setEditStudentAlreadyCompleted] = useState<number | ''>(0);
   const [newModuleReward, setNewModuleReward] = useState('stars');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1246,7 +1254,11 @@ export default function ProgressTracker({
     // altfel o salvare banala a formularului (ex: doar telefonul parintelui) pentru un elev cu
     // abonament legacy (individual_lunar etc., fara echivalent in noile pachete) i-ar sterge
     // silentios subscription_type existent.
-    const selectedTierLessons = editStudentSubscriptionType ? PACKAGE_TIER_LESSONS[editStudentSubscriptionType] : undefined;
+    // 'custom' preia numarul din editStudentCustomLessons (input liber), NU din
+    // PACKAGE_TIER_LESSONS (care nu are - deliberat - o valoare pentru 'custom').
+    const selectedTierLessons = editStudentSubscriptionType === 'custom'
+      ? Math.max(0, Math.round(numOrZero(editStudentCustomLessons)))
+      : editStudentSubscriptionType ? PACKAGE_TIER_LESSONS[editStudentSubscriptionType] : undefined;
     if (editStudentStudyMode) {
       patch.study_mode = editStudentStudyMode;
       patch.subscription_type = editStudentSubscriptionType || null;
@@ -1843,10 +1855,16 @@ export default function ProgressTracker({
     setEditStudentPresences(s.presence_count ?? 0);
     setEditStudentAbsences(s.absence_count ?? 0);
     setEditStudentStudyMode(s.study_mode ?? '');
-    // Doar daca abonamentul curent e unul din pachetele cu numar fix (lunar_4..integral_48) -
-    // valorile legacy (individual_lunar etc.) nu apar in dropdown, deci raman "nesetate" aici
-    // (formularul nu le suprascrie decat daca adminul alege explicit un pachet nou).
-    setEditStudentSubscriptionType(s.subscription_type && s.subscription_type in PACKAGE_TIER_LESSONS ? s.subscription_type : '');
+    // Doar daca abonamentul curent e unul din pachetele cu numar fix (lunar_4..integral_48) sau
+    // 'custom' - valorile legacy (individual_lunar etc.) nu apar in dropdown, deci raman
+    // "nesetate" aici (formularul nu le suprascrie decat daca adminul alege explicit un pachet nou).
+    if (s.subscription_type === 'custom') {
+      setEditStudentSubscriptionType('custom');
+      setEditStudentCustomLessons(s.total_package_lessons ?? 0);
+    } else {
+      setEditStudentSubscriptionType(s.subscription_type && s.subscription_type in PACKAGE_TIER_LESSONS ? s.subscription_type : '');
+      setEditStudentCustomLessons('');
+    }
     setEditStudentAlreadyCompleted(s.already_completed_lessons ?? 0);
     // GDPR: pentru un profesor, aceste campuri nici nu exista in payload (vezi
     // progress/page.tsx) - dar verificam explicit isAdmin ca sa nu se strecoare
@@ -2602,8 +2620,14 @@ export default function ProgressTracker({
                             // Sub-optiunile difera intre Individual si Grup ("Lunar" nu exista la
                             // Grup) - daca era deja aleasa una care nu mai e valabila in noul mod,
                             // o resetam ca sa nu ramana o combinatie invalida ascunsa, netrimisa
-                            // vizual dar tot inclusa la salvare.
-                            if (editStudentSubscriptionType && !PACKAGE_BUTTON_OPTIONS[mode].includes(editStudentSubscriptionType)) {
+                            // vizual dar tot inclusa la salvare. 'custom' e exclus din aceasta
+                            // verificare - "Personalizat" e disponibil identic la ambele moduri
+                            // (nu face parte din PACKAGE_BUTTON_OPTIONS, vezi butonul randat
+                            // manual mai jos), deci schimbarea modului NU trebuie sa il resetezi.
+                            if (
+                              editStudentSubscriptionType && editStudentSubscriptionType !== 'custom'
+                              && !PACKAGE_BUTTON_OPTIONS[mode].includes(editStudentSubscriptionType)
+                            ) {
                               setEditStudentSubscriptionType('');
                             }
                           }}
@@ -2630,12 +2654,38 @@ export default function ProgressTracker({
                                 </button>
                               );
                             })}
+                            {/* Al 4-lea buton, identic la Individual si Grup (adaugat o singura
+                                data, in interiorul buclei de mai sus) - pentru elevi vechi cu
+                                abonamente personalizate, care nu se incadreaza in niciun pachet
+                                cu numar fix. Nu face parte din PACKAGE_BUTTON_OPTIONS (folosit si
+                                de panoul de reinnoire, StudentHistoryModal, care nu are un flux
+                                de input liber) - definit direct aici, doar pentru acest formular. */}
+                            <button
+                              type="button"
+                              onClick={() => setEditStudentSubscriptionType('custom')}
+                              className={`py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
+                                editStudentSubscriptionType === 'custom' ? 'bg-[#C8F023] text-black border-[#C8F023]' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                              }`}
+                            >
+                              Personalizat
+                            </button>
                           </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
+                {editStudentSubscriptionType === 'custom' && (
+                  <div className="mb-2">
+                    <span className="block text-[11px] text-gray-500 mb-1">Numărul total de lecții din pachet</span>
+                    <input
+                      type="number" min={0} max={MAX_HISTORICAL_COUNT} value={editStudentCustomLessons} onWheel={blurOnWheel}
+                      placeholder="Introdu numărul total de lecții"
+                      onChange={(e) => setEditStudentCustomLessons(numericInputValue(e.target.value))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                    />
+                  </div>
+                )}
                 <div className="mb-2">
                   <span className="block text-[11px] text-gray-500 mb-1">Deja efectuate</span>
                   <input
@@ -2645,9 +2695,14 @@ export default function ProgressTracker({
                   />
                 </div>
                 {(() => {
-                  const previewTotal = editStudentSubscriptionType
-                    ? (PACKAGE_TIER_LESSONS[editStudentSubscriptionType] ?? (student.total_package_lessons ?? 0))
-                    : (student.total_package_lessons ?? 0);
+                  // 'custom' preia numarul din input-ul liber de mai sus, NU din PACKAGE_TIER_LESSONS
+                  // (care nu are - deliberat - o valoare pentru 'custom') - restul formulei ramane
+                  // identic, ca soldul afisat sa se actualizeze instant la fel ca pentru un pachet fix.
+                  const previewTotal = editStudentSubscriptionType === 'custom'
+                    ? Math.max(0, Math.round(numOrZero(editStudentCustomLessons)))
+                    : editStudentSubscriptionType
+                      ? (PACKAGE_TIER_LESSONS[editStudentSubscriptionType] ?? (student.total_package_lessons ?? 0))
+                      : (student.total_package_lessons ?? 0);
                   const previewRemaining = Math.max(0, previewTotal - Math.round(numOrZero(editStudentAlreadyCompleted)));
                   return (
                     <p className="text-[11px] text-gray-500">

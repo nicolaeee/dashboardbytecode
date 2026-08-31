@@ -49,6 +49,22 @@ const SORT_LABELS: Record<SortBy, string> = {
   recent: 'Cea mai recentă', oldest: 'Cea mai veche', teacher: 'Profesor', child: 'Copil', module: 'Modul',
 };
 
+/**
+ * Cele 3 sectiuni vizuale ale paginii (tab-uri) - STRICT admin, pagina intreaga necesita deja
+ * requireAdmin() server-side (page.tsx) + RLS pe urgent_tasks ("adminul gestioneaza task-urile
+ * urgente", for all... using is_admin()), deci un profesor nu poate ajunge niciodata aici, nici
+ * macar pe URL direct - nu mai e nevoie de o verificare suplimentara de rol in acest component.
+ */
+type TaskTab = 'diplome' | 'cadouri' | 'abonamente';
+const TAB_LABELS: Record<TaskTab, string> = {
+  diplome: '🎓 Diplome', cadouri: '🎁 Cadouri', abonamente: '💳 Abonamente Finalizate',
+};
+function taskTab(type: UrgentTaskWithDetails['type']): TaskTab {
+  if (type === 'SEND_VIRTUAL_COINS') return 'cadouri';
+  if (type === 'SUBSCRIPTION_FINISHED') return 'abonamente';
+  return 'diplome'; // DIPLOMA_GENERATED, DIPLOMA_NOT_SENT
+}
+
 export default function TaskUriUrgenteClient({
   viewerId, initialTasks, teacherOptions,
 }: { viewerId: string; initialTasks: UrgentTaskWithDetails[]; teacherOptions: TeacherOption[] }) {
@@ -71,10 +87,16 @@ export default function TaskUriUrgenteClient({
   const [childSearch, setChildSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
+  // Sectiunea activa (vezi TaskTab mai sus) - filtrele de mai sus (profesor/copil/status/sortare)
+  // se aplica IN INTERIORUL sectiunii curente, nu global peste toate cele 3.
+  const [activeTab, setActiveTab] = useState<TaskTab>('diplome');
 
-  const visibleTasks = useMemo(() => {
+  // Filtrate dupa profesor/copil/status, INAINTE de a separa pe sectiuni - baza atat pentru
+  // numaratoarea de pe fiecare tab (cate task-uri ar aparea daca ai comuta pe el), cat si pentru
+  // lista efectiv afisata (visibleTasks mai jos, care mai adauga filtrul de sectiune + sortarea).
+  const filteredTasks = useMemo(() => {
     const query = childSearch.trim().toLocaleLowerCase();
-    const filtered = tasks.filter((t) => {
+    return tasks.filter((t) => {
       if (teacherFilter !== 'all' && t.teacher_id !== teacherFilter) return false;
       if (statusFilter !== 'all' && t.status !== statusFilter) return false;
       if (query) {
@@ -83,6 +105,16 @@ export default function TaskUriUrgenteClient({
       }
       return true;
     });
+  }, [tasks, teacherFilter, childSearch, statusFilter]);
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<TaskTab, number> = { diplome: 0, cadouri: 0, abonamente: 0 };
+    for (const t of filteredTasks) counts[taskTab(t.type)] += 1;
+    return counts;
+  }, [filteredTasks]);
+
+  const visibleTasks = useMemo(() => {
+    const filtered = filteredTasks.filter((t) => taskTab(t.type) === activeTab);
     const sorted = [...filtered];
     switch (sortBy) {
       case 'recent':
@@ -102,7 +134,7 @@ export default function TaskUriUrgenteClient({
         break;
     }
     return sorted;
-  }, [tasks, teacherFilter, childSearch, statusFilter, sortBy]);
+  }, [filteredTasks, activeTab, sortBy]);
 
   async function updateStatus(task: UrgentTaskWithDetails, status: UrgentTaskStatus) {
     if (busyIds.has(task.id)) return;
@@ -297,6 +329,57 @@ export default function TaskUriUrgenteClient({
     );
   }
 
+  // "💳 Abonament finalizat" (SUBSCRIPTION_FINISHED) - declansat automat de trigger-ul SQL
+  // touch_subscription_finished_alert cand soldul de lectii al unui elev ajunge la 0 (schema.sql).
+  // Card mult mai simplu decat renderTask (nicio notiune de modul/premiu/diploma aici) - un
+  // singur enunt, in formatul EXACT cerut. "Marchează ca Rezolvat" refoloseste STRICT acelasi
+  // updateStatus(...,'COMPLETED') ca restul task-urilor - optimistic UI deja garantat de acolo
+  // (taskul dispare instant din `tasks`, vezi comentariul din updateStatus).
+  function renderSubscriptionTask(task: UrgentTaskWithDetails) {
+    const busy = busyIds.has(task.id);
+    const childName = task.student_short_name?.trim() || task.student_name;
+    const firstPhone = task.parent_phones[0];
+
+    return (
+      <Card key={task.id} className={`p-5 space-y-4 border-[#C8F023]/30 ${task.status === 'COMPLETED' ? 'opacity-70' : ''}`}>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Badge tone="brand">💳 Abonament finalizat</Badge>
+            <Badge tone={task.status === 'IN_PROGRESS' ? 'blue' : task.status === 'COMPLETED' ? 'ok' : 'neutral'}>
+              {STATUS_LABELS[task.status]}
+            </Badge>
+          </div>
+        </div>
+
+        <p className="text-sm text-ink">
+          Elevul <span className="font-semibold">{childName}</span> din clasa{' '}
+          <span className="font-semibold">{task.group_name ?? '—'}</span> de la profesorul{' '}
+          <span className="font-semibold">{task.teacher_name}</span> a finalizat abonamentul său.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-line">
+          <div className="flex flex-wrap gap-2">
+            {task.status !== 'COMPLETED' && (
+              <Button size="sm" disabled={busy} onClick={() => updateStatus(task, 'COMPLETED')}>
+                <Check size={14} /> Marchează ca Rezolvat
+              </Button>
+            )}
+            {firstPhone && (
+              <a href={`https://wa.me/${waDigits(firstPhone)}`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" disabled={busy}>
+                  <MessageCircle size={14} /> Contactează Părinte ({firstPhone})
+                </Button>
+              </a>
+            )}
+          </div>
+          <Button variant="danger" size="sm" onClick={() => { setDeleteError(null); setDeleteTarget(task); }}>
+            <Trash2 size={14} /> Șterge
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
   const hasActiveFilters = teacherFilter !== 'all' || childSearch.trim() !== '' || statusFilter !== 'all';
 
   return (
@@ -306,10 +389,26 @@ export default function TaskUriUrgenteClient({
           <AlertTriangle size={22} className="text-[#FF6B6B]" /> Task-uri Urgente
         </h1>
         <p className="mt-1 text-sm text-lock">
-          Diplome de trimis părinților, monede virtuale de trimis și diplome netrimise la 3 zile de la atingerea pragului de prezențe.
-          Task-urile finalizate dispar de aici și apar în{' '}
+          🎓 Diplome de trimis părinților și diplome netrimise la 3 zile de la atingerea pragului de prezențe,
+          🎁 monede virtuale de trimis și 💳 abonamente ai căror sold de lecții a ajuns la 0.
+          Task-urile finalizate dispar de aici — cele de diplomă apar în{' '}
           <Link href="/admin/arhiva" className="text-brand-500 underline underline-offset-2 hover:text-brand-600">Arhivă → Diplome Trimise</Link>.
         </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(TAB_LABELS) as TaskTab[]).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === tab ? 'bg-brand-500 text-black' : 'bg-slate-150 text-ink/70 hover:bg-slate-150/70'
+            }`}
+          >
+            {TAB_LABELS[tab]}{tabCounts[tab] > 0 && ` (${tabCounts[tab]})`}
+          </button>
+        ))}
       </div>
 
       <Card className="p-4">
@@ -362,9 +461,11 @@ export default function TaskUriUrgenteClient({
       </Card>
 
       {visibleTasks.length === 0 ? (
-        <EmptyState title={hasActiveFilters ? 'Niciun task nu corespunde filtrelor alese.' : 'Niciun task urgent momentan. 🎉'} />
+        <EmptyState title={hasActiveFilters ? 'Niciun task nu corespunde filtrelor alese.' : `Niciun task în ${TAB_LABELS[activeTab]} momentan. 🎉`} />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{visibleTasks.map(renderTask)}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {visibleTasks.map((t) => (activeTab === 'abonamente' ? renderSubscriptionTask(t) : renderTask(t)))}
+        </div>
       )}
 
       <Modal
