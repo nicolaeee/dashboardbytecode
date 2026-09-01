@@ -14,10 +14,12 @@ export default async function RegistruPage() {
   // 'present' e necesar (nu doar 'made_up') ca sa stim care lectii au avut o sedinta LIVE reala
   // (vezi liveLessonIds in lib/registryCalc.ts) - fara el, o lectie 100% absenta si recuperata
   // ulterior ar fi platita de doua ori (o data ca lectie fantoma, o data ca recuperare).
-  const [{ data: lessons }, { data: attendance }, { data: students }, teachersRes] = await Promise.all([
+  const [{ data: lessons }, { data: attendance }, { data: students }, { data: groups }, teachersRes] = await Promise.all([
     supabase.from('tracker_lessons').select('*').eq('teacher_id', profile.id),
     supabase.from('tracker_attendance').select('*').eq('teacher_id', profile.id).in('status', ['present', 'made_up']),
     supabase.from('tracker_students').select('id, name').eq('teacher_id', profile.id),
+    // Numele grupei, afisat pe fiecare lectie/recuperare in detaliul lunar - vezi Registru.tsx.
+    supabase.from('tracker_groups').select('id, group_name').eq('teacher_id', profile.id),
     isAdmin
       ? supabase.from('profiles').select('id, full_name, email').order('full_name')
       : Promise.resolve({ data: null as { id: string; full_name: string; email: string }[] | null }),
@@ -31,6 +33,7 @@ export default async function RegistruPage() {
       initialLessons={(lessons ?? []) as TrackerLesson[]}
       initialAttendance={(attendance ?? []) as TrackerAttendance[]}
       initialStudents={(students ?? []) as { id: string; name: string }[]}
+      initialGroups={(groups ?? []) as { id: string; group_name: string }[]}
     />
   );
 }

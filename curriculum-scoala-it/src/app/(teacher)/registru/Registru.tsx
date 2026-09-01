@@ -15,6 +15,7 @@ const ENTRY_CONFIG = {
 
 type TeacherOption = { id: string; label: string };
 type StudentOption = { id: string; name: string };
+type GroupOption = { id: string; group_name: string };
 
 // Index Luni=0 .. Duminica=6 (spre deosebire de Date.getDay(), unde Duminica=0).
 function mondayIndexedDay(d: Date) { return (d.getDay() + 6) % 7; }
@@ -26,16 +27,18 @@ function weekOfMonth(d: Date) {
 }
 
 export default function Registru({
-  viewerId, isAdmin, teacherOptions, initialLessons, initialAttendance, initialStudents,
+  viewerId, isAdmin, teacherOptions, initialLessons, initialAttendance, initialStudents, initialGroups,
 }: {
   viewerId: string; isAdmin: boolean; teacherOptions: TeacherOption[];
   initialLessons: TrackerLesson[]; initialAttendance: TrackerAttendance[]; initialStudents: StudentOption[];
+  initialGroups: GroupOption[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [selectedTeacherId, setSelectedTeacherId] = useState(viewerId);
   const [lessons, setLessons] = useState<TrackerLesson[]>(initialLessons);
   const [attendance, setAttendance] = useState<TrackerAttendance[]>(initialAttendance);
   const [students, setStudents] = useState<StudentOption[]>(initialStudents);
+  const [groups, setGroups] = useState<GroupOption[]>(initialGroups);
   const [loading, setLoading] = useState(false);
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
@@ -45,27 +48,29 @@ export default function Registru({
   useEffect(() => {
     setSelectedMonth(null);
     if (selectedTeacherId === viewerId) {
-      setLessons(initialLessons); setAttendance(initialAttendance); setStudents(initialStudents); return;
+      setLessons(initialLessons); setAttendance(initialAttendance); setStudents(initialStudents); setGroups(initialGroups); return;
     }
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [{ data: l }, { data: a }, { data: s }] = await Promise.all([
+      const [{ data: l }, { data: a }, { data: s }, { data: g }] = await Promise.all([
         supabase.from('tracker_lessons').select('*').eq('teacher_id', selectedTeacherId),
         // 'present' e necesar (nu doar 'made_up') ca sa stim care lectii au avut o sedinta
         // LIVE reala (vezi liveLessonIds in registryCalc.ts) - fara el, o lectie 100% absenta
         // si recuperata ulterior ar fi platita de doua ori.
         supabase.from('tracker_attendance').select('*').eq('teacher_id', selectedTeacherId).in('status', ['present', 'made_up']),
         supabase.from('tracker_students').select('id, name').eq('teacher_id', selectedTeacherId),
+        supabase.from('tracker_groups').select('id, group_name').eq('teacher_id', selectedTeacherId),
       ]);
       if (cancelled) return;
       setLessons((l ?? []) as TrackerLesson[]);
       setAttendance((a ?? []) as TrackerAttendance[]);
       setStudents((s ?? []) as StudentOption[]);
+      setGroups((g ?? []) as GroupOption[]);
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [selectedTeacherId, viewerId, initialLessons, initialAttendance, initialStudents, supabase]);
+  }, [selectedTeacherId, viewerId, initialLessons, initialAttendance, initialStudents, initialGroups, supabase]);
 
   // Toata logica de calcul (ce conteaza ca ora "grup"/"individual" vs "recuperare", fara
   // dublari) traieste in lib/registryCalc.ts, testata separat in registryCalc.test.ts -
@@ -81,8 +86,8 @@ export default function Registru({
 
   const monthEntries = useMemo(() => {
     if (selectedMonth === null) return [];
-    return computeMonthEntries(lessons, attendance, students, year, selectedMonth);
-  }, [lessons, attendance, students, year, selectedMonth]);
+    return computeMonthEntries(lessons, attendance, students, groups, year, selectedMonth);
+  }, [lessons, attendance, students, groups, year, selectedMonth]);
 
   const monthWeeks = useMemo(() => {
     const map = new Map<number, RegistryEntry[]>();
@@ -229,6 +234,13 @@ export default function Registru({
                                     <span>{cfg.icon}</span>
                                     <span className="flex-1">
                                       {cfg.label}{entry.sessionNumber ? ` #${entry.sessionNumber}` : ''}
+                                      {/* Numele grupei careia ii apartine lectia - fara el, doua lectii din grupe
+                                          diferite cazute pe aceeasi data/ora arata identic si par o dublare. */}
+                                      {entry.groupName && (
+                                        <span className="block text-xs text-gray-400 font-normal mt-0.5">
+                                          {entry.groupName}
+                                        </span>
+                                      )}
                                       {/* Recuperare de grup: o singura ora, dar afisam explicit cine a participat
                                           (vezi recovery_group_id) - transparenta pentru profesor/admin in registru. */}
                                       {entry.groupStudentNames && (
