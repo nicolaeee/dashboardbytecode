@@ -442,7 +442,8 @@ export type UrgentTask = {
   /** Text liber introdus de profesor (ex: "500 Robux", "Superputerea de a controla timpul") -
    * NU presupunem/generăm noi conținutul, îl scrie mereu profesorul. */
   reward_details: string | null;
-  /** Mesajul generat automat pentru părinte (una din 8 variante, fără recompensă) - doar DIPLOMA_GENERATED. */
+  /** Mesajul generat automat pentru părinte (una din cele 3 variante ale cursului+modulului
+   * absolvit, vezi FeedbackTemplate mai jos) - doar DIPLOMA_GENERATED. */
   parent_message: string | null;
   /** Snapshot al diplomei la momentul "Finalizează generarea diplomei" (doar DIPLOMA_GENERATED) -
    * diploma e un șablon HTML + parametri în URL, nu un fișier binar, deci "aceeași diplomă"
@@ -472,6 +473,22 @@ export function diplomaRewardLabel(rewardType: string | null) {
   if (!rewardType) return null;
   return DIPLOMA_REWARD_TYPES.find((r) => r.id === rewardType)?.label ?? `🎁 ${rewardType}`;
 }
+
+/**
+ * O variantă de mesaj către părinte pentru un curs + modul (vezi "Șabloane Feedback" - Admin,
+ * și random_diploma_parent_message în schema.sql). 3 variante per curs+modul (variant_index
+ * 0-2), alese aleator la fiecare "Generează Diplomă" - profesorul nu le vede/alege niciodată.
+ * [Numele Copilului] în message_text e înlocuit automat cu prenumele elevului la generare.
+ */
+export type FeedbackTemplate = {
+  id: string;
+  course_id: CourseId;
+  module_number: number;
+  variant_index: number;
+  message_text: string;
+  updated_at: string;
+  updated_by: string | null;
+};
 
 export const ENTITY_LABELS = {
   platform: 'Platformă',

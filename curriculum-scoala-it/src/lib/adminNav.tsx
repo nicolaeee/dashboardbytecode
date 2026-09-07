@@ -1,4 +1,4 @@
-import { AlertTriangle, Archive, ClipboardList, GraduationCap, Library, Map, PiggyBank, Rocket, Star, TrendingDown, Users } from 'lucide-react';
+import { AlertTriangle, Archive, ClipboardList, GraduationCap, Library, Map, MessageSquareText, PiggyBank, Rocket, Star, TrendingDown, Users } from 'lucide-react';
 import type { NavSection } from '@/components/NavLinks';
 
 /**
@@ -37,6 +37,15 @@ export function getAdminNavItems(newTaskCount: number): NavSection[] {
         { href: '/diplome', label: 'Diplome', icon: <GraduationCap size={16} /> },
         { href: '/recompense', label: 'Recompense', icon: <Star size={16} /> },
         { href: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },
+      ],
+    },
+    {
+      title: 'EDUCAȚIONAL',
+      items: [
+        // Rezervat STRICT Adminului - vezi requireAdmin() in admin/layout.tsx (singura sursa
+        // acestui meniu) si RLS-ul pe feedback_templates (schema.sql) - un profesor nu ajunge
+        // niciodata sa vada acest link, ruta sau textele brute din spatele ei.
+        { href: '/admin/feedback-templates', label: 'Șabloane Feedback', icon: <MessageSquareText size={16} /> },
       ],
     },
     {

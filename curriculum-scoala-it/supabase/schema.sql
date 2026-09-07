@@ -847,119 +847,94 @@ create policy "adminul gestioneaza task-urile urgente" on public.urgent_tasks
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- Indexul (1-based) variantei de mesaj trimisa la ULTIMA diploma a elevului - vezi
--- random_diploma_parent_message mai jos (update_diploma_parent_message_variants.sql).
+-- random_diploma_parent_message mai jos (add_feedback_templates.sql).
 alter table public.tracker_students
   add column last_diploma_message_variant smallint;
 
--- Mesaje complete catre parinte (vezi supabase/migrations/update_diploma_parent_message_variants.sql):
--- 10 variante, fiecare deja completa (salut + continut + mentiune diploma + semnatura, fara
--- compunere separata ca in versiunea anterioara). Alege aleator, dar EVITA sa repete exact
--- aceeasi varianta trimisa data trecuta ACELUIASI elev (last_diploma_message_variant, actualizat
--- de aceasta functie la fiecare apel) - un copil care avanseaza de la un modul la altul nu mai
--- primeste de doua ori la rand acelasi text.
-create or replace function public.random_diploma_parent_message(p_student_id uuid, p_first_name text)
+-- ----------------------------------------------------------------------------
+-- 15b. ȘABLOANE FEEDBACK DIPLOMĂ (CMS Admin) - vezi supabase/migrations/add_feedback_templates.sql
+--    pentru comentariul complet de business. CATE 3 variante de mesaj catre parinte per
+--    curs + modul (5 cursuri x 4 module x 3 variante), editabile din Admin -> "Șabloane
+--    Feedback" (STRICT admin - RLS mai jos - profesorii nu le vad/citesc direct). Placeholder-ul
+--    [Numele Copilului] e inlocuit automat cu prenumele elevului la generarea diplomei - vezi
+--    random_diploma_parent_message mai jos, care ruleaza security definer ca profesorul sa
+--    primeasca textul final fara sa aiba el insusi acces la tabela.
+-- ----------------------------------------------------------------------------
+create table public.feedback_templates (
+  id             uuid primary key default gen_random_uuid(),
+  course_id      text not null,
+  module_number  int not null check (module_number between 1 and 4),
+  variant_index  smallint not null check (variant_index between 0 and 2),
+  message_text   text not null default '',
+  updated_at     timestamptz not null default now(),
+  updated_by     uuid references public.profiles(id) on delete set null,
+  unique (course_id, module_number, variant_index)
+);
+
+create index on public.feedback_templates (course_id, module_number);
+
+alter table public.feedback_templates enable row level security;
+
+create policy "adminul gestioneaza sabloanele de feedback" on public.feedback_templates
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+drop trigger if exists feedback_templates_touch_updated_at on public.feedback_templates;
+create trigger feedback_templates_touch_updated_at
+  before update on public.feedback_templates
+  for each row execute function public.touch_updated_at();
+
+-- Seed: 5 cursuri (vezi COURSES din src/lib/diplomas.ts) x 4 module x 3 variante, text
+-- placeholder generic - adminul le rescrie din pagina "Șabloane Feedback".
+insert into public.feedback_templates (course_id, module_number, variant_index, message_text)
+select course_id, module_number, variant_index,
+  format(
+    'Acesta este un mesaj de probă pentru %1$s, Modulul %2$s, Varianta %3$s. Editează acest text pentru a-i transmite felicitări lui [Numele Copilului] pentru munca depusă!',
+    course_label, module_number, variant_index + 1
+  )
+from (values
+  ('coblocks', 'Blocuri de cod'),
+  ('python', 'Python'),
+  ('roblox', 'Roblox'),
+  ('alfabetizare', 'Alfabetizare'),
+  ('unity', 'Unity')
+) as c(course_id, course_label)
+cross join (values (1), (2), (3), (4)) as m(module_number)
+cross join (values (0), (1), (2)) as v(variant_index);
+
+-- random_diploma_parent_message citeste acum cele 3 variante din feedback_templates
+-- (course_id + module_number) in loc de array-ul hardcodat de 10 variante generice de mai
+-- inainte. Alege aleator, dar EVITA sa repete exact aceeasi varianta trimisa data trecuta
+-- ACELUIASI elev (last_diploma_message_variant, actualizat de aceasta functie la fiecare
+-- apel) - un copil care avanseaza de la un modul la altul nu mai primeste de doua ori la
+-- rand acelasi text. Fara niciun sablon pentru cursul/modulul dat (ex: curs custom, in afara
+-- COURSES) - text generic de rezerva, ca generarea diplomei sa nu esueze niciodata.
+create or replace function public.random_diploma_parent_message(
+  p_student_id uuid, p_first_name text, p_course_id text, p_module int
+)
 returns text
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_messages text[] := array[
-    format('Bună ziua! 👋
-
-Astăzi sărbătorim o reușită deosebită! %1$s a finalizat cu succes încă un modul din aventura programării. 🚀
-
-Am urmărit cu mare bucurie creativitatea și dorința de a descoperi lucruri noi la fiecare lecție.
-
-🎓 Găsiți atașată diploma de merit — vă invităm să o descărcați și să vă bucurați împreună de acest moment special. Vă mulțumim că ne sunteți alături!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Salutare! 🎉
-
-Avem motive de mare bucurie astăzi. %1$s tocmai a absolvit o nouă etapă importantă la cursurile noastre!
-
-A demonstrat foarte multă ambiție, concentrare și o minte ascuțită în rezolvarea provocărilor digitale. 💡
-
-🏆 V-am atașat diploma care atestă această muncă minunată. Merită toate felicitările!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Vești minunate de la ByteCode! ✨
-
-Suntem extrem de încântați să vă anunțăm că %1$s a trecut cu brio la nivelul următor!
-
-Este o plăcere să îi urmărim evoluția și să vedem cum ideile prind viață pe ecran, pas cu pas. 💻
-
-🏅 Vă transmitem atașat diploma de absolvire, o dovadă clară a efortului depus. Sărbătoriți cu zâmbete această reușită!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Bună ziua! 🌟
-
-Evoluția la clasă ne umple mereu de energie pozitivă! %1$s a finalizat încă un modul cu rezultate excelente.
-
-A dat dovadă de multă curiozitate și o pasiune reală pentru tehnologie pe tot parcursul orelor. 🚀
-
-🎓 Diploma atașată acestui mesaj este mica noastră recunoaștere pentru o muncă uriașă. Vă mulțumim pentru încredere!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Salutare! 🎯
-
-Călătoria în lumea programării continuă cu un nou succes! %1$s a finalizat cu brio modulul curent.
-
-Ne bucură enorm să vedem capacitatea de a transforma fiecare lecție într-o experiență captivantă și plină de învățături. 💡
-
-🏆 V-am atașat diploma de merit — vă invităm să o deschideți și să transmiteți felicitările noastre! Abia așteptăm următoarele proiecte.
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Bună ziua! ✨
-
-Când pasiunea întâlnește munca, apar rezultate magice! Suntem fericiți să vă anunțăm încheierea cu succes a unei noi etape de curs.
-
-Nivelul de implicare pe care %1$s l-a arătat la fiecare proiect a fost o adevărată bucurie pentru noi. 💻
-
-🎓 Găsiți diploma atașată mai jos, gata să fie descărcată și pusă în ramă. Vă dorim o zi minunată!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Vești excelente pentru familia dumneavoastră! 🎉
-
-%1$s a reușit să finalizeze încă un modul plin de provocări tehnice și proiecte creative.
-
-Ne-a impresionat profund modul în care a asimilat informațiile noi. 🚀
-
-🏅 V-am atașat diploma care marchează această victorie educațională. Vă mulțumim că îi susțineți visurile digitale acasă!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Salutare! 💡
-
-Suntem tare bucuroși să vă împărtășim o veste grozavă: %1$s a trecut cu bine de un nou modul!
-
-Logica și răbdarea cu care a construit fiecare proiect ne-au inspirat la fiecare oră petrecută împreună. 🧩
-
-🏆 Aveți atașată diploma de absolvire pentru a celebra acest moment special. Să ne auzim cu bine!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Bună ziua! 🌟
-
-Efortul dă mereu roade, iar %1$s ne-a demonstrat asta din plin finalizând cu succes încă o etapă din programare!
-
-Ne bucurăm enorm să fim ghizi în această aventură a cunoașterii. 💻
-
-🎓 Diploma atașată este simbolul muncii fantastice din ultima perioadă. Vă felicităm și pe dumneavoastră pentru susținerea necondiționată!
-
-Cu drag, echipa ByteCode.', p_first_name),
-    format('Salutare! 🚀
-
-Mai facem un pas uriaș în lumea tehnologiei! %1$s tocmai a absolvit o nouă etapă a cursurilor noastre.
-
-Fiecare lecție a fost o dovadă clară de perseverență și imaginație fără limite. ✨
-
-🏅 Vă lăsăm atașată diploma de merit, perfectă pentru a vă bucura de acest progres minunat. Vă mulțumim că sunteți alături de noi!
-
-Cu drag, echipa ByteCode.', p_first_name)
-  ];
-  v_count int := array_length(v_messages, 1);
+  v_variants text[];
+  v_count int;
   v_prev int;
   v_choice int;
 begin
+  select array_agg(message_text order by variant_index) into v_variants
+    from public.feedback_templates
+    where course_id = p_course_id and module_number = p_module;
+
+  v_count := coalesce(array_length(v_variants, 1), 0);
+
+  if v_count = 0 then
+    return format(
+      'Bună ziua! 👋 Felicitări, %1$s a finalizat cu succes un nou modul! 🎉 Găsiți atașată diploma de merit. Cu drag, echipa ByteCode.',
+      p_first_name
+    );
+  end if;
+
   -- p_student_id poate fi null (elev "Manual", fara cont in tracker_students) - nu exista
   -- niciun rand de citit/actualizat pentru anti-repetare, alegerea ramane pur aleatoare.
   if p_student_id is not null then
@@ -971,7 +946,7 @@ begin
   -- Daca a picat exact pe varianta trimisa data trecuta acestui copil, trece deterministic la
   -- urmatoarea (ciclic) - garanteaza ca NU se repeta niciodata consecutiv, fara bucla/risc de
   -- blocare, ramanand in continuare aleator la fiecare apel.
-  if v_prev is not null and v_choice = v_prev then
+  if v_prev is not null and v_count > 1 and v_choice = v_prev then
     v_choice := 1 + (v_choice % v_count);
   end if;
 
@@ -979,7 +954,7 @@ begin
     update public.tracker_students set last_diploma_message_variant = v_choice where id = p_student_id;
   end if;
 
-  return v_messages[v_choice];
+  return replace(v_variants[v_choice], '[Numele Copilului]', p_first_name);
 end;
 $$;
 
@@ -1099,7 +1074,7 @@ begin
   values (
     'DIPLOMA_GENERATED', p_student_id, v_teacher_id, v_milestone,
     p_reward_received, v_reward_type, v_reward_details,
-    public.random_diploma_parent_message(p_student_id, v_first_name),
+    public.random_diploma_parent_message(p_student_id, v_first_name, v_course_id, p_module),
     v_student_name, v_teacher_name, v_course_id, p_diploma_date,
     v_stars, v_total_stars,
     now()

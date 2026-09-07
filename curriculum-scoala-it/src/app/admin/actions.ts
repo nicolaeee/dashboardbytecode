@@ -428,6 +428,30 @@ export async function transferStudentTeacher(
   }
 }
 
+// ================================================================ ȘABLOANE FEEDBACK (Admin)
+/**
+ * Editeaza textul unei singure variante de mesaj catre parinte (vezi pagina "Șabloane
+ * Feedback" - CMS-ul cu cele 3 variante per curs+modul, folosite de
+ * random_diploma_parent_message la fiecare "Generează Diplomă"). UI-ul (FeedbackTemplatesManager)
+ * aplica deja optimistic update - server action-ul doar persista/confirma, RLS-ul pe
+ * feedback_templates ramane a doua bariera (strict admin).
+ */
+export async function updateFeedbackTemplate(id: string, messageText: string): Promise<Result> {
+  try {
+    const { supabase, userId } = await adminGuard();
+    const trimmed = messageText.trim();
+    if (!trimmed) return { ok: false, error: 'Textul nu poate fi gol.' };
+    const { error } = await supabase.from('feedback_templates')
+      .update({ message_text: trimmed, updated_by: userId })
+      .eq('id', id);
+    if (error) throw error;
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ================================================================ ACCES MODULE NOI (Super Admin)
 /**
  * Activeaza/dezactiveaza un modul nou (Pachete/Abonamente, Rata de Abandon) pentru un
