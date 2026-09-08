@@ -260,7 +260,11 @@ const TIME_PATTERN = '^([01]\\d|2[0-3]):[0-5]\\d$';
 
 /** Input de ora in format STRICT 24h - text simplu cu masca, nu <input type="time"> nativ,
  * ca sa nu depinda de locale-ul browserului (unele afiseaza AM/PM). Optional (poate fi gol). */
-function TimeInput({
+// Exportat (doar cuvantul-cheie `export`, fara nicio alta modificare) - reutilizat STRICT ca
+// referinta la aceeasi componenta in (teacher)/demo/DemoClient.tsx (sectiunea Demo, izolata),
+// ca acolo sa arate identic, nu "asemanator". Nu schimba nimic din comportamentul/stilul
+// acestei componente aici, in Progress Tracker.
+export function TimeInput({
   value, onChange, className, placeholder = 'HH:MM',
 }: { value: string; onChange: (v: string) => void; className?: string; placeholder?: string }) {
   return (
@@ -3381,7 +3385,8 @@ function DynamicContactList({
   );
 }
 
-function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+// Exportat (doar `export`, fara alta modificare) - vezi comentariul de langa TimeInput mai sus.
+export function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[90%] overflow-y-auto tracker-card-shadow">
@@ -3397,7 +3402,8 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
 // si ei prezenti la aceeasi sesiune (de ex. 2 din 3 copii). Indiferent cati colegi sunt bifati,
 // handleSubmitGroupRecovery scrie un singur recovery_group_id comun pe toate randurile lor -
 // sesiunea conteaza ca o singura ora platita in registru (vezi recoveryUnits din Registru.tsx).
-function GroupRecoveryFormModal({
+// Exportat (doar `export`, fara alta modificare) - vezi comentariul de langa TimeInput mai sus.
+export function GroupRecoveryFormModal({
   student, otherStudents, date, time, busy, onDateChange, onTimeChange, onClose, onSubmit,
 }: {
   student: TrackerStudent; otherStudents: TrackerStudent[]; date: string; time: string; busy: boolean;
@@ -3473,7 +3479,8 @@ const HISTORY_STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: Rea
 // Nicio lectie nemarcata inca pentru elev (record null) nu e "Absent" - e doar nemarcata.
 const UNMARKED_HISTORY_CONFIG = { label: 'Nemarcat', icon: <span className="text-[10px] leading-none">–</span>, pill: 'bg-white/5 text-gray-400 border border-white/10', dot: 'bg-gray-500' };
 
-function StudentHistoryModal({
+// Exportat (doar `export`, fara alta modificare) - vezi comentariul de langa TimeInput mai sus.
+export function StudentHistoryModal({
   student, group, history, isAdmin, subscriptionHistory, onClose, onChangeStatus, onRenewSubscription, onDeleteSubscriptionTransaction, onOpenTransfer,
 }: {
   student: TrackerStudent; group: TrackerGroup | null;
@@ -4139,7 +4146,11 @@ function MakeupLinkButton({ link, onOpen }: { link: string | null; onOpen: () =>
   );
 }
 
-function ClassView({
+// Exportat (doar `export`, fara alta modificare) - vezi comentariul de langa TimeInput mai sus.
+// ClassView randeaza intern AttendanceBoard si StudentCard (definite mai jos in acest fisier) -
+// exportand doar ClassView, Demo-ul primeste automat EXACT acelasi ecran de clasa, fara sa
+// mai fie nevoie sa exportam separat fiecare sub-componenta.
+export function ClassView({
   isAdmin, group, students, lessons, attendance, onBack, onEditStudent, onRequestNewLesson, onRequestRecovery, onSetAttendanceStatus, onCycleStar, onDeleteLesson, onOpenHistory, onSaveMeetLink, onSaveLessonHomework,
   notifyState, connectedState, onSendNotification, onSetConnectionStatus,
 }: {

@@ -26,7 +26,10 @@ type TeacherOption = { id: string; label: string };
 
 // Cardurile afisate in grid, in ordinea si cu iconitele cerute. "Delighted" nu are card aici
 // (nu a fost cerut explicit in grid), dar ramane disponibil ca fallback in alerta de diplome.
-const GRID_COURSES: { id: CourseId; emoji: string }[] = [
+// Exportat (doar `export`, fara alta modificare) - reutilizat STRICT ca referinta la aceeasi
+// lista in (teacher)/demo/DemoClient.tsx (sectiunea Demo, izolata), ca grila de cursuri sa fie
+// identica acolo, nu doar asemanatoare.
+export const GRID_COURSES: { id: CourseId; emoji: string }[] = [
   { id: 'alfabetizare', emoji: '📖' },
   { id: 'coblocks', emoji: '🧩' },
   { id: 'python', emoji: '🐍' },

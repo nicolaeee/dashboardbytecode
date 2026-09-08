@@ -1,4 +1,4 @@
-import { AlertTriangle, Archive, ClipboardList, GraduationCap, Library, Map, MessageSquareText, PiggyBank, Rocket, Star, TrendingDown, Users } from 'lucide-react';
+import { AlertTriangle, Archive, ClipboardList, FlaskConical, GraduationCap, Library, Map, MessageSquareText, PiggyBank, Rocket, Star, TrendingDown, Users } from 'lucide-react';
 import type { NavSection } from '@/components/NavLinks';
 
 /**
@@ -56,6 +56,15 @@ export function getAdminNavItems(newTaskCount: number): NavSection[] {
         { href: '/abonamente', label: 'Abonamente', icon: <PiggyBank size={16} /> },
         { href: '/admin/arhiva', label: 'Arhivă', icon: <Archive size={16} /> },
         { href: '/analytics', label: 'Rata de Abandon', icon: <TrendingDown size={16} /> },
+      ],
+    },
+    {
+      // Grup separat, la finalul meniului - sectiunea Demo (izolata, date fictive, vezi
+      // (teacher)/demo/DemoClient.tsx) nu apartine niciunei categorii existente, deci nu
+      // atinge continutul lor.
+      title: 'DEMO',
+      items: [
+        { href: '/demo', label: 'Ghid interactiv', icon: <FlaskConical size={16} /> },
       ],
     },
   ];

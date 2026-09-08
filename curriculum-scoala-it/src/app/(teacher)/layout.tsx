@@ -1,4 +1,4 @@
-import { ClipboardList, Library, Map, PiggyBank, Rocket, Star, TrendingDown } from 'lucide-react';
+import { ClipboardList, FlaskConical, Library, Map, PiggyBank, Rocket, Star, TrendingDown } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { getEnabledFeatureModules } from '@/lib/featureAccess';
 import { getNewUrgentTaskCount } from '@/lib/urgentTasks';
@@ -29,6 +29,9 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     { href: '/registru', label: 'Registru', icon: <ClipboardList size={16} /> },
     { href: '/recompense', label: 'Recompense', icon: <Star size={16} /> },
     { href: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },
+    // Sectiune Demo (izolata, date fictive) - vezi (teacher)/demo/DemoClient.tsx. Singurul scop
+    // al acestei linii e sa o faca accesibila din meniu, ca orice alta pagina.
+    { href: '/demo', label: 'Demo', icon: <FlaskConical size={16} /> },
     // Module noi, randate condiționat - activate per profesor de Super Admin
     // (vezi src/lib/featureAccess.ts si /admin/teachers/[id] -> "Module noi").
     ...(enabledModules.has('subscriptions')
