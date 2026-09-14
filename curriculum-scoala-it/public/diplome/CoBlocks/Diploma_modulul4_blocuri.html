@@ -604,6 +604,24 @@
             await new Promise(resolve => setTimeout(resolve, 100));
 
             try {
+                // html2canvas 1.4.1 fix: gradient/background rendering can round a sub-1px
+                // dimension down to 0 and pass a 0x0 canvas into createPattern(), which
+                // throws InvalidStateError (see niklasvh/html2canvas#2540, #2981). Not fixed
+                // in the published 1.4.1 build, so guard it here before capturing.
+                if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.__patchedCreatePattern) {
+                    const originalCreatePattern = CanvasRenderingContext2D.prototype.createPattern;
+                    CanvasRenderingContext2D.prototype.createPattern = function (image, repetition) {
+                        if (image && ((image.width === 0) || (image.height === 0))) {
+                            const fallback = document.createElement('canvas');
+                            fallback.width = 1;
+                            fallback.height = 1;
+                            return originalCreatePattern.call(this, fallback, repetition);
+                        }
+                        return originalCreatePattern.call(this, image, repetition);
+                    };
+                    CanvasRenderingContext2D.prototype.__patchedCreatePattern = true;
+                }
+
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('l', 'px', [1200, 800]);
 
