@@ -449,7 +449,9 @@ export type UrgentTask = {
    * diploma e un șablon HTML + parametri în URL, nu un fișier binar, deci "aceeași diplomă"
    * înseamnă aceiași parametri. Folosit de buildDiplomaUrl în TaskUriUrgenteClient.tsx, NU date
    * live (care ar putea diferi dacă elevul progresează sau adminul deschide taskul altă zi).
-   * Null pentru DIPLOMA_NOT_SENT și SEND_VIRTUAL_COINS. */
+   * Null pentru DIPLOMA_NOT_SENT. SEND_VIRTUAL_COINS primește DOAR diploma_student_name +
+   * diploma_course_id (snapshot propriu, independent de task-ul diplomei - vezi
+   * add_gift_task_student_snapshot.sql). */
   diploma_student_name: string | null;
   diploma_teacher_name: string | null;
   diploma_course_id: CourseId | null;

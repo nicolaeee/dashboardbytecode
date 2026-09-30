@@ -4,6 +4,12 @@ import { createClient } from '@/lib/supabase/client';
 import type { StudentStatus, SubscriptionType } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS } from '@/lib/types';
 import { Badge, Button, Card } from '@/components/ui';
+import { Select, type SelectOption } from '@/components/Select';
+
+const SUBSCRIPTION_TYPE_OPTIONS: SelectOption<SubscriptionType | ''>[] = [
+  { value: '', label: 'Fără pachet' },
+  ...(Object.entries(SUBSCRIPTION_TYPE_LABELS) as [SubscriptionType, string][]).map(([value, label]) => ({ value, label })),
+];
 
 export type SubscriptionRow = {
   id: string;
@@ -125,17 +131,15 @@ export default function AbonamenteClient({
 
               <Badge tone={STATUS_TONE[row.status]}>{STUDENT_STATUS_LABELS[row.status]}</Badge>
 
-              <select
+              <Select<SubscriptionType | ''>
                 value={row.subscriptionType ?? ''}
                 disabled={busyId === row.id}
-                onChange={(e) => changeSubscriptionType(row, e.target.value as SubscriptionType | '')}
-                className="glass h-9 rounded-xl border border-line px-2.5 text-[13px] text-ink focus:outline-none"
-              >
-                <option value="" className="bg-night text-ink">Fără pachet</option>
-                {Object.entries(SUBSCRIPTION_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value} className="bg-night text-ink">{label}</option>
-                ))}
-              </select>
+                onChange={(value) => changeSubscriptionType(row, value)}
+                options={SUBSCRIPTION_TYPE_OPTIONS}
+                size="sm"
+                className="h-9"
+                aria-label="Pachet"
+              />
 
               <span className={`w-10 shrink-0 text-center font-display text-lg font-semibold tabular-nums ${row.remaining <= 2 ? 'text-[#FF6B6B]' : 'text-ink'}`}>
                 {row.remaining}

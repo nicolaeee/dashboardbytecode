@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { Select } from '@/components/Select';
 import type { TrackerLesson, TrackerAttendance } from '@/lib/types';
 import { computeMonthEntries, computePayslipTable, computePayslipTotals, type RegistryEntry } from '@/lib/registryCalc';
 
@@ -114,16 +115,16 @@ export default function Registru({
             <p className="text-xs text-gray-400 mt-0.5">Generat automat din Progress Tracker · doar vizualizare</p>
           </div>
           {isAdmin && (
-            <select
+            <Select
               value={selectedTeacherId}
-              onChange={(e) => setSelectedTeacherId(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white"
-            >
-              <option value={viewerId} className="bg-gray-900 text-white">Eu (propriul raport)</option>
-              {teacherOptions.filter((t) => t.id !== viewerId).map((t) => (
-                <option key={t.id} value={t.id} className="bg-gray-900 text-white">{t.label}</option>
-              ))}
-            </select>
+              onChange={setSelectedTeacherId}
+              options={[
+                { value: viewerId, label: 'Eu (propriul raport)' },
+                ...teacherOptions.filter((t) => t.id !== viewerId).map((t) => ({ value: t.id, label: t.label })),
+              ]}
+              aria-label="Profesor"
+              className="max-w-[60vw] md:max-w-xs"
+            />
           )}
         </div>
       </header>

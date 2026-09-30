@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, X as XIcon, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, Plus, Video, Pencil, ExternalLink, Trash2, Calendar, Star, PlayCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { Select } from '@/components/Select';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode, TrackerLessonTransaction } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
 import { COURSES, getCourse, starsForModule } from '@/lib/diplomas';
@@ -1956,16 +1957,16 @@ export default function ProgressTracker({
           <h1 className="text-xl md:text-2xl font-bold shrink-0">🚀 Progress Tracker</h1>
           <div className="flex items-center gap-2 flex-wrap gap-y-2">
             {isAdmin && (
-              <select
+              <Select
                 value={viewedTeacherId}
-                onChange={(e) => setViewedTeacherId(e.target.value)}
-                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white max-w-[45vw] md:max-w-none"
-              >
-                <option value={teacherId} className="bg-gray-900 text-white">Eu (propriile clase)</option>
-                {teacherOptions.filter((t) => t.id !== teacherId).map((t) => (
-                  <option key={t.id} value={t.id} className="bg-gray-900 text-white">{t.label}</option>
-                ))}
-              </select>
+                onChange={setViewedTeacherId}
+                options={[
+                  { value: teacherId, label: 'Eu (propriile clase)' },
+                  ...teacherOptions.filter((t) => t.id !== teacherId).map((t) => ({ value: t.id, label: t.label })),
+                ]}
+                aria-label="Profesor"
+                className="max-w-[45vw] md:max-w-xs"
+              />
             )}
             <button
               onClick={() => { setStudentsDrawerOpen(true); setMenuOpen(false); }}
@@ -2449,15 +2450,13 @@ export default function ProgressTracker({
               {isAdmin && (
                 <div className="mb-4">
                   <label className="block text-sm font-semibold mb-2">Transferă clasa la alt profesor</label>
-                  <select
+                  <Select
                     value={editClassTransferTeacherId}
-                    onChange={(e) => setEditClassTransferTeacherId(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
-                  >
-                    {teacherOptions.map((t) => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </select>
+                    onChange={setEditClassTransferTeacherId}
+                    options={teacherOptions.map((t) => ({ value: t.id, label: t.label }))}
+                    size="lg"
+                    className="w-full rounded-2xl"
+                  />
                 </div>
               )}
               <div className="mb-4">
@@ -3064,30 +3063,24 @@ export default function ProgressTracker({
             <form onSubmit={(e) => handleSubmitTransferStudent(e, student.id)} className="space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-400 mb-1">Profesor</label>
-                <select
-                  required value={transferTeacherId} onChange={(e) => loadTransferGroupOptions(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
-                >
-                  <option value="" className="bg-gray-900">Alege profesorul...</option>
-                  {teacherOptions.map((t) => (
-                    <option key={t.id} value={t.id} className="bg-gray-900">
-                      {t.label}{t.id === student.teacher_id ? ' (profesorul actual - altă clasă)' : ''}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={transferTeacherId} onChange={loadTransferGroupOptions}
+                  options={teacherOptions.map((t) => ({
+                    value: t.id, label: `${t.label}${t.id === student.teacher_id ? ' (profesorul actual - altă clasă)' : ''}`,
+                  }))}
+                  placeholder="Alege profesorul..."
+                  className="w-full"
+                />
               </div>
               {transferTeacherId && (
                 <div>
                   <label className="block text-[11px] font-semibold text-gray-400 mb-1">Clasă destinație</label>
-                  <select
-                    required value={transferGroupId} onChange={(e) => setTransferGroupId(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
-                  >
-                    <option value="" className="bg-gray-900">Alege clasa...</option>
-                    {transferGroupOptions.filter((g) => g.id !== student.group_id).map((g) => (
-                      <option key={g.id} value={g.id} className="bg-gray-900">{g.group_name}</option>
-                    ))}
-                  </select>
+                  <Select
+                    value={transferGroupId} onChange={setTransferGroupId}
+                    options={transferGroupOptions.filter((g) => g.id !== student.group_id).map((g) => ({ value: g.id, label: g.group_name }))}
+                    placeholder="Alege clasa..."
+                    className="w-full"
+                  />
                   {transferGroupOptions.filter((g) => g.id !== student.group_id).length === 0 && (
                     <p className="text-[11px] text-amber-400 mt-1">
                       {transferTeacherId === student.teacher_id

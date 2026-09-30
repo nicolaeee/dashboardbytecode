@@ -3,6 +3,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { KeyRound, Lock, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { Badge, Button, Card, Field, Input, Modal } from '@/components/ui';
+import { Select, type SelectOption } from '@/components/Select';
 import { createTeacher, deleteTeacher, resetTeacherPassword, setUserActive, setUserLevel, setUserRole, updateTeacherProfile } from '@/app/admin/actions';
 import type { Profile, Role, TeacherLevel } from '@/lib/types';
 
@@ -259,35 +260,43 @@ function RoleLevelSelect({
   onRoleChange: (role: Role) => void; onLevelChange: (level: TeacherLevel) => void;
   disabled?: boolean; compact?: boolean;
 }) {
-  const sizeClasses = compact ? 'h-8 text-[13px]' : 'h-10 text-sm';
+  const size = compact ? 'sm' : 'md';
   return (
-    <div className={`glass flex items-stretch rounded-xl border border-line ${disabled ? 'opacity-50' : ''} ${compact ? '' : 'w-full'}`}>
-      <select
+    <div className={`flex items-stretch rounded-xl border border-gray-800 bg-black/60 backdrop-blur-md transition hover:border-gray-600
+      focus-within:border-[#c8f023] focus-within:ring-2 focus-within:ring-[#c8f023]/25 ${compact ? '' : 'w-full'}`}>
+      <Select<Role>
+        bare size={size}
         value={role}
         disabled={disabled}
-        onChange={(e) => onRoleChange(e.target.value as Role)}
-        className={`bg-transparent ${sizeClasses} rounded-l-xl px-3 text-ink focus:outline-none disabled:cursor-not-allowed ${role === 'admin' ? 'rounded-r-xl' : ''}`}
+        onChange={onRoleChange}
+        options={ROLE_OPTIONS}
+        className={`rounded-l-xl ${role === 'admin' ? 'flex-1 rounded-r-xl' : ''}`}
         aria-label="Rol"
-      >
-        <option value="teacher" className="bg-night text-ink">Profesor</option>
-        <option value="admin" className="bg-night text-ink">Administrator</option>
-      </select>
+      />
       {role === 'teacher' && (
         <>
-          <span className="w-px shrink-0 bg-line" aria-hidden />
-          <select
+          <span className="w-px shrink-0 bg-gray-800" aria-hidden />
+          <Select<TeacherLevel>
+            bare size={size}
             value={level}
             disabled={disabled}
-            onChange={(e) => onLevelChange(e.target.value as TeacherLevel)}
-            className={`bg-transparent ${sizeClasses} flex-1 rounded-r-xl px-3 text-ink focus:outline-none disabled:cursor-not-allowed`}
+            onChange={onLevelChange}
+            options={LEVEL_OPTIONS}
+            className="flex-1 rounded-r-xl"
             aria-label="Nivel"
-          >
-            <option value="Junior" className="bg-night text-ink">Junior</option>
-            <option value="Middle" className="bg-night text-ink">Middle</option>
-            <option value="Senior" className="bg-night text-ink">Senior</option>
-          </select>
+          />
         </>
       )}
     </div>
   );
 }
+
+const ROLE_OPTIONS: SelectOption<Role>[] = [
+  { value: 'teacher', label: 'Profesor' },
+  { value: 'admin', label: 'Administrator' },
+];
+const LEVEL_OPTIONS: SelectOption<TeacherLevel>[] = [
+  { value: 'Junior', label: 'Junior' },
+  { value: 'Middle', label: 'Middle' },
+  { value: 'Senior', label: 'Senior' },
+];

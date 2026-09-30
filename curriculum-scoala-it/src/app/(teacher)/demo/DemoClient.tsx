@@ -5,6 +5,7 @@ import { GRID_COURSES } from '../diplome/Diplome';
 import { computeModuleLesson } from '@/lib/lessonNumbering';
 import { DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule } from '@/lib/diplomas';
 import { Modal, Button, Field, Textarea } from '@/components/ui';
+import { Select } from '@/components/Select';
 import {
   DIPLOMA_REWARD_TYPES, PACKAGE_TIER_LESSONS,
   type AttendanceStatus, type CourseId, type StudentStatus, type StudyMode,
@@ -749,13 +750,12 @@ export default function DemoClient({ isAdmin }: { isAdmin: boolean }) {
         {diplomaStep === 'form' ? (
           <>
             <Field label="Copil">
-              <select
+              <Select
                 value={diplomaStudentId}
-                onChange={(e) => setDiplomaStudentId(e.target.value)}
-                className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-              >
-                {students.map((s) => <option key={s.id} value={s.id} className="bg-night text-ink">{s.name} — {starsForModule(s.progress)} din 16 steluțe</option>)}
-              </select>
+                onChange={setDiplomaStudentId}
+                options={students.map((s) => ({ value: s.id, label: `${s.name} — ${starsForModule(s.progress)} din 16 steluțe` }))}
+                className="w-full"
+              />
             </Field>
             <Field label="Curs">
               <div className="grid grid-cols-3 gap-2">
@@ -771,13 +771,12 @@ export default function DemoClient({ isAdmin }: { isAdmin: boolean }) {
               </div>
             </Field>
             <Field label="Modul">
-              <select
-                value={diplomaModule}
-                onChange={(e) => setDiplomaModule(Number(e.target.value))}
-                className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-              >
-                {DIPLOMA_MODULES.map((m) => <option key={m} value={m} className="bg-night text-ink">Modulul {m}</option>)}
-              </select>
+              <Select
+                value={String(diplomaModule)}
+                onChange={(value) => setDiplomaModule(Number(value))}
+                options={DIPLOMA_MODULES.map((m) => ({ value: String(m), label: `Modulul ${m}` }))}
+                className="w-full"
+              />
             </Field>
             <p className="text-xs text-lock">Următorul pas îți cere să confirmi dacă elevul a câștigat un premiu, înainte de finalizare — la fel ca în aplicația reală.</p>
           </>

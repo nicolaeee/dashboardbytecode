@@ -6,6 +6,7 @@ import { computeModuleLesson } from '@/lib/lessonNumbering';
 import { DIPLOMA_REWARD_TYPES, type CourseId } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { Modal, Button, Field, Textarea } from '@/components/ui';
+import { Select } from '@/components/Select';
 import type { DiplomaGroupWithStudents } from './page';
 
 /**
@@ -346,16 +347,16 @@ export default function Diplome({
             <p className="text-xs text-gray-400 mt-0.5">Generare manuală, oricând — alege cursul, elevul și modulul.</p>
           </div>
           {isAdmin && (
-            <select
+            <Select
               value={selectedTeacherId}
-              onChange={(e) => setSelectedTeacherId(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white"
-            >
-              <option value={viewerId} className="bg-gray-900 text-white">Eu (propriile grupe)</option>
-              {teacherOptions.filter((t) => t.id !== viewerId).map((t) => (
-                <option key={t.id} value={t.id} className="bg-gray-900 text-white">{t.label}</option>
-              ))}
-            </select>
+              onChange={setSelectedTeacherId}
+              options={[
+                { value: viewerId, label: 'Eu (propriile grupe)' },
+                ...teacherOptions.filter((t) => t.id !== viewerId).map((t) => ({ value: t.id, label: t.label })),
+              ]}
+              aria-label="Profesor"
+              className="max-w-[60vw] md:max-w-xs"
+            />
           )}
         </div>
       </header>
@@ -469,37 +470,31 @@ export default function Diplome({
                   </p>
                 )}
                 <Field label="Grupă">
-                  <select
+                  <Select
                     value={selectedGroupId}
-                    onChange={(e) => {
-                      const g = relevantGroups.find((rg) => rg.id === e.target.value);
-                      setSelectedGroupId(e.target.value);
+                    onChange={(groupId) => {
+                      const g = relevantGroups.find((rg) => rg.id === groupId);
+                      setSelectedGroupId(groupId);
                       setSelectedStudentId(g?.students[0]?.id ?? '');
                       setSelectedModule(moduleForStudent(g?.students[0]));
                     }}
-                    className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-                  >
-                    {relevantGroups.map((g) => (
-                      <option key={g.id} value={g.id} className="bg-night text-ink">{g.group_name}</option>
-                    ))}
-                  </select>
+                    options={relevantGroups.map((g) => ({ value: g.id, label: g.group_name }))}
+                    className="w-full"
+                  />
                 </Field>
                 <Field label="Elev">
-                  <select
+                  <Select
                     value={selectedStudentId}
-                    onChange={(e) => {
-                      setSelectedStudentId(e.target.value);
-                      setSelectedModule(moduleForStudent(selectedGroup?.students.find((s) => s.id === e.target.value)));
+                    onChange={(studentId) => {
+                      setSelectedStudentId(studentId);
+                      setSelectedModule(moduleForStudent(selectedGroup?.students.find((s) => s.id === studentId)));
                     }}
-                    className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-                  >
-                    {(selectedGroup?.students.length ?? 0) === 0 && <option value="" className="bg-night text-ink">Niciun elev în grupă</option>}
-                    {selectedGroup?.students.map((s) => (
-                      <option key={s.id} value={s.id} className="bg-night text-ink">
-                        {s.name} — {starsForModule(s.progress)} din 16 steluțe
-                      </option>
-                    ))}
-                  </select>
+                    options={(selectedGroup?.students ?? []).map((s) => ({
+                      value: s.id, label: `${s.name} — ${starsForModule(s.progress)} din 16 steluțe`,
+                    }))}
+                    placeholder="Niciun elev în grupă"
+                    className="w-full"
+                  />
                 </Field>
               </>
             )}
@@ -524,15 +519,12 @@ export default function Diplome({
         )}
 
         <Field label="Modul">
-          <select
-            value={selectedModule}
-            onChange={(e) => setSelectedModule(Number(e.target.value))}
-            className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink"
-          >
-            {DIPLOMA_MODULES.map((m) => (
-              <option key={m} value={m} className="bg-night text-ink">Modulul {m}</option>
-            ))}
-          </select>
+          <Select
+            value={String(selectedModule)}
+            onChange={(value) => setSelectedModule(Number(value))}
+            options={DIPLOMA_MODULES.map((m) => ({ value: String(m), label: `Modulul ${m}` }))}
+            className="w-full"
+          />
         </Field>
 
         <p className="text-xs text-lock">

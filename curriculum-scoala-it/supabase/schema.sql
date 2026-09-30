@@ -1082,15 +1082,19 @@ begin
   on conflict (student_id, milestone, type) do nothing;
 
   -- Task 2 - "🪙 Trimite monedele virtuale": DOAR cand recompensa e bani virtuali. Task
-  -- independent (status propriu), fara mesaj pentru parinte si fara snapshot de diploma -
-  -- nu are butoane de diploma (vezi TaskUriUrgenteClient.tsx). Idempotent ca si task-ul 1,
-  -- prin acelasi unique (student_id, milestone, type).
+  -- independent (status propriu), fara mesaj pentru parinte si fara butoane de diploma (vezi
+  -- TaskUriUrgenteClient.tsx). Are propriul snapshot de nume/curs (vezi
+  -- add_gift_task_student_snapshot.sql) - afiseaza copilul si fara student_id (elev "Manual")
+  -- si indiferent de statusul task-ului de diploma. Idempotent ca si task-ul 1, prin acelasi
+  -- unique (student_id, milestone, type).
   if p_reward_received and p_reward_type = 'virtual_money' then
     insert into public.urgent_tasks
-      (type, student_id, teacher_id, milestone, reward_received, reward_type, reward_details, milestone_reached_at)
+      (type, student_id, teacher_id, milestone, reward_received, reward_type, reward_details,
+       diploma_student_name, diploma_course_id, milestone_reached_at)
     values (
       'SEND_VIRTUAL_COINS', p_student_id, v_teacher_id, v_milestone,
       true, 'virtual_money', v_reward_details,
+      v_student_name, v_course_id,
       now()
     )
     on conflict (student_id, milestone, type) do nothing;

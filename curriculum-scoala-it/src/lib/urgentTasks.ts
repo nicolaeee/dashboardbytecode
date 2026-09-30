@@ -59,8 +59,10 @@ export async function attachUrgentTaskDetails(
   const studentById = new Map((students ?? []).map((s) => [s.id, s]));
   const teacherById = new Map((teachers ?? []).map((t) => [t.id, t]));
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
+  const giftSnapshots = await findGiftSnapshotsFromDiplomas(supabase, tasks, studentById);
 
-  return tasks.map((t) => {
+  return tasks.map((original) => {
+    const t = { ...original, ...giftSnapshots.get(original.id) };
     const student = t.student_id ? studentById.get(t.student_id) : undefined;
     const group = student ? groupById.get(student.group_id) : undefined;
     const teacher = t.teacher_id ? teacherById.get(t.teacher_id) : undefined;
@@ -78,4 +80,46 @@ export async function attachUrgentTaskDetails(
       course: group?.course ?? t.diploma_course_id ?? null,
     };
   });
+}
+
+/** Cheia care leaga un cadou de diploma creata IN ACEEASI tranzactie (finalize_diploma_with_reward). */
+function siblingKey(t: Pick<UrgentTask, 'teacher_id' | 'milestone' | 'milestone_reached_at'>) {
+  return `${t.teacher_id}|${t.milestone}|${t.milestone_reached_at}`;
+}
+
+/**
+ * Cadourile ("🪙 Trimite monedele virtuale") create inainte de add_gift_task_student_snapshot.sql
+ * nu au snapshot de nume - pentru un elev "Manual" (student_id null) numele exista DOAR pe
+ * task-ul de diploma creat in aceeasi tranzactie. Il cautam direct in urgent_tasks, ORICARE ar fi
+ * statusul diplomei (o diploma finalizata nu mai e in lista paginii, dar numele cadoului nu
+ * trebuie sa depinda de asta). No-op (fara interogare) cand toate cadourile au deja snapshot.
+ */
+async function findGiftSnapshotsFromDiplomas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tasks: UrgentTask[],
+  studentById: Map<string, unknown>,
+): Promise<Map<string, Pick<UrgentTask, 'diploma_student_name' | 'diploma_course_id'>>> {
+  const result = new Map<string, Pick<UrgentTask, 'diploma_student_name' | 'diploma_course_id'>>();
+  const orphanGifts = tasks.filter((t) =>
+    t.type === 'SEND_VIRTUAL_COINS' && !t.diploma_student_name && !(t.student_id && studentById.has(t.student_id)));
+  if (!orphanGifts.length) return result;
+
+  const { data: diplomas } = await supabase
+    .from('urgent_tasks')
+    .select('teacher_id, milestone, milestone_reached_at, diploma_student_name, diploma_course_id')
+    .eq('type', 'DIPLOMA_GENERATED')
+    .is('student_id', null)
+    .in('milestone_reached_at', [...new Set(orphanGifts.map((t) => t.milestone_reached_at))]);
+
+  const diplomaByKey = new Map((diplomas ?? []).filter((d) => d.diploma_student_name).map((d) => [siblingKey(d), d]));
+  for (const gift of orphanGifts) {
+    const diploma = diplomaByKey.get(siblingKey(gift));
+    if (diploma) {
+      result.set(gift.id, {
+        diploma_student_name: diploma.diploma_student_name,
+        diploma_course_id: gift.diploma_course_id ?? diploma.diploma_course_id,
+      });
+    }
+  }
+  return result;
 }

@@ -7,6 +7,7 @@ import { diplomaRewardLabel, type UrgentTaskStatus } from '@/lib/types';
 import { buildDiplomaUrl, getCourse } from '@/lib/diplomas';
 import { computeModuleLesson } from '@/lib/lessonNumbering';
 import { Badge, Button, Card, EmptyState, Input, Modal } from '@/components/ui';
+import { Select } from '@/components/Select';
 import type { UrgentTaskWithDetails } from './page';
 
 const STATUS_LABELS: Record<UrgentTaskStatus, string> = {
@@ -415,15 +416,11 @@ export default function TaskUriUrgenteClient({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="block space-y-1.5">
             <span className="text-[13px] font-medium text-ink">Profesor</span>
-            <select
-              value={teacherFilter} onChange={(e) => setTeacherFilter(e.target.value)}
-              className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 hover:border-brand-300"
-            >
-              <option value="all" className="bg-night text-ink">Toți profesorii</option>
-              {teacherOptions.map((t) => (
-                <option key={t.id} value={t.id} className="bg-night text-ink">{t.label}</option>
-              ))}
-            </select>
+            <Select
+              value={teacherFilter} onChange={setTeacherFilter}
+              options={[{ value: 'all', label: 'Toți profesorii' }, ...teacherOptions.map((t) => ({ value: t.id, label: t.label }))]}
+              className="w-full"
+            />
           </label>
 
           <label className="block space-y-1.5">
@@ -436,26 +433,20 @@ export default function TaskUriUrgenteClient({
 
           <label className="block space-y-1.5">
             <span className="text-[13px] font-medium text-ink">Status</span>
-            <select
-              value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 hover:border-brand-300"
-            >
-              {(Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]).map((s) => (
-                <option key={s} value={s} className="bg-night text-ink">{STATUS_FILTER_LABELS[s]}</option>
-              ))}
-            </select>
+            <Select
+              value={statusFilter} onChange={setStatusFilter}
+              options={(Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]).map((s) => ({ value: s, label: STATUS_FILTER_LABELS[s] }))}
+              className="w-full"
+            />
           </label>
 
           <label className="block space-y-1.5">
             <span className="text-[13px] font-medium text-ink">Sortare</span>
-            <select
-              value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="glass h-10 w-full rounded-xl border border-line px-3 text-sm text-ink focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 hover:border-brand-300"
-            >
-              {(Object.keys(SORT_LABELS) as SortBy[]).map((s) => (
-                <option key={s} value={s} className="bg-night text-ink">{SORT_LABELS[s]}</option>
-              ))}
-            </select>
+            <Select
+              value={sortBy} onChange={setSortBy}
+              options={(Object.keys(SORT_LABELS) as SortBy[]).map((s) => ({ value: s, label: SORT_LABELS[s] }))}
+              className="w-full"
+            />
           </label>
         </div>
       </Card>
