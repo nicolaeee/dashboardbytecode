@@ -11,12 +11,6 @@ const SIZES = {
   lg: 'h-12 px-4 text-sm',
 };
 
-// Bara de scroll subtire si intunecata - Firefox (scrollbar-*) + Chrome/Safari/Edge (::-webkit-scrollbar).
-const SCROLLBAR = `[scrollbar-width:thin] [scrollbar-color:#374151_transparent]
-  [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent
-  [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700
-  hover:[&::-webkit-scrollbar-thumb]:bg-gray-600`;
-
 /**
  * Dropdown-ul unic al aplicatiei - inlocuieste <select>-ul nativ, ale carui optiuni (lista
  * deschisa + hover) sunt desenate de sistemul de operare si nu pot fi stilizate pe tema noastra
@@ -50,7 +44,7 @@ export function Select<T extends string>({
   const listRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [position, setPosition] = useState<{ top: number; left: number; width: number; maxHeight: number; flip: boolean } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; width: number; maxWidth: number; maxHeight: number; flip: boolean } | null>(null);
 
   const selected = options.find((o) => o.value === value);
 
@@ -65,7 +59,9 @@ export function Select<T extends string>({
       top: flip ? rect.top - gap : rect.bottom + gap,
       left: rect.left,
       width: rect.width,
-      maxHeight: Math.min(288, flip ? spaceAbove : spaceBelow),
+      // Lista nu iese niciodata din ecran spre dreapta - un nume prea lung se trunchiaza cu "...".
+      maxWidth: Math.max(rect.width, window.innerWidth - rect.left - 8),
+      maxHeight: Math.min(256, flip ? spaceAbove : spaceBelow),
       flip,
     });
   }, []);
@@ -173,7 +169,7 @@ export function Select<T extends string>({
           focus:outline-none focus-visible:outline-none ${bare ? '' : 'focus-visible:border-[#c8f023] focus-visible:ring-2 focus-visible:ring-[#c8f023]/25'}
           disabled:cursor-not-allowed disabled:opacity-50 ${SIZES[size]} ${surface} ${className}`}
       >
-        <span className={`truncate ${selected ? '' : 'text-slate-400'}`}>{selected?.label ?? placeholder}</span>
+        <span className={`min-w-0 flex-1 truncate ${selected ? '' : 'text-slate-400'}`}>{selected?.label ?? placeholder}</span>
         <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180 text-[#c8f023]' : ''}`} />
       </button>
 
@@ -187,11 +183,12 @@ export function Select<T extends string>({
             position: 'fixed',
             left: position.left,
             minWidth: position.width,
+            maxWidth: position.maxWidth,
             maxHeight: position.maxHeight,
             ...(position.flip ? { bottom: window.innerHeight - position.top } : { top: position.top }),
           }}
-          className={`z-[80] max-w-[calc(100vw-16px)] space-y-0.5 overflow-y-auto rounded-xl border border-gray-800 bg-black/80 p-1.5
-            text-sm text-gray-200 shadow-pop backdrop-blur-md ${SCROLLBAR}`}
+          className={`z-[80] max-h-64 max-w-[calc(100vw-16px)] space-y-0.5 overflow-y-auto overflow-x-hidden rounded-xl border border-gray-800 bg-black/80 p-1.5
+            text-sm text-gray-200 shadow-pop backdrop-blur-md no-scrollbar`}
         >
           {options.length === 0 && <li className="px-4 py-2 text-gray-500">Nicio opțiune</li>}
           {options.map((option, index) => {
@@ -207,11 +204,12 @@ export function Select<T extends string>({
                 onMouseEnter={() => !option.disabled && setActiveIndex(index)}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(index)}
-                className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg px-4 py-2 transition-colors
+                title={option.label}
+                className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-lg px-4 py-2 transition-colors
                   ${option.disabled ? 'cursor-not-allowed opacity-40' : ''}
                   ${isActive ? 'bg-[#c8f023] font-medium text-black' : isSelected ? 'font-medium text-[#c8f023]' : ''}`}
               >
-                <span className="truncate">{option.label}</span>
+                <span className="min-w-0 flex-1 truncate">{option.label}</span>
                 {isSelected && <Check size={14} className={`shrink-0 ${isActive ? 'text-black' : 'text-[#c8f023]'}`} />}
               </li>
             );
