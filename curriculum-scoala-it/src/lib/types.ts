@@ -374,6 +374,10 @@ export type TrackerLesson = {
   is_taught: boolean;
   /** Notita libera de tema pentru aceasta lectie (nu per elev), editabila din Tracker. */
   homework_note: string | null;
+  /** Profesorul care a PREDAT efectiv lectia - fixat la creare, NU se muta la transferul
+   * clasei (spre deosebire de teacher_id = proprietarul curent). Baza registrului/Payslip-ului,
+   * vezi supabase/migrations/add_lesson_taught_by_history.sql. */
+  taught_by?: string | null;
   created_at: string;
 };
 
@@ -401,6 +405,9 @@ export type TrackerAttendance = {
   /** null = recuperare individuala; setat = recuperare de grup, impartita cu alti elevi care
    * au acelasi id - impreuna conteaza ca O SINGURA ora in Payslip (vezi Registru.tsx). */
   recovery_group_id: string | null;
+  /** Cine a tinut sedinta: profesorul lectiei live (present/absent) sau cel care a tinut
+   * recuperarea (made_up). Nu se muta la transferul clasei - vezi TrackerLesson.taught_by. */
+  taught_by?: string | null;
   updated_at: string;
 };
 

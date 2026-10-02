@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Select } from '@/components/Select';
 import type { TrackerLesson, TrackerAttendance } from '@/lib/types';
 import { computeMonthEntries, computePayslipTable, computePayslipTotals, type RegistryEntry } from '@/lib/registryCalc';
+import { fetchTeacherRegistry, type RegistryData } from '@/lib/registryData';
 
 const MONTHS = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
 const DAY_LABELS = ['Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă', 'Duminică'];
@@ -54,20 +55,19 @@ export default function Registru({
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [{ data: l }, { data: a }, { data: s }, { data: g }] = await Promise.all([
-        supabase.from('tracker_lessons').select('*').eq('teacher_id', selectedTeacherId),
-        // 'present' e necesar (nu doar 'made_up') ca sa stim care lectii au avut o sedinta
-        // LIVE reala (vezi liveLessonIds in registryCalc.ts) - fara el, o lectie 100% absenta
-        // si recuperata ulterior ar fi platita de doua ori.
-        supabase.from('tracker_attendance').select('*').eq('teacher_id', selectedTeacherId).in('status', ['present', 'made_up']),
-        supabase.from('tracker_students').select('id, name').eq('teacher_id', selectedTeacherId),
-        supabase.from('tracker_groups').select('id, group_name').eq('teacher_id', selectedTeacherId),
-      ]);
+      // Dupa cine a PREDAT (taught_by), nu dupa proprietarul curent al clasei - vezi
+      // lib/registryData.ts. Un transfer de clasa nu muta istoricul platit al profesorului.
+      let data: RegistryData = { lessons: [], attendance: [], students: [], groups: [] };
+      try {
+        data = await fetchTeacherRegistry(supabase, selectedTeacherId);
+      } catch (e) {
+        console.error('Registru: nu am putut incarca datele profesorului', e);
+      }
       if (cancelled) return;
-      setLessons((l ?? []) as TrackerLesson[]);
-      setAttendance((a ?? []) as TrackerAttendance[]);
-      setStudents((s ?? []) as StudentOption[]);
-      setGroups((g ?? []) as GroupOption[]);
+      setLessons(data.lessons);
+      setAttendance(data.attendance);
+      setStudents(data.students);
+      setGroups(data.groups);
       setLoading(false);
     })();
     return () => { cancelled = true; };

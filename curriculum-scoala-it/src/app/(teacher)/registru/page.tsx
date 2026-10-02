@@ -1,6 +1,6 @@
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import type { TrackerLesson, TrackerAttendance } from '@/lib/types';
+import { fetchTeacherRegistry } from '@/lib/registryData';
 import Registru from './Registru';
 
 export default async function RegistruPage() {
@@ -8,18 +8,13 @@ export default async function RegistruPage() {
   const supabase = await createClient();
   const isAdmin = profile.role === 'admin';
 
-  // `tracker_students` (doar id+name) - necesar STRICT ca sa afisam numele elevilor participanti
-  // la o recuperare de grup in detaliul lunar (vezi recovery_group_id, Registru.tsx); nimic
-  // sensibil (GDPR), spre deosebire de parent_phones/parent_emails care nu sunt cerute aici.
-  // 'present' e necesar (nu doar 'made_up') ca sa stim care lectii au avut o sedinta LIVE reala
-  // (vezi liveLessonIds in lib/registryCalc.ts) - fara el, o lectie 100% absenta si recuperata
-  // ulterior ar fi platita de doua ori (o data ca lectie fantoma, o data ca recuperare).
-  const [{ data: lessons }, { data: attendance }, { data: students }, { data: groups }, teachersRes] = await Promise.all([
-    supabase.from('tracker_lessons').select('*').eq('teacher_id', profile.id),
-    supabase.from('tracker_attendance').select('*').eq('teacher_id', profile.id).in('status', ['present', 'made_up']),
-    supabase.from('tracker_students').select('id, name').eq('teacher_id', profile.id),
-    // Numele grupei, afisat pe fiecare lectie/recuperare in detaliul lunar - vezi Registru.tsx.
-    supabase.from('tracker_groups').select('id, group_name').eq('teacher_id', profile.id),
+  // Registrul vine din get_teacher_registry (vezi lib/registryData.ts): lectiile/recuperarile
+  // pe care profesorul le-a PREDAT efectiv (taught_by), nu cele ale claselor pe care le detine
+  // acum - altfel un transfer de clasa i-ar muta istoricul platit la noul profesor. Include
+  // prezenta 'present' (nu doar 'made_up'), ca sa stim care lectii au avut o sedinta LIVE reala
+  // (vezi liveLessonIds in lib/registryCalc.ts), plus doar id+name pentru elevi/grupe (GDPR).
+  const [registry, teachersRes] = await Promise.all([
+    fetchTeacherRegistry(supabase, profile.id),
     isAdmin
       ? supabase.from('profiles').select('id, full_name, email').order('full_name')
       : Promise.resolve({ data: null as { id: string; full_name: string; email: string }[] | null }),
@@ -30,10 +25,10 @@ export default async function RegistruPage() {
       viewerId={profile.id}
       isAdmin={isAdmin}
       teacherOptions={(teachersRes.data ?? []).map((t) => ({ id: t.id, label: t.full_name || t.email }))}
-      initialLessons={(lessons ?? []) as TrackerLesson[]}
-      initialAttendance={(attendance ?? []) as TrackerAttendance[]}
-      initialStudents={(students ?? []) as { id: string; name: string }[]}
-      initialGroups={(groups ?? []) as { id: string; group_name: string }[]}
+      initialLessons={registry.lessons}
+      initialAttendance={registry.attendance}
+      initialStudents={registry.students}
+      initialGroups={registry.groups}
     />
   );
 }

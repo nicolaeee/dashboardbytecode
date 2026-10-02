@@ -279,7 +279,9 @@ export async function deleteTeacher(userId: string): Promise<Result> {
  * Transfera o clasa (tracker_groups) la alt profesor - cascadeaza pe teacher_id-ul
  * denormalizat din tracker_students/tracker_lessons/tracker_attendance printr-o
  * functie SQL (vezi supabase/migrations/add_transfer_class_teacher.sql), ca cele 4
- * update-uri sa reuseasca/esueze impreuna intr-o singura tranzactie.
+ * update-uri sa reuseasca/esueze impreuna intr-o singura tranzactie. Istoricul NU se muta:
+ * taught_by (cine a predat efectiv) ramane pe vechiul profesor pentru lectiile deja tinute,
+ * deci registrul lui ramane intact (vezi supabase/migrations/add_lesson_taught_by_history.sql).
  */
 export async function transferClassTeacher(groupId: string, newTeacherId: string): Promise<Result> {
   try {
