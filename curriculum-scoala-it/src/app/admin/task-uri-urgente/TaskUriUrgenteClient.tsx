@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { AlertTriangle, Check, Clock, Copy, Download, Eye, MessageCircle, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { diplomaRewardLabel, type UrgentTaskStatus } from '@/lib/types';
-import { buildDiplomaUrl, getCourse } from '@/lib/diplomas';
-import { computeModuleLesson } from '@/lib/lessonNumbering';
+import { buildDiplomaUrl, diplomaModuleForMilestone, getCourse } from '@/lib/diplomas';
 import { Badge, Button, Card, EmptyState, Input, Modal } from '@/components/ui';
 import { Select } from '@/components/Select';
 import type { UrgentTaskWithDetails } from './page';
@@ -195,10 +194,10 @@ export default function TaskUriUrgenteClient({
     // finalize_diploma_with_reward cand recompensa e "Bani virtuali" (vezi Diplome.tsx). Status
     // independent de task-ul diplomei ("🎓 Trimite diploma părintelui") - vezi cerinta.
     const isCoins = task.type === 'SEND_VIRTUAL_COINS';
-    const { module } = computeModuleLesson(task.milestone);
+    const diplomaModule = diplomaModuleForMilestone(task.milestone);
     const rewardLabel = diplomaRewardLabel(task.reward_type);
     const firstPhone = task.parent_phones[0];
-    const diploma = (isOverdue || isCoins) ? null : buildDiplomaUrl(task, module);
+    const diploma = (isOverdue || isCoins) ? null : buildDiplomaUrl(task, diplomaModule);
 
     return (
       <Card key={task.id} className={`p-5 space-y-4 ${isOverdue ? 'border-[#FF6B6B]/40' : ''} ${task.status === 'COMPLETED' ? 'opacity-70' : ''}`}>
@@ -220,7 +219,7 @@ export default function TaskUriUrgenteClient({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <div><span className="text-lock">Copil</span><p className="font-semibold">{task.student_short_name?.trim() || task.student_name}</p></div>
           <div><span className="text-lock">Profesor</span><p className="font-semibold">{task.teacher_name}</p></div>
-          <div><span className="text-lock">Modul</span><p className="font-semibold">Modulul {module} — {courseLabel(task.course)}{task.group_name ? ` (${task.group_name})` : ''}</p></div>
+          <div><span className="text-lock">Modul</span><p className="font-semibold">Modulul {diplomaModule} — {courseLabel(task.course)}{task.group_name ? ` (${task.group_name})` : ''}</p></div>
           {isOverdue ? (
             <>
               <div><span className="text-lock">Prezențe</span><p className="font-semibold">{task.milestone} / {task.milestone}</p></div>

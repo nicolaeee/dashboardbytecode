@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { COURSES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from './diplomas';
+import { COURSES, diplomaModuleForMilestone, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from './diplomas';
 
 describe('getCourse', () => {
   it('gaseste un curs cunoscut dupa id', () => {
@@ -74,5 +74,16 @@ describe('todayFormatted', () => {
   it('adauga zero in fata pentru zi/luna cu o singura cifra', () => {
     vi.setSystemTime(new Date(2026, 0, 1)); // 1 ianuarie 2026
     expect(todayFormatted()).toBe('01.01.2026');
+  });
+});
+
+describe('diplomaModuleForMilestone', () => {
+  it('pragurile 16/32/48/64 -> modulele 1-4', () => {
+    expect([16, 32, 48, 64].map(diplomaModuleForMilestone)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('un elev trecut de Modulul 4 (prag 80, 96) primeste sablonul Modulului 4 - altfel taskul ramanea agatat', () => {
+    expect(diplomaModuleForMilestone(80)).toBe(4);
+    expect(diplomaModuleForMilestone(96)).toBe(4);
   });
 });

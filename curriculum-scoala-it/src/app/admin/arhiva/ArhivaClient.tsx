@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Archive, Check, Copy, Download, Eye, GraduationCap, MessageCircle } from 'lucide-react';
 import type { StudentStatus, TrackerGroup } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, diplomaRewardLabel } from '@/lib/types';
-import { buildDiplomaUrl, getCourse } from '@/lib/diplomas';
+import { buildDiplomaUrl, diplomaModuleForMilestone, getCourse } from '@/lib/diplomas';
 import { computeModuleLesson } from '@/lib/lessonNumbering';
 import type { UrgentTaskWithDetails } from '@/lib/urgentTasks';
 import { Badge, Button, Card, EmptyState } from '@/components/ui';
@@ -138,8 +138,8 @@ export default function ArhivaClient({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {sortedDiplomas.map((task) => {
-            const { module } = computeModuleLesson(task.milestone);
-            const diploma = buildDiplomaUrl(task, module);
+            const diplomaModule = diplomaModuleForMilestone(task.milestone);
+            const diploma = buildDiplomaUrl(task, diplomaModule);
             const rewardLabel = diplomaRewardLabel(task.reward_type);
             const firstPhone = task.parent_phones[0];
             return (
@@ -152,7 +152,7 @@ export default function ArhivaClient({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                   <div><span className="text-lock">Copil</span><p className="font-semibold">{task.student_short_name?.trim() || task.student_name}</p></div>
                   <div><span className="text-lock">Profesor</span><p className="font-semibold">{task.teacher_name}</p></div>
-                  <div><span className="text-lock">Modul</span><p className="font-semibold">Modulul {module} — {courseLabel(task.course)}{task.group_name ? ` (${task.group_name})` : ''}</p></div>
+                  <div><span className="text-lock">Modul</span><p className="font-semibold">Modulul {diplomaModule} — {courseLabel(task.course)}{task.group_name ? ` (${task.group_name})` : ''}</p></div>
                   <div><span className="text-lock">🎁 Premiu</span><p className="font-semibold">{task.reward_received ? rewardLabel : 'Niciun premiu'}</p></div>
                 </div>
 

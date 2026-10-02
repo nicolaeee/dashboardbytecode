@@ -1,4 +1,5 @@
 import type { CourseId } from './types';
+import { computeModuleLesson } from './lessonNumbering';
 
 /**
  * Cursurile "cunoscute", pentru care exista sabloane de diploma in public/diplome/<folder>.
@@ -20,6 +21,14 @@ export const COURSES: { id: CourseId; label: string; folder: string; fileSuffix:
 ];
 
 export const DIPLOMA_MODULES = [1, 2, 3, 4];
+
+/** Modulul diplomei pentru un prag de prezente (16 -> 1 ... 64 -> 4), limitat la ultimul sablon
+ * existent: un elev trecut de Modulul 4 (prag 80, 96...) primeste sablonul Modulului 4. Aceeasi
+ * regula ca diploma_module_for_milestone din SQL (finalize_diploma_with_reward) - daca difera,
+ * taskul "🎓 Diplomă necesară" nu se mai inchide dupa generare. */
+export function diplomaModuleForMilestone(milestone: number): number {
+  return Math.min(computeModuleLesson(milestone).module, Math.max(...DIPLOMA_MODULES));
+}
 
 export function getCourse(id: CourseId | string | null | undefined) {
   return COURSES.find((c) => c.id === id) ?? null;

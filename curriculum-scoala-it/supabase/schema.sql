@@ -1102,6 +1102,15 @@ begin
 end;
 $$;
 
+-- Modulul de diploma pentru un prag de prezente: 16 -> 1, 32 -> 2, 48 -> 3, 64+ -> 4 (ultimul
+-- sablon existent - vezi DIPLOMA_MODULES in src/lib/diplomas.ts). null -> null.
+create or replace function public.diploma_module_for_milestone(p_milestone int)
+returns int language sql immutable as $$
+  select case when p_milestone is null or p_milestone < 1 then null
+              else least((p_milestone - 1) / 16 + 1, 4) end;
+$$;
+
+
 -- p_student_id NULL = elev "Manual" (fara cont in tracker_students, mod "Manual" din Diplome.tsx)
 -- - profesorul NU trebuie sa vada/descarce diploma direct in acest caz (aceeasi regula ca la un
 -- elev real - decizie explicita de business), deci si un elev Manual trece prin acelasi task
@@ -1136,6 +1145,7 @@ declare
   v_course_id text;
   v_stars int;
   v_total_stars int;
+  v_origin_pending int;
 begin
   if p_module is null or p_module < 1 then
     raise exception 'Modul invalid.';
@@ -1171,7 +1181,13 @@ begin
     v_first_name := coalesce(nullif(trim(v_student.short_name), ''), split_part(v_student.name, ' ', 1));
     select group_name, course into v_group from public.tracker_groups where id = v_student.group_id;
 
-    if v_student.pending_diploma_milestone = v_milestone then
+    -- Pragul deschis se inchide daca modulul diplomei corespunde pragului, cu aceeasi limitare
+    -- la ultimul sablon (Modulul 4) ca in Diplome.tsx: un prag de 80/96/... prezente (M5+) se
+    -- genereaza pe sablonul Modulului 4 - inainte, 4*16=64 != 80 si taskul ramanea agatat.
+    -- Taskul pentru admin primeste pragul REAL (ex. 80), nu 64, ca sa nu se ciocneasca cu
+    -- diploma deja trimisa la 64 (unique student_id+milestone+type).
+    if public.diploma_module_for_milestone(v_student.pending_diploma_milestone) = p_module then
+      v_milestone := v_student.pending_diploma_milestone;
       update public.tracker_students
         set last_diploma_issued_milestone = v_milestone, pending_diploma_milestone = null
         where id = p_student_id;
@@ -1199,11 +1215,14 @@ begin
     -- prag (aceeasi conditie de siguranta ca la elevul real de mai sus - nu inchidem orbeste un
     -- prag care nu mai corespunde, ex. elevul a mai avansat intre timp).
     if p_origin_student_id is not null then
-      update public.tracker_students
-        set last_diploma_issued_milestone = v_milestone, pending_diploma_milestone = null
-        where id = p_origin_student_id
-          and (teacher_id = auth.uid() or public.is_admin())
-          and pending_diploma_milestone = v_milestone;
+      select pending_diploma_milestone into v_origin_pending from public.tracker_students
+        where id = p_origin_student_id and (teacher_id = auth.uid() or public.is_admin());
+      if public.diploma_module_for_milestone(v_origin_pending) = p_module then
+        v_milestone := v_origin_pending;
+        update public.tracker_students
+          set last_diploma_issued_milestone = v_milestone, pending_diploma_milestone = null
+          where id = p_origin_student_id and pending_diploma_milestone = v_origin_pending;
+      end if;
     end if;
   end if;
 

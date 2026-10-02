@@ -1,8 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { COURSES, DIPLOMA_MODULES, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
-import { computeModuleLesson } from '@/lib/lessonNumbering';
+import { COURSES, DIPLOMA_MODULES, diplomaModuleForMilestone, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
 import { DIPLOMA_REWARD_TYPES, type CourseId } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { Modal, Button, Field, Textarea } from '@/components/ui';
@@ -136,7 +135,7 @@ export default function Diplome({
             // un elev putea avansa in Tracker peste modulul 4 (module_count merge pana la 30),
             // dar nu exista sablon de diploma dincolo de 4, deci precompletarea nu trebuie sa
             // aleaga un modul inexistent in dropdown.
-            ? Math.min(computeModuleLesson(student.pending_diploma_milestone).module, Math.max(...DIPLOMA_MODULES))
+            ? diplomaModuleForMilestone(student.pending_diploma_milestone)
             : 1
         );
         break;
@@ -166,7 +165,7 @@ export default function Diplome({
   // regenereze o diploma pentru un modul anterior.
   function moduleForStudent(student: { pending_diploma_milestone: number | null } | undefined | null): number {
     if (!student?.pending_diploma_milestone) return 1;
-    return Math.min(computeModuleLesson(student.pending_diploma_milestone).module, Math.max(...DIPLOMA_MODULES));
+    return diplomaModuleForMilestone(student.pending_diploma_milestone);
   }
 
   function openModal(courseId: CourseId) {
@@ -289,12 +288,18 @@ export default function Diplome({
     // (p_origin_student_id mai sus). Pastreaza alerta Pabbly existenta ("completed") - un elev
     // Manual FARA origine reala nu exista in tracker, deci nu exista niciun prag de recalculat.
     const resolvedRealStudentId = studentId ?? initialStudentId;
+    // Pragul REAL inchis de RPC (ex. 80 pentru un elev trecut de Modulul 4, generat pe sablonul
+    // Modulului 4) - aceeasi regula ca in finalize_diploma_with_reward, nu doar modul*16.
+    const realPending = groups.flatMap((g) => g.students).find((s) => s.id === resolvedRealStudentId)?.pending_diploma_milestone;
+    const closedMilestone = realPending && diplomaModuleForMilestone(realPending) === finalizeStep.module
+      ? realPending
+      : finalizeStep.module * 16;
     if (resolvedRealStudentId) {
       try {
         await fetch('/api/diploma-milestone-alerts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId: resolvedRealStudentId, milestone: finalizeStep.module * 16, status: 'completed' }),
+          body: JSON.stringify({ studentId: resolvedRealStudentId, milestone: closedMilestone, status: 'completed' }),
         });
       } catch (alertError) {
         console.error('DIPLOMA MILESTONE ALERT ERROR:', alertError);
