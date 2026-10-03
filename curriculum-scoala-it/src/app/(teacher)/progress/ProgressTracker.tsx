@@ -448,7 +448,7 @@ export default function ProgressTracker({
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [celebrations, setCelebrations] = useState<CelebrationItem[]>([]);
   const [confetti, setConfetti] = useState<ConfettiItem[]>([]);
-  const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean } | null>(null);
+  const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean; reason?: 'lessons' } | null>(null);
   // Popup automat "Task Urgent" de diploma - la fiecare 16 prezente (istoric + curent) ale
   // unui elev, independent de modalul de editare (acelasi tipar ca magicPopup de mai sus).
   const [diplomaMilestonePopup, setDiplomaMilestonePopup] = useState<{ studentId: string; milestone: number } | null>(null);
@@ -662,6 +662,12 @@ export default function ProgressTracker({
   const getStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && !s.deleted_at);
   const getDeletedStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && s.deleted_at);
   const getGroupById = (groupId: string | null) => activeGroups.find((g) => g.id === groupId) ?? null;
+  // Pozitia grupei in materie = cea mai avansata lectie efectuata (curriculum_index, afisat M/L).
+  // Un modul = 16 LECTII: "Adauga Modulul Nou" se cere dupa lectii, NU dupa steluțe - cu
+  // multiplicatorul 0-3 steluțe/lectie, 16 steluțe se adunau deja pe la lectia 6-12 si
+  // aplicatia cerea gresit un modul nou in mijlocul modulului (raportat la Daniel Tabacaru).
+  const groupCurriculumPosition = (groupId: string) =>
+    lessons.reduce((max, l) => (l.group_id === groupId && l.is_taught && l.curriculum_index > max ? l.curriculum_index : max), 0);
   const calcAvgProgress = (groupId: string) => {
     const list = getStudentsForGroup(groupId);
     if (list.length === 0) return 0;
@@ -1452,7 +1458,7 @@ export default function ProgressTracker({
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
     const maxSteps = (group.module_count || 1) * 16;
-    const newProgress = Math.max(0, Math.min(student.progress + delta, maxSteps));
+    const newProgress = Math.max(0, student.progress + delta);
     if (newProgress === student.progress) return;
 
     const rewardEmoji = getRewardEmoji(group.reward_type);
@@ -1461,7 +1467,8 @@ export default function ProgressTracker({
     if (!ok) return;
 
     if (delta > 0 && newProgress > 0 && newProgress % 16 === 0) {
-      const needsNewModule = newProgress >= maxSteps;
+      // Modulul nou se cere doar daca si LECTIILE au ajuns la finalul ultimului modul.
+      const needsNewModule = groupCurriculumPosition(group.id) >= maxSteps;
       setTimeout(() => {
         launchConfetti(rewardEmoji);
         setNewModuleReward('stars');
@@ -1509,8 +1516,6 @@ export default function ProgressTracker({
     const prevCount = current.star_count ?? 0;
     const nextCount = (prevCount + 1) % 4;
     const delta = nextCount - prevCount;
-    const maxSteps = (group.module_count || 1) * 16;
-    if (delta > 0 && student.progress >= maxSteps) return showToast('Adauga un modul nou pentru a continua!', 'error');
 
     // Rollback de modul: verificam daca acest wrap descrescator traverseaza in jos un prag de
     // 16 care e EXACT motivul pentru care modulul curent al grupei a fost creat (module_count
@@ -1526,7 +1531,8 @@ export default function ProgressTracker({
         const moduleCount = group.module_count || 1;
         const moduleCreatedForThisThreshold = topMultiple / 16 + 1;
         const newModuleCount = moduleCount - 1;
-        if (moduleCount === moduleCreatedForThisThreshold && newProgress <= newModuleCount * 16) {
+        if (moduleCount === moduleCreatedForThisThreshold && newProgress <= newModuleCount * 16
+          && groupCurriculumPosition(group.id) <= newModuleCount * 16) {
           setModal({ type: 'confirmStarModuleRollback', studentId, lessonId, groupId: group.id, newModuleCount });
           return;
         }
@@ -1605,6 +1611,12 @@ export default function ProgressTracker({
     if (error || !data) { showToast('Eroare la crearea lectiei', 'error'); return undefined; }
     setLessons((ls) => [...ls, data as TrackerLesson]);
     showToast(`Lectia ${nextCurriculumIndex} creata!`);
+    // Prima lectie dupa finalul ultimului modul (ex. L17 cu 1 modul) -> acelasi popup de alegere
+    // a premiului + "Adauga Modulul Nou" care aparea inainte la a 16-a steluta.
+    if (nextCurriculumIndex > (group.module_count || 1) * 16 && (group.module_count || 1) < 30) {
+      setNewModuleReward('stars');
+      setMagicPopup({ rewardEmoji: getRewardEmoji(group.reward_type), rewardType: group.reward_type, needsNewModule: true, reason: 'lessons' });
+    }
     return data as TrackerLesson;
   }
 
@@ -3164,7 +3176,9 @@ export default function ProgressTracker({
             <div className="text-5xl mb-4">🎉</div>
             <h3 className="text-2xl font-bold text-black mb-2">Felicitari!</h3>
             <p className="text-black/90 font-semibold mb-4">
-              {magicPopup.rewardType === 'stars'
+              {magicPopup.reason === 'lessons'
+                ? 'Ai terminat toate cele 16 lecții ale modulului!'
+                : magicPopup.rewardType === 'stars'
                 ? 'Ura! Ai colectat toate cele 16 steluțe.'
                 : `Ura! Ai colectat toate cele 16 ${getRewardName(magicPopup.rewardType)}.`}
             </p>
@@ -3187,7 +3201,7 @@ export default function ProgressTracker({
               </>
             ) : (
               <>
-                <p className="text-black/80 mb-6">Ai terminat un modul! Continua calatoria!</p>
+                <p className="text-black/80 mb-6">Continua calatoria!</p>
                 <div className="mb-6">
                   <div className="bg-white/80 rounded-2xl p-6 text-center hover:bg-white transition-colors">
                     <div className="text-6xl mb-2">🎮</div>
