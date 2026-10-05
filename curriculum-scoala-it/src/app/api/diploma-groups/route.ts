@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/apiSecurity';
+import { moduleStarsByStudent } from '@/lib/lessonNumbering';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +44,17 @@ export async function GET(request: Request) {
     .is('deleted_at', null)
     .order('name');
 
-  const studentsByGroup = new Map<string, { id: string; name: string; progress: number }[]>();
+  const groupIds = groups.map((g) => g.id);
+  const [{ data: lessonsData }, { data: starredAttendance }] = await Promise.all([
+    supabase.from('tracker_lessons').select('id, group_id, curriculum_index').in('group_id', groupIds),
+    supabase.from('tracker_attendance').select('lesson_id, student_id, star_count').eq('teacher_id', targetTeacherId).gt('star_count', 0),
+  ]);
+  const moduleStars = moduleStarsByStudent((studentsData ?? []) as StudentRow[], lessonsData ?? [], starredAttendance ?? []);
+
+  const studentsByGroup = new Map<string, { id: string; name: string; progress: number; module_stars: number }[]>();
   for (const s of (studentsData ?? []) as StudentRow[]) {
     const list = studentsByGroup.get(s.group_id) ?? [];
-    list.push({ id: s.id, name: s.name, progress: s.progress });
+    list.push({ id: s.id, name: s.name, progress: s.progress, module_stars: moduleStars.get(s.id) ?? 0 });
     studentsByGroup.set(s.group_id, list);
   }
 

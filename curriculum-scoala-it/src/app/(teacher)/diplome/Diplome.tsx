@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { COURSES, DIPLOMA_MODULES, diplomaModuleForMilestone, diplomaTemplateUrl, getCourse, starsForModule, todayFormatted } from '@/lib/diplomas';
+import { COURSES, DIPLOMA_MODULES, diplomaModuleForMilestone, diplomaTemplateUrl, getCourse, todayFormatted } from '@/lib/diplomas';
 import { DIPLOMA_REWARD_TYPES, type CourseId } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { Modal, Button, Field, Textarea } from '@/components/ui';
@@ -192,7 +192,7 @@ export default function Diplome({
       const student = selectedGroup?.students.find((s) => s.id === selectedStudentId);
       if (!student) return;
       studentName = student.name;
-      stars = starsForModule(student.progress);
+      stars = Math.min(16, student.module_stars);
       totalStars = student.progress;
       realStudentId = student.id;
     } else {
@@ -495,7 +495,7 @@ export default function Diplome({
                       setSelectedModule(moduleForStudent(selectedGroup?.students.find((s) => s.id === studentId)));
                     }}
                     options={(selectedGroup?.students ?? []).map((s) => ({
-                      value: s.id, label: `${s.name} — ${starsForModule(s.progress)} din 16 steluțe`,
+                      value: s.id, label: `${s.name} — ${Math.min(16, s.module_stars)} din 16 steluțe`,
                     }))}
                     placeholder="Niciun elev în grupă"
                     className="w-full"

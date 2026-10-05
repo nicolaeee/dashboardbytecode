@@ -1,11 +1,13 @@
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { TrackerGroup, TrackerStudent } from '@/lib/types';
+import { moduleStarsByStudent } from '@/lib/lessonNumbering';
 import Diplome from './Diplome';
 
 export type DiplomaGroupWithStudents = {
   id: string; group_name: string; course: TrackerGroup['course'];
-  students: Pick<TrackerStudent, 'id' | 'name' | 'progress' | 'pending_diploma_milestone'>[];
+  // module_stars = steluțele din modulul curent (pornesc de la 0 la fiecare modul nou).
+  students: (Pick<TrackerStudent, 'id' | 'name' | 'progress' | 'pending_diploma_milestone'> & { module_stars: number })[];
 };
 
 export default async function DiplomePage({
@@ -21,18 +23,21 @@ export default async function DiplomePage({
   const isAdmin = profile.role === 'admin';
   const { studentId: initialStudentId, teacherId: initialTeacherId } = await searchParams;
 
-  const [{ data: groups }, { data: students }, teachersRes] = await Promise.all([
+  const [{ data: groups }, { data: students }, { data: lessons }, { data: starredAttendance }, teachersRes] = await Promise.all([
     supabase.from('tracker_groups').select('id, group_name, course').eq('teacher_id', profile.id).is('deleted_at', null).order('group_name'),
     supabase.from('tracker_students').select('id, group_id, name, progress, pending_diploma_milestone').eq('teacher_id', profile.id).is('deleted_at', null).order('name'),
+    supabase.from('tracker_lessons').select('id, group_id, curriculum_index').eq('teacher_id', profile.id),
+    supabase.from('tracker_attendance').select('lesson_id, student_id, star_count').eq('teacher_id', profile.id).gt('star_count', 0),
     isAdmin
       ? supabase.from('profiles').select('id, full_name, email').order('full_name')
       : Promise.resolve({ data: null as { id: string; full_name: string; email: string }[] | null }),
   ]);
 
-  const studentsByGroup = new Map<string, Pick<TrackerStudent, 'id' | 'name' | 'progress' | 'pending_diploma_milestone'>[]>();
+  const moduleStars = moduleStarsByStudent(students ?? [], lessons ?? [], starredAttendance ?? []);
+  const studentsByGroup = new Map<string, DiplomaGroupWithStudents['students']>();
   for (const s of students ?? []) {
     const list = studentsByGroup.get(s.group_id) ?? [];
-    list.push({ id: s.id, name: s.name, progress: s.progress, pending_diploma_milestone: s.pending_diploma_milestone });
+    list.push({ id: s.id, name: s.name, progress: s.progress, pending_diploma_milestone: s.pending_diploma_milestone, module_stars: moduleStars.get(s.id) ?? 0 });
     studentsByGroup.set(s.group_id, list);
   }
   const initialGroups: DiplomaGroupWithStudents[] = (groups ?? []).map((g) => ({

@@ -7,9 +7,9 @@ import { createClient } from '@/lib/supabase/client';
 import { Select } from '@/components/Select';
 import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, AttendanceStatus, CourseId, LessonKind, StudentStatus, SubscriptionType, StudyMode, TrackerLessonTransaction } from '@/lib/types';
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
-import { COURSES, getCourse, starsForModule } from '@/lib/diplomas';
+import { COURSES, getCourse } from '@/lib/diplomas';
 import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
-import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from '@/lib/lessonNumbering';
+import { computeModuleLesson, currentModuleOf, formatModuleLesson, moduleOfIndex, moduleStarsFor, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
 import { computeLessonBalanceDelta, computeMakeupPatch } from '@/lib/attendanceTransition';
 
@@ -395,9 +395,6 @@ type ModalState =
   // deja încărcat (grupele altui profesor decât cel vizualizat).
   | { type: 'transferStudent'; studentId: string }
   | { type: 'editMakeupLink' }
-  // Rollback modul (steluțe): scaderea unei stelute readuce progresul sub varful curent al
-  // modulelor grupei, exact pragul pentru care fusese adaugat ultimul modul - vezi cycleStar.
-  | { type: 'confirmStarModuleRollback'; studentId: string; lessonId: string; groupId: string; newModuleCount: number }
   // Rollback diploma (prezente): anularea unei prezente scade numarul total sub un prag de 16
   // pentru care exista deja o alerta de diploma (in asteptare sau deja generata) - vezi
   // setAttendanceStatus/confirmDiplomaMilestoneRollback.
@@ -448,7 +445,13 @@ export default function ProgressTracker({
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [celebrations, setCelebrations] = useState<CelebrationItem[]>([]);
   const [confetti, setConfetti] = useState<ConfettiItem[]>([]);
-  const [magicPopup, setMagicPopup] = useState<{ rewardEmoji: string; rewardType: string; needsNewModule: boolean; reason?: 'lessons' } | null>(null);
+  // reason 'stars' = un elev a strans 16 steluțe in modulul curent (alege premiul de mai departe);
+  // reason 'lessons' = s-au efectuat cele 16 lectii ale modulului si s-a adaugat automat modulul urmator.
+  const [magicPopup, setMagicPopup] = useState<
+    | { reason: 'stars'; rewardEmoji: string; rewardType: string; groupId: string; studentName: string }
+    | { reason: 'lessons'; rewardEmoji: string; rewardType: string; groupId: string; finishedModule: number }
+    | null
+  >(null);
   // Popup automat "Task Urgent" de diploma - la fiecare 16 prezente (istoric + curent) ale
   // unui elev, independent de modalul de editare (acelasi tipar ca magicPopup de mai sus).
   const [diplomaMilestonePopup, setDiplomaMilestonePopup] = useState<{ studentId: string; milestone: number } | null>(null);
@@ -662,12 +665,6 @@ export default function ProgressTracker({
   const getStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && !s.deleted_at);
   const getDeletedStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && s.deleted_at);
   const getGroupById = (groupId: string | null) => activeGroups.find((g) => g.id === groupId) ?? null;
-  // Pozitia grupei in materie = cea mai avansata lectie efectuata (curriculum_index, afisat M/L).
-  // Un modul = 16 LECTII: "Adauga Modulul Nou" se cere dupa lectii, NU dupa steluțe - cu
-  // multiplicatorul 0-3 steluțe/lectie, 16 steluțe se adunau deja pe la lectia 6-12 si
-  // aplicatia cerea gresit un modul nou in mijlocul modulului (raportat la Daniel Tabacaru).
-  const groupCurriculumPosition = (groupId: string) =>
-    lessons.reduce((max, l) => (l.group_id === groupId && l.is_taught && l.curriculum_index > max ? l.curriculum_index : max), 0);
   const calcAvgProgress = (groupId: string) => {
     const list = getStudentsForGroup(groupId);
     if (list.length === 0) return 0;
@@ -1444,20 +1441,25 @@ export default function ProgressTracker({
     }
   }
 
-  async function addModuleWithReward() {
-    if (!currentGroup) return;
-    const count = currentGroup.module_count || 1;
-    if (count >= 30) return showToast('Maxim 30 module', 'error');
-    const ok = await patchGroup(currentGroup.id, { module_count: count + 1, reward_type: newModuleReward });
-    if (ok) { showToast('Modul adaugat!'); setMagicPopup(null); }
+  // "Continua" pe popup-ul de 16 steluțe - salveaza doar premiul ales pentru mai departe.
+  // NU adauga niciun modul: modulul nou vine strict din lectii (vezi performSetAttendanceStatus).
+  async function confirmNextReward() {
+    if (!magicPopup) return;
+    const group = getGroupById(magicPopup.groupId);
+    if (group && magicPopup.reason === 'stars' && newModuleReward !== group.reward_type) {
+      const ok = await patchGroup(group.id, { reward_type: newModuleReward });
+      if (!ok) return;
+    }
+    setMagicPopup(null);
   }
 
-  // Ajusteaza progresul (stelutele) unui elev cu +1/-1, tinand cont de plafonul modulelor
-  // si declansand celebrarea + popup-ul magic exact la pragul de 16.
-  async function applyStarDelta(studentId: string, delta: number, group: TrackerGroup) {
+  // Ajusteaza progresul cumulativ (stelutele, pentru Nivel/Insigne/clasament) si declanseaza
+  // popup-ul de 16 steluțe STRICT cand elevul trece pragul de 16 in modulul lectiei respective
+  // (numarat doar din lectiile acelui modul - fiecare modul porneste de la 0). Apelata inainte
+  // ca starea `attendance` din closure sa contina noua valoare, deci `attendance` = starea veche.
+  async function applyStarDelta(studentId: string, delta: number, group: TrackerGroup, lessonId: string) {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
-    const maxSteps = (group.module_count || 1) * 16;
     const newProgress = Math.max(0, student.progress + delta);
     if (newProgress === student.progress) return;
 
@@ -1466,44 +1468,25 @@ export default function ProgressTracker({
     const ok = await patchStudent(studentId, { progress: newProgress });
     if (!ok) return;
 
-    if (delta > 0 && newProgress > 0 && newProgress % 16 === 0) {
-      // Modulul nou se cere doar daca si LECTIILE au ajuns la finalul ultimului modul.
-      const needsNewModule = groupCurriculumPosition(group.id) >= maxSteps;
-      setTimeout(() => {
-        launchConfetti(rewardEmoji);
-        setNewModuleReward('stars');
-        setMagicPopup({ rewardEmoji, rewardType: group.reward_type, needsNewModule });
-      }, 800);
+    const lesson = lessons.find((l) => l.id === lessonId);
+    if (delta > 0 && lesson) {
+      const groupLessons = lessons.filter((l) => l.group_id === group.id);
+      const before = moduleStarsFor(studentId, moduleOfIndex(lesson.curriculum_index), groupLessons, attendance);
+      if (before < 16 && before + delta >= 16) {
+        setTimeout(() => {
+          launchConfetti(rewardEmoji);
+          setNewModuleReward(group.reward_type);
+          setMagicPopup({ rewardEmoji, rewardType: group.reward_type, groupId: group.id, reason: 'stars', studentName: student.name });
+        }, 800);
+      }
     }
-  }
-
-  // Executa efectiv ciclarea stelutei (scriere in DB + ajustarea progresului) - separata de
-  // cycleStar ca sa poata fi reapelata si din confirmStarModuleRollback, dupa ce profesorul
-  // confirma explicit revenirea la modulul anterior (vezi cycleStar mai jos).
-  async function performCycleStar(studentId: string, lessonId: string, group: TrackerGroup) {
-    const current = attendance.find((a) => a.lesson_id === lessonId && a.student_id === studentId);
-    if (!current || current.status === 'absent') return;
-    const prevCount = current.star_count ?? 0;
-    const nextCount = (prevCount + 1) % 4;
-    const delta = nextCount - prevCount;
-
-    const previousAttendance = attendance;
-    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, star_count: nextCount } : a)));
-    const { data, error } = await supabase.from('tracker_attendance')
-      .update({ star_count: nextCount }).eq('id', current.id).select().single();
-    if (error || !data) {
-      setAttendance(previousAttendance);
-      return showToast('Eroare', 'error');
-    }
-    setAttendance((as) => as.map((a) => (a.id === current.id ? (data as TrackerAttendance) : a)));
-    await applyStarDelta(studentId, delta, group);
   }
 
   // Steluta se acorda strict daca elevul a fost prezent sau a recuperat lectia - niciodata
   // pentru o lectie marcata "absent". Profesorul cicleaza valoarea (0 -> 1 -> 2 -> 3 -> 0)
-  // din click pe iconita - e un multiplicator, nu doar o bifa facuta/nefacuta. Singurul sens in
-  // care "scade" progresul e wrap-ul 3 -> 0 (delta -3, vezi mai jos) - de aceea pragul verificat
-  // pentru rollback e cel traversat descrescator de acest wrap, nu un "-1" separat (nu exista).
+  // din click pe iconita - e un multiplicator, nu doar o bifa facuta/nefacuta. Stelutele NU
+  // mai influenteaza modulele (un modul = 16 lectii prezente/recuperate), deci scaderea lor
+  // nu poate anula niciun modul.
   async function cycleStar(studentId: string, lessonId: string) {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
@@ -1517,43 +1500,16 @@ export default function ProgressTracker({
     const nextCount = (prevCount + 1) % 4;
     const delta = nextCount - prevCount;
 
-    // Rollback de modul: verificam daca acest wrap descrescator traverseaza in jos un prag de
-    // 16 care e EXACT motivul pentru care modulul curent al grupei a fost creat (module_count
-    // == prag/16 + 1) SI daca, dupa scadere, elevul nu mai are nevoie deloc de acel modul
-    // (noul progres incape in plafonul modulului anterior). Fara aceasta a doua conditie am
-    // risca sa stergem un modul de care elevul tot mai are nevoie (progres construit din multe
-    // lectii anterioare, nu doar din steluta tocmai anulata) - vezi ModalState.confirmStarModuleRollback.
-    if (delta < 0) {
-      const oldProgress = student.progress;
-      const newProgress = Math.max(0, oldProgress + delta);
-      const topMultiple = Math.floor(oldProgress / 16) * 16;
-      if (topMultiple > 0 && topMultiple > newProgress) {
-        const moduleCount = group.module_count || 1;
-        const moduleCreatedForThisThreshold = topMultiple / 16 + 1;
-        const newModuleCount = moduleCount - 1;
-        if (moduleCount === moduleCreatedForThisThreshold && newProgress <= newModuleCount * 16
-          && groupCurriculumPosition(group.id) <= newModuleCount * 16) {
-          setModal({ type: 'confirmStarModuleRollback', studentId, lessonId, groupId: group.id, newModuleCount });
-          return;
-        }
-      }
+    const previousAttendance = attendance;
+    setAttendance((as) => as.map((a) => (a.id === current.id ? { ...a, star_count: nextCount } : a)));
+    const { data, error } = await supabase.from('tracker_attendance')
+      .update({ star_count: nextCount }).eq('id', current.id).select().single();
+    if (error || !data) {
+      setAttendance(previousAttendance);
+      return showToast('Eroare', 'error');
     }
-
-    await performCycleStar(studentId, lessonId, group);
-  }
-
-  // "Da, revin la modulul anterior" pe popup-ul de rollback - aplica efectiv scaderea stelutei
-  // SI sterge modulul nou-creat (module_count - 1), fara sa atinga in vreun fel alerta de
-  // diploma (sisteme complet separate - vezi comentariul din setAttendanceStatus).
-  async function confirmStarModuleRollback() {
-    if (modal.type !== 'confirmStarModuleRollback') return;
-    const { studentId, lessonId, groupId, newModuleCount } = modal;
-    const group = getGroupById(groupId);
-    setModal({ type: null });
-    if (!group) return;
-    await performCycleStar(studentId, lessonId, group);
-    await patchGroup(groupId, { module_count: newModuleCount });
-    showToast('Modulul a fost anulat - ai revenit la modulul anterior');
+    setAttendance((as) => as.map((a) => (a.id === current.id ? (data as TrackerAttendance) : a)));
+    await applyStarDelta(studentId, delta, group, lessonId);
   }
 
   // Creeaza o lectie noua (sedinta) pentru o grupa. Tipul se deduce AUTOMAT din numarul de
@@ -1611,12 +1567,9 @@ export default function ProgressTracker({
     if (error || !data) { showToast('Eroare la crearea lectiei', 'error'); return undefined; }
     setLessons((ls) => [...ls, data as TrackerLesson]);
     showToast(`Lectia ${nextCurriculumIndex} creata!`);
-    // Prima lectie dupa finalul ultimului modul (ex. L17 cu 1 modul) -> acelasi popup de alegere
-    // a premiului + "Adauga Modulul Nou" care aparea inainte la a 16-a steluta.
-    if (nextCurriculumIndex > (group.module_count || 1) * 16 && (group.module_count || 1) < 30) {
-      setNewModuleReward('stars');
-      setMagicPopup({ rewardEmoji: getRewardEmoji(group.reward_type), rewardType: group.reward_type, needsNewModule: true, reason: 'lessons' });
-    }
+    // Crearea unei lectii NU mai deschide niciun popup (nici de steluțe, nici de modul nou) -
+    // modulul nou apare strict cand a 16-a lectie a modulului devine efectuata (prezent/recuperat),
+    // vezi performSetAttendanceStatus.
     return data as TrackerLesson;
   }
 
@@ -1717,7 +1670,23 @@ export default function ProgressTracker({
     const lesson = lessons.find((l) => l.id === lessonId);
     if (lesson && lesson.is_taught !== hasAnyPresentOrMadeUp) await patchLesson(lessonId, { is_taught: hasAnyPresentOrMadeUp });
 
-    if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group);
+    // Modul nou STRICT dupa 16 lectii efectuate (prezent/recuperat): cand lectia L16 a unui modul
+    // devine "Efectuata" pentru prima data, modulul urmator se adauga automat - iar stelutele
+    // pornesc de la 0 in el (vezi moduleStarsFor - numara doar lectiile modulului curent).
+    if (lesson && !lesson.is_taught && hasAnyPresentOrMadeUp && lesson.curriculum_index > 0 && lesson.curriculum_index % 16 === 0) {
+      const finishedModule = lesson.curriculum_index / 16;
+      const moduleCount = group.module_count || 1;
+      if (moduleCount <= finishedModule && moduleCount < 30) {
+        const ok = await patchGroup(group.id, { module_count: Math.min(30, finishedModule + 1) });
+        if (ok) {
+          const rewardEmoji = getRewardEmoji(group.reward_type);
+          launchConfetti(rewardEmoji);
+          setMagicPopup({ rewardEmoji, rewardType: group.reward_type, groupId: group.id, reason: 'lessons', finishedModule });
+        }
+      }
+    }
+
+    if (nextStarCount !== prevStarCount) await applyStarDelta(studentId, nextStarCount - prevStarCount, group, lessonId);
     if (willBeCounted && !wasCounted) checkDiplomaMilestone(studentId, newTotalPresences);
 
     // Task-uri Urgente de recuperare: marcarea explicita "Absent" adauga o restanta;
@@ -2604,7 +2573,7 @@ export default function ProgressTracker({
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
                 <p className="mt-1.5 text-[11px] text-gray-500">
-                  Suprascrie imediat totalul de steluțe afișat pe Cardul Elevului, pe bara de progres și în textul trimis către diplomă.
+                  Suprascrie totalul cumulativ de steluțe (Nivel, insigne, clasament, diplomă). Contorul X/16 de pe Cardul Elevului numără doar temele din lecțiile modulului curent.
                 </p>
               </div>
               <div className="mb-4">
@@ -2829,27 +2798,6 @@ export default function ProgressTracker({
                 className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors"
               >
                 🗑️ Șterge
-              </button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
-
-      {modal.type === 'confirmStarModuleRollback' && (
-        <ModalShell onClose={() => setModal({ type: null })}>
-          <div className="text-center">
-            <div className="text-5xl mb-4">⚠️</div>
-            <h3 className="text-xl font-bold mb-2">Atenție!</h3>
-            <p className="text-gray-400 mb-6">
-              Prin ștergerea acestei steluțe, modulul curent va fi marcat ca nefinalizat. Ești
-              sigur că vrei să revii la modulul anterior?
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
-                Nu
-              </button>
-              <button onClick={confirmStarModuleRollback} className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors">
-                Da, revin la modulul anterior
               </button>
             </div>
           </div>
@@ -3177,14 +3125,12 @@ export default function ProgressTracker({
             <h3 className="text-2xl font-bold text-black mb-2">Felicitari!</h3>
             <p className="text-black/90 font-semibold mb-4">
               {magicPopup.reason === 'lessons'
-                ? 'Ai terminat toate cele 16 lecții ale modulului!'
-                : magicPopup.rewardType === 'stars'
-                ? 'Ura! Ai colectat toate cele 16 steluțe.'
-                : `Ura! Ai colectat toate cele 16 ${getRewardName(magicPopup.rewardType)}.`}
+                ? `Ați terminat toate cele 16 lecții ale modulului ${magicPopup.finishedModule}!`
+                : `Ura! ${magicPopup.studentName} a colectat toate cele 16 ${magicPopup.rewardType === 'stars' ? 'steluțe' : getRewardName(magicPopup.rewardType)}.`}
             </p>
-            {magicPopup.needsNewModule ? (
+            {magicPopup.reason === 'stars' ? (
               <>
-                <p className="text-black/80 mb-4">Alege premiul pentru urmatorul modul:</p>
+                <p className="text-black/80 mb-4">Alege ce vrei să strângi mai departe:</p>
                 <div className="grid grid-cols-4 gap-2 mb-6">
                   {REWARD_TYPES.map((r) => (
                     <button
@@ -3195,13 +3141,15 @@ export default function ProgressTracker({
                     </button>
                   ))}
                 </div>
-                <button onClick={addModuleWithReward} className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold">
-                  ➕ Adauga Modulul Nou
+                <button onClick={confirmNextReward} className="tracker-btn-primary w-full py-3 rounded-2xl font-semibold">
+                  ✨ Continua
                 </button>
               </>
             ) : (
               <>
-                <p className="text-black/80 mb-6">Continua calatoria!</p>
+                <p className="text-black/80 mb-6">
+                  Modulul {magicPopup.finishedModule + 1} a fost adăugat - de la prima lui lecție, colecția pornește de la 0.
+                </p>
                 <div className="mb-6">
                   <div className="bg-white/80 rounded-2xl p-6 text-center hover:bg-white transition-colors">
                     <div className="text-6xl mb-2">🎮</div>
@@ -4180,6 +4128,9 @@ export function ClassView({
   const groupLessons = lessons.filter((l) => l.group_id === group.id);
   const groupLessonIds = new Set(groupLessons.map((l) => l.id));
   const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
+  // Modulul curent = modulul celei mai avansate lectii create - steluțele de pe card se numara
+  // doar din lectiile lui, deci pornesc de la 0 odata cu prima lectie a unui modul nou.
+  const currentModule = currentModuleOf(groupLessons);
   // Total afisat = istoric (presence_count/absence_count, salvat manual pt elevii cu istoric
   // dinainte de Tracker) + dinamic (calculat din lectiile bifate efectiv in platforma).
   const attendanceCountFor = (studentId: string) => {
@@ -4218,7 +4169,8 @@ export function ClassView({
         ) : (
           students.map((s, i) => (
             <StudentCard
-              key={s.id} isAdmin={isAdmin} student={s} index={i} totalStudents={students.length} moduleCount={group.module_count || 1}
+              key={s.id} isAdmin={isAdmin} student={s} index={i} totalStudents={students.length} currentModule={currentModule}
+              moduleStars={moduleStarsFor(s.id, currentModule, groupLessons, groupAttendance)}
               rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} absenceCount={absenceCountFor(s.id)}
               onEdit={() => onEditStudent(s)}
               onOpenHistory={() => onOpenHistory(s.id)}
@@ -4453,11 +4405,11 @@ function AttendanceBoard({
 }
 
 function StudentCard({
-  isAdmin, student, index, totalStudents, moduleCount, rewardEmoji, attendanceCount, absenceCount, onEdit, onOpenHistory,
+  isAdmin, student, index, totalStudents, currentModule, moduleStars, rewardEmoji, attendanceCount, absenceCount, onEdit, onOpenHistory,
   notifyStatus, connectedStatus, onSendNotification, onSetConnectionStatus,
 }: {
   isAdmin: boolean;
-  student: TrackerStudent & { rank: number }; index: number; totalStudents: number; moduleCount: number;
+  student: TrackerStudent & { rank: number }; index: number; totalStudents: number; currentModule: number; moduleStars: number;
   rewardEmoji: string; attendanceCount: number; absenceCount: number; onEdit: () => void; onOpenHistory: () => void;
   notifyStatus: ButtonState; connectedStatus: ButtonState;
   onSendNotification: () => void; onSetConnectionStatus: (status: 'conectat' | 'neconectat') => void;
@@ -4465,18 +4417,12 @@ function StudentCard({
   const levelInfo = getLevelInfo(student.progress);
   const badges = getBadgesForPerson(student.id, student.progress);
   const visibleBadges = badges.slice(-5);
-  const progressInLevel = student.progress % 16;
-  const progressPercent = (progressInLevel / 16) * 100;
   const studentColor = PROGRESS_COLORS[index % PROGRESS_COLORS.length];
-  // Contorul de steluțe AFISAT trebuie sa se resetezeze la 0 de fiecare data cand incepe un
-  // modul nou - `student.progress` ramane cumulativ pe toata durata (istoricul general, folosit
-  // in continuare pentru Nivel/Insigne mai sus, neschimbat), dar afisarea "curenta" nu trebuie
-  // sa arate niciodata suma acumulata peste modulele anterioare (bug raportat: elevul parea sa
-  // porneasca noul modul cu stelutele vechi inca "in cont"). Aceeasi formula (16 la un multiplu
-  // exact, altfel modulo) ca `starsForModule` din lib/diplomas.ts, folosita deja la generarea
-  // diplomei - ramane consistenta cu ce vede adminul acolo.
-  const starsInCurrentModule = starsForModule(student.progress);
-  const currentModuleNumber = Math.min(Math.floor(student.progress / 16) + 1, moduleCount);
+  // Contorul de steluțe AFISAT numara strict temele din lectiile modulului curent (vezi
+  // moduleStarsFor) - porneste de la 0 la fiecare modul nou, indiferent cate s-au strans in
+  // modulul anterior. `student.progress` ramane cumulativ (doar pentru Nivel/Insigne/clasament).
+  const starsInCurrentModule = Math.min(16, moduleStars);
+  const progressPercent = (starsInCurrentModule / 16) * 100;
 
   return (
     <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
@@ -4509,7 +4455,7 @@ function StudentCard({
           </div>
         </div>
         <div className="text-right">
-          <span className="text-2xl font-bold text-[#C8F023]" title={`Steluțe în modulul ${currentModuleNumber} - se resetează la 0 la fiecare modul nou`}>
+          <span className="text-2xl font-bold text-[#C8F023]" title={`Steluțe în modulul ${currentModule} - se resetează la 0 la fiecare modul nou`}>
             {starsInCurrentModule}/16
           </span>
         </div>
@@ -4531,7 +4477,7 @@ function StudentCard({
       <div className="grid w-full grid-cols-8 gap-1 mb-4">
         {Array.from({ length: 16 }, (_, i) => (
           <div key={i} className="flex items-center justify-center">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${i < progressInLevel ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${i < starsInCurrentModule ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
               {rewardEmoji}
             </div>
           </div>

@@ -63,6 +63,7 @@ describe('/api/makeup-notification-alerts (cooldown, ore de liniste, "Programat"
       teacherPhone: '0700000000',
       calendarLink: 'https://cal.example.com/prof',
       notificationStep: 1, // count-ul curent (0) + 1
+      deduplication_id: 's1_none_notif1', // elev + data absentei (lipsa -> 'none') + pas
     });
   });
 

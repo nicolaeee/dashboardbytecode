@@ -1195,7 +1195,15 @@ begin
 
     v_student_name := v_student.name;
     v_course_id := v_group.course;
-    v_stars := case when v_student.progress > 0 and v_student.progress % 16 = 0 then 16 else v_student.progress % 16 end;
+    -- Steluțele de pe diploma = STRICT temele din lectiile modulului diplomei (fiecare modul
+    -- porneste de la 0), la fel ca contorul X/16 de pe Cardul Elevului din Progress Tracker
+    -- (vezi moduleStarsFor in src/lib/lessonNumbering.ts). v_milestone / 16 = modulul real
+    -- (ex. 80 -> 5, chiar daca sablonul folosit e cel al Modulului 4).
+    select least(16, coalesce(sum(a.star_count), 0))::int into v_stars
+      from public.tracker_attendance a
+      join public.tracker_lessons l on l.id = a.lesson_id
+      where a.student_id = p_student_id and l.group_id = v_student.group_id
+        and l.curriculum_index between (v_milestone / 16 - 1) * 16 + 1 and (v_milestone / 16) * 16;
     v_total_stars := v_student.progress;
     v_teacher_id := v_student.teacher_id;
   else

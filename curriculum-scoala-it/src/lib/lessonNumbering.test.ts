@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeModuleLesson, formatModuleLesson, totalLessonsFor } from './lessonNumbering';
+import { computeModuleLesson, formatModuleLesson, totalLessonsFor, currentModuleOf, moduleStarsFor } from './lessonNumbering';
 
 describe('computeModuleLesson', () => {
   it('prima lectie a primului modul', () => {
@@ -62,5 +62,30 @@ describe('totalLessonsFor', () => {
 
   it('modulul 1, lectia 0 inseamna 0 lectii efectuate', () => {
     expect(totalLessonsFor(1, 0)).toBe(0);
+  });
+});
+
+describe('moduleStarsFor / currentModuleOf', () => {
+  // 16 lectii in M1 (L1..L16) + 1 lectie in M2 (L17).
+  const lessons = Array.from({ length: 17 }, (_, i) => ({ id: `l${i + 1}`, curriculum_index: i + 1 }));
+
+  it('numara doar temele din lectiile modulului cerut - M2 porneste de la 0', () => {
+    const attendance = Array.from({ length: 8 }, (_, i) => ({ lesson_id: `l${i + 1}`, student_id: 's1', star_count: 1 }));
+    expect(moduleStarsFor('s1', 1, lessons, attendance)).toBe(8);
+    expect(moduleStarsFor('s1', 2, lessons, attendance)).toBe(0);
+  });
+
+  it('ignora alti elevi si aduna multiplicatorul 0-3', () => {
+    const attendance = [
+      { lesson_id: 'l17', student_id: 's1', star_count: 3 },
+      { lesson_id: 'l17', student_id: 's2', star_count: 2 },
+    ];
+    expect(moduleStarsFor('s1', 2, lessons, attendance)).toBe(3);
+  });
+
+  it('modulul curent urmeaza cea mai avansata lectie creata', () => {
+    expect(currentModuleOf([])).toBe(1);
+    expect(currentModuleOf(lessons.slice(0, 16))).toBe(1);
+    expect(currentModuleOf(lessons)).toBe(2);
   });
 });
