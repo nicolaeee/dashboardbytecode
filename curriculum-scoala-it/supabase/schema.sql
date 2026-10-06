@@ -266,6 +266,9 @@ create table public.tracker_students (
   -- Decalaj manual de lectii (vezi src/lib/lessonNumbering.ts) - punct de pornire pentru
   -- elevii cu istoric dinainte de Tracker, folosit la calculul "M{x} / L{y}".
   lesson_offset int  not null default 0,
+  -- Steluțe deja strânse în modulul pozitiei manuale (lesson_offset), dinainte de Tracker -
+  -- se adauga la contorul X/16 si la diploma acelui modul (vezi legacyStarsInModule).
+  legacy_module_stars int not null default 0 check (legacy_module_stars between 0 and 16),
   -- Suprascriere manuala a totalului de prezente/absente (acelasi tipar ca `progress`
   -- pentru stelute) - editabila din formularul "Editeaza Elev".
   presence_count int not null default 0,
@@ -1168,7 +1171,8 @@ begin
   v_milestone := p_module * 16;
 
   if p_student_id is not null then
-    select s.id, s.name, s.short_name, s.teacher_id, s.group_id, s.pending_diploma_milestone, s.progress
+    select s.id, s.name, s.short_name, s.teacher_id, s.group_id, s.pending_diploma_milestone, s.progress,
+           s.lesson_offset, s.legacy_module_stars
       into v_student
       from public.tracker_students s
       where s.id = p_student_id and (s.teacher_id = auth.uid() or public.is_admin())
@@ -1199,7 +1203,12 @@ begin
     -- porneste de la 0), la fel ca contorul X/16 de pe Cardul Elevului din Progress Tracker
     -- (vezi moduleStarsFor in src/lib/lessonNumbering.ts). v_milestone / 16 = modulul real
     -- (ex. 80 -> 5, chiar daca sablonul folosit e cel al Modulului 4).
-    select least(16, coalesce(sum(a.star_count), 0))::int into v_stars
+    -- + steluțele istorice (legacy_module_stars), doar daca pozitia manuala a elevului
+    -- (lesson_offset) cade in modulul diplomei (vezi legacyStarsInModule).
+    select least(16, coalesce(sum(a.star_count), 0)
+        + case when (greatest(v_student.lesson_offset, 1) - 1) / 16 + 1 = v_milestone / 16
+               then v_student.legacy_module_stars else 0 end)::int
+      into v_stars
       from public.tracker_attendance a
       join public.tracker_lessons l on l.id = a.lesson_id
       where a.student_id = p_student_id and l.group_id = v_student.group_id

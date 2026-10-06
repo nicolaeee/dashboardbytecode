@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeModuleLesson, formatModuleLesson, totalLessonsFor, currentModuleOf, moduleStarsFor } from './lessonNumbering';
+import { computeModuleLesson, formatModuleLesson, totalLessonsFor, currentModuleOf, legacyStarsInModule, moduleStarsByStudent, moduleStarsFor } from './lessonNumbering';
 
 describe('computeModuleLesson', () => {
   it('prima lectie a primului modul', () => {
@@ -87,5 +87,33 @@ describe('moduleStarsFor / currentModuleOf', () => {
     expect(currentModuleOf([])).toBe(1);
     expect(currentModuleOf(lessons.slice(0, 16))).toBe(1);
     expect(currentModuleOf(lessons)).toBe(2);
+  });
+
+  it('fara lectii, modulul curent cade pe pozitia manuala a elevilor', () => {
+    expect(currentModuleOf([], [{ lesson_offset: 0 }, { lesson_offset: 21 }])).toBe(2);
+    expect(currentModuleOf(lessons.slice(0, 3), [{ lesson_offset: 40 }])).toBe(1);
+  });
+});
+
+describe('legacyStarsInModule / moduleStarsByStudent', () => {
+  it('steluțele istorice se numara doar in modulul pozitiei manuale', () => {
+    const student = { lesson_offset: 10, legacy_module_stars: 7 };
+    expect(legacyStarsInModule(student, 1)).toBe(7);
+    expect(legacyStarsInModule(student, 2)).toBe(0);
+    // M1/L16 -> tot M1; M2 porneste de la 0.
+    expect(legacyStarsInModule({ lesson_offset: 16, legacy_module_stars: 5 }, 1)).toBe(5);
+    expect(legacyStarsInModule({ lesson_offset: 0, legacy_module_stars: 3 }, 1)).toBe(3);
+  });
+
+  it('elev nou cu steluțe istorice si fara lectii apare cu ele pe contor', () => {
+    const students = [{ id: 's1', group_id: 'g1', lesson_offset: 21, legacy_module_stars: 6 }];
+    expect(moduleStarsByStudent(students, [], []).get('s1')).toBe(6);
+  });
+
+  it('aduna steluțele istorice cu temele bifate in acelasi modul', () => {
+    const students = [{ id: 's1', group_id: 'g1', lesson_offset: 5, legacy_module_stars: 4 }];
+    const groupLessons = [{ id: 'l6', group_id: 'g1', curriculum_index: 6 }];
+    const attendance = [{ lesson_id: 'l6', student_id: 's1', star_count: 2 }];
+    expect(moduleStarsByStudent(students, groupLessons, attendance).get('s1')).toBe(6);
   });
 });

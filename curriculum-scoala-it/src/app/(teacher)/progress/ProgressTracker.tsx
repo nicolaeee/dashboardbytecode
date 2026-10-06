@@ -9,7 +9,7 @@ import type { TrackerGroup, TrackerStudent, TrackerLesson, TrackerAttendance, At
 import { STUDENT_STATUS_LABELS, SUBSCRIPTION_TYPE_LABELS, STUDY_MODE_LABELS, PACKAGE_TIER_LESSONS } from '@/lib/types';
 import { COURSES, getCourse } from '@/lib/diplomas';
 import { createClass, transferClassTeacher, transferStudentTeacher } from '@/app/admin/actions';
-import { computeModuleLesson, currentModuleOf, formatModuleLesson, moduleOfIndex, moduleStarsFor, totalLessonsFor } from '@/lib/lessonNumbering';
+import { computeModuleLesson, currentModuleOf, formatModuleLesson, legacyStarsInModule, moduleOfIndex, moduleStarsFor, totalLessonsFor } from '@/lib/lessonNumbering';
 import { MAX_CONTACTS, asContactList, cleanContactList, toEditableList } from '@/lib/contactList';
 import { computeLessonBalanceDelta, computeMakeupPatch } from '@/lib/attendanceTransition';
 
@@ -556,6 +556,9 @@ export default function ProgressTracker({
   // Steluțe istorice (legacy) - suprascrie direct student.progress, campul deja folosit
   // de Cardul Elevului, bara de progres si parametrul trimis la generarea diplomei.
   const [editStudentStars, setEditStudentStars] = useState<number | ''>(0);
+  // Steluțe deja strânse în modulul pozitiei manuale (legacy_module_stars) - singurele care
+  // apar pe contorul X/16 al Cardului Elevului, pe langa temele bifate efectiv in Tracker.
+  const [editStudentModuleStars, setEditStudentModuleStars] = useState<number | ''>(0);
   // Prezente/Absente manuale (legacy) - suprascriu direct presence_count/absence_count,
   // acelasi tipar ca Steluțele de mai sus.
   const [editStudentPresences, setEditStudentPresences] = useState<number | ''>(0);
@@ -1253,11 +1256,12 @@ export default function ProgressTracker({
     const desiredTotal = totalLessonsFor(clampedModule, clampedLesson);
     const lessonOffset = desiredTotal - studentLessonCount(studentId);
     const stars = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentStars))));
+    const moduleStars = Math.min(16, Math.max(0, Math.round(numOrZero(editStudentModuleStars))));
     const presences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentPresences))));
     const absences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAbsences))));
     const alreadyCompletedLessons = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAlreadyCompleted))));
     const patch: Partial<TrackerStudent> = {
-      name, lesson_offset: lessonOffset, progress: stars, short_name: editStudentShortName.trim() || null,
+      name, lesson_offset: lessonOffset, progress: stars, legacy_module_stars: moduleStars, short_name: editStudentShortName.trim() || null,
       presence_count: presences, absence_count: absences, already_completed_lessons: alreadyCompletedLessons,
     };
     const editedStudent = students.find((s) => s.id === studentId);
@@ -1471,7 +1475,8 @@ export default function ProgressTracker({
     const lesson = lessons.find((l) => l.id === lessonId);
     if (delta > 0 && lesson) {
       const groupLessons = lessons.filter((l) => l.group_id === group.id);
-      const before = moduleStarsFor(studentId, moduleOfIndex(lesson.curriculum_index), groupLessons, attendance);
+      const lessonModule = moduleOfIndex(lesson.curriculum_index);
+      const before = moduleStarsFor(studentId, lessonModule, groupLessons, attendance) + legacyStarsInModule(student, lessonModule);
       if (before < 16 && before + delta >= 16) {
         setTimeout(() => {
           launchConfetti(rewardEmoji);
@@ -1844,6 +1849,7 @@ export default function ProgressTracker({
       setEditStudentLesson(lesson);
     }
     setEditStudentStars(s.progress);
+    setEditStudentModuleStars(s.legacy_module_stars ?? 0);
     setEditStudentPresences(s.presence_count ?? 0);
     setEditStudentAbsences(s.absence_count ?? 0);
     setEditStudentStudyMode(s.study_mode ?? '');
@@ -2573,7 +2579,20 @@ export default function ProgressTracker({
                   className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
                 />
                 <p className="mt-1.5 text-[11px] text-gray-500">
-                  Suprascrie totalul cumulativ de steluțe (Nivel, insigne, clasament, diplomă). Contorul X/16 de pe Cardul Elevului numără doar temele din lecțiile modulului curent.
+                  Suprascrie totalul cumulativ de steluțe (Nivel, insigne, clasament). Pentru contorul X/16 de pe card, completează câmpul de mai jos.
+                </p>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2">
+                  Steluțe în modulul M{moduleOfIndex(totalLessonsFor(numOrZero(editStudentModule), numOrZero(editStudentLesson)))} <span className="text-gray-500 font-normal">— deja strânse înainte de Tracker (0-16)</span>
+                </label>
+                <input
+                  type="number" min={0} max={16} value={editStudentModuleStars} onWheel={blurOnWheel}
+                  onChange={(e) => setEditStudentModuleStars(numericInputValue(e.target.value))}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 text-white"
+                />
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  Apar pe contorul X/16 al Cardului Elevului și pe diploma acestui modul, adunate cu temele bifate în Tracker. Din modulul următor contorul pornește de la 0.
                 </p>
               </div>
               <div className="mb-4">
@@ -4130,7 +4149,7 @@ export function ClassView({
   const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
   // Modulul curent = modulul celei mai avansate lectii create - steluțele de pe card se numara
   // doar din lectiile lui, deci pornesc de la 0 odata cu prima lectie a unui modul nou.
-  const currentModule = currentModuleOf(groupLessons);
+  const currentModule = currentModuleOf(groupLessons, students);
   // Total afisat = istoric (presence_count/absence_count, salvat manual pt elevii cu istoric
   // dinainte de Tracker) + dinamic (calculat din lectiile bifate efectiv in platforma).
   const attendanceCountFor = (studentId: string) => {
@@ -4170,7 +4189,7 @@ export function ClassView({
           students.map((s, i) => (
             <StudentCard
               key={s.id} isAdmin={isAdmin} student={s} index={i} totalStudents={students.length} currentModule={currentModule}
-              moduleStars={moduleStarsFor(s.id, currentModule, groupLessons, groupAttendance)}
+              moduleStars={moduleStarsFor(s.id, currentModule, groupLessons, groupAttendance) + legacyStarsInModule(s, currentModule)}
               rewardEmoji={rewardEmoji} attendanceCount={attendanceCountFor(s.id)} absenceCount={absenceCountFor(s.id)}
               onEdit={() => onEditStudent(s)}
               onOpenHistory={() => onOpenHistory(s.id)}

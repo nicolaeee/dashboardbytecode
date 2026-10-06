@@ -8,7 +8,7 @@ import { moduleStarsByStudent } from '@/lib/lessonNumbering';
 export const dynamic = 'force-dynamic';
 
 type GroupRow = { id: string; group_name: string; course: string | null };
-type StudentRow = { id: string; group_id: string; name: string; progress: number };
+type StudentRow = { id: string; group_id: string; name: string; progress: number; lesson_offset: number; legacy_module_stars: number };
 
 /**
  * Grupele (+ elevii lor) disponibile pentru generarea manuala a diplomelor din /diplome.
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
   const { data: studentsData } = await supabase
     .from('tracker_students')
-    .select('id, group_id, name, progress')
+    .select('id, group_id, name, progress, lesson_offset, legacy_module_stars')
     .in('group_id', groups.map((g) => g.id))
     .is('deleted_at', null)
     .order('name');

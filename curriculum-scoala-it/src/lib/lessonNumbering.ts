@@ -48,24 +48,49 @@ export function moduleStarsFor(
   );
 }
 
-/** Modulul curent al unei grupe = modulul celei mai avansate lectii create (L17 deschide M2). */
-export function currentModuleOf(groupLessons: { curriculum_index: number }[]): number {
+/**
+ * Modulul curent al unei grupe = modulul celei mai avansate lectii create (L17 deschide M2).
+ * Fara nicio lectie creata inca, cade pe cea mai avansata pozitie manuala (lesson_offset) a
+ * elevilor - altfel un elev nou adaugat la M2/L5 ar aparea in M1 pana la prima lectie.
+ */
+export function currentModuleOf(
+  groupLessons: { curriculum_index: number }[],
+  groupStudents: { lesson_offset: number }[] = [],
+): number {
+  if (groupLessons.length === 0) {
+    return moduleOfIndex(groupStudents.reduce((max, s) => Math.max(max, s.lesson_offset ?? 0), 0));
+  }
   return moduleOfIndex(groupLessons.reduce((max, l) => Math.max(max, l.curriculum_index), 0));
 }
 
 /**
+ * Steluțele istorice ale elevului (legacy_module_stars - introduse manual pentru copiii cu istoric
+ * dinainte de Tracker) apartin modulului pozitiei lui manuale (lesson_offset): M1/L10 -> M1,
+ * M1/L16 -> tot M1 (M2 porneste de la 0). In orice alt modul nu se mai numara.
+ */
+export function legacyStarsInModule(
+  student: { lesson_offset: number; legacy_module_stars?: number | null },
+  module: number,
+): number {
+  const legacy = student.legacy_module_stars ?? 0;
+  return legacy > 0 && moduleOfIndex(student.lesson_offset ?? 0) === module ? legacy : 0;
+}
+
+/**
  * Steluțele din modulul curent al fiecarui elev (acelasi calcul ca X/16 de pe Cardul Elevului din
- * Progress Tracker - vezi moduleStarsFor/currentModuleOf), pentru eticheta "X din 16 steluțe".
+ * Progress Tracker - vezi moduleStarsFor/currentModuleOf/legacyStarsInModule), pentru eticheta
+ * "X din 16 steluțe".
  */
 export function moduleStarsByStudent(
-  students: { id: string; group_id: string }[],
+  students: { id: string; group_id: string; lesson_offset: number; legacy_module_stars?: number | null }[],
   lessons: { id: string; group_id: string; curriculum_index: number }[],
   attendance: { lesson_id: string; student_id: string; star_count: number | null }[],
 ): Map<string, number> {
   const result = new Map<string, number>();
   for (const s of students) {
     const groupLessons = lessons.filter((l) => l.group_id === s.group_id);
-    result.set(s.id, moduleStarsFor(s.id, currentModuleOf(groupLessons), groupLessons, attendance));
+    const groupModule = currentModuleOf(groupLessons, students.filter((o) => o.group_id === s.group_id));
+    result.set(s.id, moduleStarsFor(s.id, groupModule, groupLessons, attendance) + legacyStarsInModule(s, groupModule));
   }
   return result;
 }

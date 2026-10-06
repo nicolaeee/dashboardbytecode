@@ -99,6 +99,12 @@ export type TrackerStudent = {
    * de pornire pentru toate calculele viitoare, care continua automat de acolo.
    */
   lesson_offset: number;
+  /**
+   * Steluțe deja strânse în modulul pozitiei manuale (lesson_offset), dinainte de Tracker - se
+   * adauga la contorul X/16 al acelui modul (vezi legacyStarsInModule in lessonNumbering.ts) si
+   * la steluțele de pe diploma lui. `progress` ramane separat (total cumulativ).
+   */
+  legacy_module_stars: number;
   /** Suprascriere manuala a totalului de prezente/absente - vezi formularul "Editeaza Elev". */
   presence_count: number;
   absence_count: number;
