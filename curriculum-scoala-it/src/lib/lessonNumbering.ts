@@ -69,11 +69,16 @@ export function currentModuleOf(
  * M1/L16 -> tot M1 (M2 porneste de la 0). In orice alt modul nu se mai numara.
  */
 export function legacyStarsInModule(
-  student: { lesson_offset: number; legacy_module_stars?: number | null },
+  student: { lesson_offset: number; legacy_module_stars?: number | null; legacy_stars_module?: number | null },
   module: number,
 ): number {
   const legacy = student.legacy_module_stars ?? 0;
-  return legacy > 0 && moduleOfIndex(student.lesson_offset ?? 0) === module ? legacy : 0;
+  // Modulul salvat explicit are prioritate: eticheta din Editeaza Elev arata modulul POZITIEI
+  // CURENTE a elevului, iar lesson_offset (pozitia de la intrare) poate fi intr-un modul
+  // anterior la copiii care au deja lectii in Tracker - acolo steluțele erau salvate dar nu
+  // apareau pe card (raportat la Horia Simbotin, Dima Androne Filip Ioan).
+  const legacyModule = student.legacy_stars_module ?? moduleOfIndex(student.lesson_offset ?? 0);
+  return legacy > 0 && legacyModule === module ? legacy : 0;
 }
 
 /**
@@ -82,7 +87,7 @@ export function legacyStarsInModule(
  * "X din 16 steluțe".
  */
 export function moduleStarsByStudent(
-  students: { id: string; group_id: string; lesson_offset: number; legacy_module_stars?: number | null }[],
+  students: { id: string; group_id: string; lesson_offset: number; legacy_module_stars?: number | null; legacy_stars_module?: number | null }[],
   lessons: { id: string; group_id: string; curriculum_index: number }[],
   attendance: { lesson_id: string; student_id: string; star_count: number | null }[],
 ): Map<string, number> {

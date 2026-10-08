@@ -21,6 +21,10 @@ export default async function ProgressTrackerPage({
   // GDPR: telefoanele/email-urile parintelui sunt coloane admin-only - un profesor nu
   // primeste deloc aceste valori in payload-ul paginii (nu doar ascunse in UI, ci absente
   // din raspuns).
+  // Elevii marcati "Abandon" (status 'dropped_out') dispar complet din contul profesorului -
+  // nu mai are ce face cu ei. Raman in baza de date cu tot istoricul (prezente, steluțe,
+  // abonament), vizibili pentru admin (aici, cand vizualizeaza profesorul, si in Arhivă) si in
+  // Registrul (payslip) profesorului, pentru lectiile pe care i le-a predat deja.
   const [{ data: groups }, { data: students }, { data: lessons }, { data: attendance }, teachersRes] = await Promise.all([
     // Clasele arhivate (is_archived - vezi sync_group_archive_status) dispar complet din
     // contul profesorului, aici la sursa - nu doar ascunse in UI. Vizibile doar in "Arhivă
@@ -28,7 +32,7 @@ export default async function ProgressTrackerPage({
     supabase.from('tracker_groups').select('*').eq('teacher_id', profile.id).eq('is_archived', false).order('created_at'),
     isAdmin
       ? supabase.from('tracker_students').select('*').eq('teacher_id', profile.id).order('created_at')
-      : supabase.from('tracker_students').select('id,teacher_id,group_id,name,short_name,progress,lesson_offset,legacy_module_stars,presence_count,absence_count,pending_diploma_milestone,last_diploma_issued_milestone,pending_makeups,absence_date,makeup_notification_count,last_makeup_notification,is_scheduled,status,status_changed_at,status_changed_by,status_note,subscription_type,total_lessons_remaining,deleted_at,created_at').eq('teacher_id', profile.id).order('created_at'),
+      : supabase.from('tracker_students').select('id,teacher_id,group_id,name,short_name,progress,lesson_offset,legacy_module_stars,legacy_stars_module,presence_count,absence_count,pending_diploma_milestone,last_diploma_issued_milestone,pending_makeups,absence_date,makeup_notification_count,last_makeup_notification,is_scheduled,status,status_changed_at,status_changed_by,status_note,subscription_type,total_lessons_remaining,deleted_at,created_at').eq('teacher_id', profile.id).neq('status', 'dropped_out').order('created_at'),
     supabase.from('tracker_lessons').select('*').eq('teacher_id', profile.id).order('session_number'),
     supabase.from('tracker_attendance').select('*').eq('teacher_id', profile.id),
     isAdmin

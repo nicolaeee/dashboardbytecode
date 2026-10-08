@@ -22,7 +22,8 @@ export default async function AbonamentePage() {
     .select('id, teacher_id, group_id, name, status, subscription_type, total_lessons_remaining')
     .is('deleted_at', null)
     .order('name');
-  if (!isAdmin) studentsQuery = studentsQuery.eq('teacher_id', profile.id);
+  // Elevii "Abandon" nu mai apar la profesor (vezi progress/page.tsx) - adminul ii vede in continuare.
+  if (!isAdmin) studentsQuery = studentsQuery.eq('teacher_id', profile.id).neq('status', 'dropped_out');
 
   let groupsQuery = supabase.from('tracker_groups').select('id, group_name, teacher_id').is('deleted_at', null);
   if (!isAdmin) groupsQuery = groupsQuery.eq('teacher_id', profile.id);

@@ -38,7 +38,7 @@ const NOW_ISO = '2026-08-01T00:00:00.000Z';
 
 function baseStudent(overrides: Partial<TrackerStudent> & Pick<TrackerStudent, 'id' | 'name' | 'progress'>): TrackerStudent {
   return {
-    teacher_id: DEMO_TEACHER_ID, group_id: DEMO_GROUP_ID, lesson_offset: 0, legacy_module_stars: 0,
+    teacher_id: DEMO_TEACHER_ID, group_id: DEMO_GROUP_ID, lesson_offset: 0, legacy_module_stars: 0, legacy_stars_module: null,
     presence_count: 0, absence_count: 0, pending_diploma_milestone: null, last_diploma_issued_milestone: 0,
     pending_diploma_milestone_at: null, diploma_overdue_alert_sent_at: null, last_diploma_message_variant: null,
     pending_makeups: 0, absence_date: null, makeup_notification_count: 0, last_makeup_notification: null,

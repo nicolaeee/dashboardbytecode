@@ -105,6 +105,15 @@ describe('legacyStarsInModule / moduleStarsByStudent', () => {
     expect(legacyStarsInModule({ lesson_offset: 0, legacy_module_stars: 3 }, 1)).toBe(3);
   });
 
+  it('modulul salvat explicit (legacy_stars_module) are prioritate fata de lesson_offset', () => {
+    // Intrat la M1/L10, acum in M2 (lectii in Tracker) - steluțele puse din Editeaza Elev
+    // pentru M2 trebuie sa apara in M2, nu in modulul pozitiei de la intrare.
+    const student = { lesson_offset: 10, legacy_module_stars: 4, legacy_stars_module: 2 };
+    expect(legacyStarsInModule(student, 2)).toBe(4);
+    expect(legacyStarsInModule(student, 1)).toBe(0);
+    expect(legacyStarsInModule({ lesson_offset: 10, legacy_module_stars: 4, legacy_stars_module: null }, 1)).toBe(4);
+  });
+
   it('elev nou cu steluțe istorice si fara lectii apare cu ele pe contor', () => {
     const students = [{ id: 's1', group_id: 'g1', lesson_offset: 21, legacy_module_stars: 6 }];
     expect(moduleStarsByStudent(students, [], []).get('s1')).toBe(6);

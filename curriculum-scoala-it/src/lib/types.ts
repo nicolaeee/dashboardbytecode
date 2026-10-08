@@ -105,6 +105,11 @@ export type TrackerStudent = {
    * la steluțele de pe diploma lui. `progress` ramane separat (total cumulativ).
    */
   legacy_module_stars: number;
+  /**
+   * Modulul caruia ii apartin legacy_module_stars (modulul afisat in eticheta campului din
+   * Editeaza Elev la salvare). NULL = elevi vechi -> cade pe modulul lui lesson_offset.
+   */
+  legacy_stars_module: number | null;
   /** Suprascriere manuala a totalului de prezente/absente - vezi formularul "Editeaza Elev". */
   presence_count: number;
   absence_count: number;

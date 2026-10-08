@@ -1261,7 +1261,9 @@ export default function ProgressTracker({
     const absences = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAbsences))));
     const alreadyCompletedLessons = Math.min(MAX_HISTORICAL_COUNT, Math.max(0, Math.round(numOrZero(editStudentAlreadyCompleted))));
     const patch: Partial<TrackerStudent> = {
-      name, lesson_offset: lessonOffset, progress: stars, legacy_module_stars: moduleStars, short_name: editStudentShortName.trim() || null,
+      name, lesson_offset: lessonOffset, progress: stars, legacy_module_stars: moduleStars,
+      // Acelasi modul ca in eticheta campului "Steluțe în modulul M{x}" (pozitia salvata acum).
+      legacy_stars_module: moduleOfIndex(desiredTotal), short_name: editStudentShortName.trim() || null,
       presence_count: presences, absence_count: absences, already_completed_lessons: alreadyCompletedLessons,
     };
     const editedStudent = students.find((s) => s.id === studentId);
@@ -1849,7 +1851,9 @@ export default function ProgressTracker({
       setEditStudentLesson(lesson);
     }
     setEditStudentStars(s.progress);
-    setEditStudentModuleStars(s.legacy_module_stars ?? 0);
+    // Doar steluțele istorice ale modulului din eticheta campului (pozitia curenta) - cele ale
+    // unui modul anterior nu mai apar pe card, deci nu le aratam ca si cum ar fi ale acestuia.
+    setEditStudentModuleStars(legacyStarsInModule(s, moduleOfIndex(Math.max(0, totalNow))));
     setEditStudentPresences(s.presence_count ?? 0);
     setEditStudentAbsences(s.absence_count ?? 0);
     setEditStudentStudyMode(s.study_mode ?? '');

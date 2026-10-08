@@ -269,6 +269,9 @@ create table public.tracker_students (
   -- Steluțe deja strânse în modulul pozitiei manuale (lesson_offset), dinainte de Tracker -
   -- se adauga la contorul X/16 si la diploma acelui modul (vezi legacyStarsInModule).
   legacy_module_stars int not null default 0 check (legacy_module_stars between 0 and 16),
+  -- Modulul caruia ii apartin legacy_module_stars (salvat din Editeaza Elev); NULL = modulul
+  -- lui lesson_offset (vezi add_tracker_legacy_stars_module.sql).
+  legacy_stars_module int check (legacy_stars_module is null or legacy_stars_module >= 1),
   -- Suprascriere manuala a totalului de prezente/absente (acelasi tipar ca `progress`
   -- pentru stelute) - editabila din formularul "Editeaza Elev".
   presence_count int not null default 0,
@@ -1172,7 +1175,7 @@ begin
 
   if p_student_id is not null then
     select s.id, s.name, s.short_name, s.teacher_id, s.group_id, s.pending_diploma_milestone, s.progress,
-           s.lesson_offset, s.legacy_module_stars
+           s.lesson_offset, s.legacy_module_stars, s.legacy_stars_module
       into v_student
       from public.tracker_students s
       where s.id = p_student_id and (s.teacher_id = auth.uid() or public.is_admin())
@@ -1206,7 +1209,8 @@ begin
     -- + steluțele istorice (legacy_module_stars), doar daca pozitia manuala a elevului
     -- (lesson_offset) cade in modulul diplomei (vezi legacyStarsInModule).
     select least(16, coalesce(sum(a.star_count), 0)
-        + case when (greatest(v_student.lesson_offset, 1) - 1) / 16 + 1 = v_milestone / 16
+        + case when coalesce(v_student.legacy_stars_module,
+                             (greatest(v_student.lesson_offset, 1) - 1) / 16 + 1) = v_milestone / 16
                then v_student.legacy_module_stars else 0 end)::int
       into v_stars
       from public.tracker_attendance a

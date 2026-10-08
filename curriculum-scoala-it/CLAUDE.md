@@ -84,9 +84,11 @@ profesorii, abonamentele și task-urile; **profesorii** își țin clasele în P
     `applyStarDelta` la fiecare steluță și suprascris din câmpul „Steluțe colectate” din Editează Elev.
   - Contorul **X/16** de pe Cardul Elevului și steluțele de pe **diplomă** sunt **per modul**
     (fiecare modul pornește de la 0): temele bifate pe lecțiile modulului (`moduleStarsFor`)
-    **+** `legacy_module_stars` (steluțe istorice introduse manual) dacă poziția manuală
-    (`lesson_offset`) cade în acel modul (`legacyStarsInModule`). Același calcul există în SQL în
-    `finalize_diploma_with_reward` — ține-le sincronizate.
+    **+** `legacy_module_stars` (steluțe istorice introduse manual) dacă modulul lor cade în acel
+    modul (`legacyStarsInModule`). Modulul lor = `legacy_stars_module` (salvat explicit din
+    Editează Elev = modulul poziției afișate în etichetă); `NULL` (elevi vechi) → modulul lui
+    `lesson_offset`. Același calcul există în SQL în `finalize_diploma_with_reward` — ține-le
+    sincronizate.
   - Popup-ul „16 steluțe” apare când elevul trece pragul 16 în modulul lecției.
 - **Diplome**: praguri la fiecare 16 prezențe (`pending_diploma_milestone`, trigger-e SQL), task
   urgent pentru admin; profesorul generează diploma din /diplome (sau mod „Manual”), funcția
@@ -98,6 +100,10 @@ profesorii, abonamentele și task-urile; **profesorii** își țin clasele în P
 - **Abonamente**: `study_mode` + `subscription_type` (pachete cu număr fix sau `custom`),
   `total_lessons_remaining` scade din prezențe/absențe.
 - Transfer elev la alt profesor: elevul se mută, istoricul (lecții/prezențe) rămâne la vechea clasă.
+- **Abandon** (`status = 'dropped_out'`): elevul dispare complet din contul profesorului (Progress,
+  Diplome, Abonamente — filtrat la sursă cu `.neq('status', 'dropped_out')` doar pentru non-admin).
+  Datele rămân intacte; adminul îl vede peste tot (inclusiv când vizualizează profesorul și în
+  Arhivă). Registrul/payslip-ul NU se filtrează — lecțiile deja predate se plătesc în continuare.
 
 ## Convenții de cod
 
@@ -125,3 +131,11 @@ profesorii, abonamentele și task-urile; **profesorii** își țin clasele în P
   `status = 'dropped_out'` cu `supabase/repair/restore_chiru_alexandru_as_dropout.sql`. Dialogul
   „Ștergi elevul?” are acum o atenționare să se folosească Abandon pentru copiii plecați.
   „Abandon” e doar pentru admin, în Fișa Elevului; ștergerea e soft (urnă) până la 🗑️ din urnă.
+- 2026-10-08 (2): `restore_hidden_module_stars.sql` nu a ajutat (ex. Horia Simbotin trebuia 4/16,
+  Dima Androne Filip Ioan 15/16): stelele erau atribuite modulului lui `lesson_offset` (poziția
+  de la intrare), dar la copiii cu lecții în Tracker acela e un modul mai vechi decât cel curent →
+  salvate, dar invizibile. Același bug era și în Editează Elev (eticheta „M{x}” = poziția curentă,
+  salvarea = modulul lui `lesson_offset`). Adăugat `legacy_stars_module` (migrarea
+  `add_tracker_legacy_stars_module.sql`) + reparat datele cu
+  `supabase/repair/restore_module_stars_v2.sql` (țintă = ce arăta cardul înainte de 5 oct.,
+  `progress % 16`, doar dacă modulul curent al clasei a început înainte de 5 oct.; Horia/Dima explicit).

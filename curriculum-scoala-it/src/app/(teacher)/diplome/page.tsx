@@ -23,9 +23,13 @@ export default async function DiplomePage({
   const isAdmin = profile.role === 'admin';
   const { studentId: initialStudentId, teacherId: initialTeacherId } = await searchParams;
 
+  // Elevii "Abandon" nu mai apar la profesor (vezi progress/page.tsx) - adminul ii vede in continuare.
+  let studentsQuery = supabase.from('tracker_students').select('id, group_id, name, progress, lesson_offset, legacy_module_stars, legacy_stars_module, pending_diploma_milestone').eq('teacher_id', profile.id).is('deleted_at', null);
+  if (!isAdmin) studentsQuery = studentsQuery.neq('status', 'dropped_out');
+
   const [{ data: groups }, { data: students }, { data: lessons }, { data: starredAttendance }, teachersRes] = await Promise.all([
     supabase.from('tracker_groups').select('id, group_name, course').eq('teacher_id', profile.id).is('deleted_at', null).order('group_name'),
-    supabase.from('tracker_students').select('id, group_id, name, progress, lesson_offset, legacy_module_stars, pending_diploma_milestone').eq('teacher_id', profile.id).is('deleted_at', null).order('name'),
+    studentsQuery.order('name'),
     supabase.from('tracker_lessons').select('id, group_id, curriculum_index').eq('teacher_id', profile.id),
     supabase.from('tracker_attendance').select('lesson_id, student_id, star_count').eq('teacher_id', profile.id).gt('star_count', 0),
     isAdmin
