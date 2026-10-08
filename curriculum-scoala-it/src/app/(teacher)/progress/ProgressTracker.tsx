@@ -2767,7 +2767,13 @@ export default function ProgressTracker({
           <div className="text-center">
             <div className="text-5xl mb-4">🗑️</div>
             <h3 className="text-xl font-bold mb-2">Stergi elevul?</h3>
-            <p className="text-gray-400 mb-6">Elevul va fi mutat in urna si poate fi restaurat.</p>
+            <p className="text-gray-400 mb-3">Elevul va fi mutat in urna si poate fi restaurat.</p>
+            {/* Stergerea e pentru elevi adaugati gresit - un copil care a plecat din scoala se
+                marcheaza "Abandon" (Fisa Elevului), altfel nu se numara in rata de abandon
+                (s-a intamplat cu Chiru Alexandru, sters in loc de Abandon). */}
+            <p className="text-amber-400 text-sm mb-6">
+              Dacă elevul a plecat din școală, nu-l șterge — marchează-l <b>Abandon</b> din Fișa Elevului.
+            </p>
             <div className="flex gap-3">
               <button onClick={() => setModal({ type: null })} className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
                 Anuleaza

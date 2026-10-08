@@ -114,3 +114,14 @@ profesorii, abonamentele și task-urile; **profesorii** își țin clasele în P
   `progress`, iar contorul numără doar temele bifate pe lecții. Adăugat `legacy_module_stars`
   (migrarea `add_tracker_legacy_module_stars.sql`, cu backfill pentru elevii cu `progress` 1–16 și
   fără nicio temă bifată) + câmp „Steluțe în modulul M{x}” în Editează Elev.
+- 2026-10-08: după trecerea la steluțe per modul, unii copii apăreau cu 0/16 (sau mai puțin decât
+  aveau): backfill-ul de mai sus sărise elevii cu steluțe manuale **și** câteva teme bifate, și pe
+  cei cu `progress` > 16. Reparat cu `supabase/repair/restore_hidden_module_stars.sql`: steluțele
+  „ascunse” (`progress` − temele bifate pe lecțiile clasei curente) intră în `legacy_module_stars`
+  (≤16 sau M1 → toate; >16 în M2+ → `% 16`, 16 la multiplu exact — ce arăta cardul înainte), doar
+  unde `legacy_module_stars = 0`. Limitare cunoscută: la elevii transferați, temele din vechea clasă
+  nu se văd pe card (RLS + `group_id` în calcul) — se corectează manual din Editează Elev.
+- 2026-10-08: Chiru Alexandru a fost șters (urnă, `deleted_at`) în loc de „Abandon”; restaurat +
+  `status = 'dropped_out'` cu `supabase/repair/restore_chiru_alexandru_as_dropout.sql`. Dialogul
+  „Ștergi elevul?” are acum o atenționare să se folosească Abandon pentru copiii plecați.
+  „Abandon” e doar pentru admin, în Fișa Elevului; ștergerea e soft (urnă) până la 🗑️ din urnă.
