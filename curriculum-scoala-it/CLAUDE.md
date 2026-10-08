@@ -104,6 +104,9 @@ profesorii, abonamentele și task-urile; **profesorii** își țin clasele în P
   Diplome, Abonamente — filtrat la sursă cu `.neq('status', 'dropped_out')` doar pentru non-admin).
   Datele rămân intacte; adminul îl vede peste tot (inclusiv când vizualizează profesorul și în
   Arhivă). Registrul/payslip-ul NU se filtrează — lecțiile deja predate se plătesc în continuare.
+  În ProgressTracker (admin) elevul Abandon iese și din clasă (`isInClass` / `getStudentsForGroup`:
+  carduri, prezențe, numărători, task-uri urgente, căutare) și apare doar în meniul clasei →
+  „🚪 Abandon” (Fișa Elevului + „Reactivează”).
 
 ## Convenții de cod
 

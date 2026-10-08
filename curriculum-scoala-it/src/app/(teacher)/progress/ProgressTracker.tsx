@@ -377,6 +377,9 @@ type ModalState =
   | { type: 'editStudent'; studentId: string }
   | { type: 'trashGroups' }
   | { type: 'trashStudents' }
+  // Sectiunea "Abandon" a clasei (doar admin): elevii marcati Abandon nu mai stau printre
+  // cardurile clasei, dar raman aici cu Fisa Elevului (istoric complet) si optiunea de reactivare.
+  | { type: 'droppedStudents' }
   | { type: 'confirmDeleteStudent'; studentId: string }
   | { type: 'confirmDeleteClass'; groupId: string }
   | { type: 'confirmDeleteLesson'; lessonId: string }
@@ -665,8 +668,14 @@ export default function ProgressTracker({
   // data - vezi audit-ul de performanta, "Progress Tracker").
   const activeGroups = useMemo(() => groups.filter((g) => !g.deleted_at), [groups]);
   const deletedGroups = useMemo(() => groups.filter((g) => g.deleted_at), [groups]);
-  const getStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && !s.deleted_at);
+  // Elevii "Abandon" (dropped_out) NU mai fac parte din clasa: nu apar pe carduri, la prezente,
+  // in numaratori sau in task-urile urgente - doar in sectiunea "🚪 Abandon" (admin). Profesorul
+  // nici nu-i primeste (filtrati in progress/page.tsx); adminul ii are in lista students.
+  const isInClass = (s: TrackerStudent) => !s.deleted_at && s.status !== 'dropped_out';
+  const getStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && isInClass(s));
   const getDeletedStudentsForGroup = (groupId: string) => students.filter((s) => s.group_id === groupId && s.deleted_at);
+  const getDroppedStudentsForGroup = (groupId: string) =>
+    students.filter((s) => s.group_id === groupId && !s.deleted_at && s.status === 'dropped_out');
   const getGroupById = (groupId: string | null) => activeGroups.find((g) => g.id === groupId) ?? null;
   const calcAvgProgress = (groupId: string) => {
     const list = getStudentsForGroup(groupId);
@@ -676,13 +685,13 @@ export default function ProgressTracker({
   // "🚨 Task-uri Urgente" - elevii cu un task de diploma deschis (pending_diploma_milestone),
   // pentru profesorul curent afisat (viewedTeacherId).
   const pendingDiplomaStudents = useMemo(
-    () => students.filter((s) => !s.deleted_at && s.pending_diploma_milestone),
+    () => students.filter((s) => isInClass(s) && s.pending_diploma_milestone),
     [students]
   );
   // "🚨 Task-uri Urgente" - elevii cu recuperari neefectuate (pending_makeups), crescute cand
   // profesorul marcheaza un elev "Absent" la o lectie (vezi setAttendanceStatus).
   const pendingMakeupStudents = useMemo(
-    () => students.filter((s) => !s.deleted_at && s.pending_makeups > 0),
+    () => students.filter((s) => isInClass(s) && s.pending_makeups > 0),
     [students]
   );
   const hasUrgentTasks = pendingDiplomaStudents.length > 0 || pendingMakeupStudents.length > 0;
@@ -694,7 +703,7 @@ export default function ProgressTracker({
   const searchNorm = norm(searchQuery.trim());
   const searchedGroups = useMemo(() => (!searchNorm ? activeGroups : activeGroups.filter((g) => {
     if (norm(g.group_name).includes(searchNorm)) return true;
-    return students.some((s) => s.group_id === g.id && !s.deleted_at && norm(s.name).includes(searchNorm));
+    return students.some((s) => s.group_id === g.id && isInClass(s) && norm(s.name).includes(searchNorm));
   })), [activeGroups, students, searchNorm]);
   const groupsByDay = useMemo(() => DAYS.map((d) => ({
     ...d,
@@ -2230,6 +2239,9 @@ export default function ProgressTracker({
               group={currentGroup}
               otherGroups={activeGroups.filter((g) => g.id !== currentGroup.id)}
               deletedStudentsCount={getDeletedStudentsForGroup(currentGroup.id).length}
+              isAdmin={isAdmin}
+              droppedStudentsCount={getDroppedStudentsForGroup(currentGroup.id).length}
+              onDroppedStudents={() => { setModal({ type: 'droppedStudents' }); setMenuOpen(false); }}
               onOpenClass={openClass}
               onAddModule={() => { addModule(); setMenuOpen(false); }}
               onRemoveModule={() => { removeModule(); setMenuOpen(false); }}
@@ -2250,7 +2262,7 @@ export default function ProgressTracker({
       <div className={`fixed top-0 left-0 h-full w-96 max-w-full bg-gray-900 z-50 overflow-y-auto transform transition-transform ${studentsDrawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <AllStudentsDrawer
           groups={activeGroups}
-          students={students.filter((s) => !s.deleted_at)}
+          students={students.filter(isInClass)}
           onClose={() => setStudentsDrawerOpen(false)}
           onSelectStudent={(s) => { setStudentsDrawerOpen(false); openEditStudentModal(s); }}
         />
@@ -3091,6 +3103,41 @@ export default function ProgressTracker({
           </ModalShell>
         );
       })()}
+
+      {modal.type === 'droppedStudents' && isAdmin && (
+        <ModalShell onClose={() => setModal({ type: null })}>
+          <h3 className="text-xl font-bold mb-1 text-[#C8F023]">🚪 Abandon</h3>
+          <p className="text-gray-400 text-sm mb-4">
+            Elevii care au plecat din această clasă. Nu mai apar la profesor; istoricul lor (prezențe, steluțe, abonament) rămâne în Fișa Elevului.
+          </p>
+          {(!currentGroupId || getDroppedStudentsForGroup(currentGroupId).length === 0) ? (
+            <p className="text-gray-400 text-center py-8">Niciun elev în abandon</p>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto mb-4">
+              {getDroppedStudentsForGroup(currentGroupId).map((s) => (
+                <div key={s.id} className="flex items-center gap-2 bg-gray-800 rounded-2xl px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate">{s.name}</div>
+                    {s.status_changed_at && (
+                      <div className="text-[11px] text-gray-500">din {new Date(s.status_changed_at).toLocaleDateString('ro-RO')}</div>
+                    )}
+                  </div>
+                  <button onClick={() => openStudentHistory(s.id)} className="text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full">📋 Fișa</button>
+                  <button
+                    onClick={() => { if (confirm(`Reactivezi pe ${s.name}? Revine în clasă ca elev activ.`)) handleChangeStudentStatus(s.id, 'active'); }}
+                    className="text-sm bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 px-3 py-1.5 rounded-full"
+                  >
+                    ↩️ Reactivează
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={() => setModal({ type: null })} className="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-2xl font-semibold transition-colors">
+            Inchide
+          </button>
+        </ModalShell>
+      )}
 
       {(modal.type === 'trashGroups' || modal.type === 'trashStudents') && (
         <ModalShell onClose={() => setModal({ type: null })}>
@@ -3957,9 +4004,10 @@ function HomeMenu({
 }
 
 function ClassMenu({
-  group, otherGroups, deletedStudentsCount, onOpenClass, onAddModule, onRemoveModule, onAddStudent, onTrashStudents, onDeleteClass, onGoHome,
+  group, otherGroups, deletedStudentsCount, isAdmin, droppedStudentsCount, onDroppedStudents, onOpenClass, onAddModule, onRemoveModule, onAddStudent, onTrashStudents, onDeleteClass, onGoHome,
 }: {
   group: TrackerGroup; otherGroups: TrackerGroup[]; deletedStudentsCount: number;
+  isAdmin: boolean; droppedStudentsCount: number; onDroppedStudents: () => void;
   onOpenClass: (id: string) => void; onAddModule: () => void; onRemoveModule: () => void;
   onAddStudent: () => void; onTrashStudents: () => void; onDeleteClass: () => void; onGoHome: () => void;
 }) {
@@ -3992,6 +4040,12 @@ function ClassMenu({
           🗑️ Urna Elevi
           {deletedStudentsCount > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{deletedStudentsCount}</span>}
         </button>
+        {isAdmin && (
+          <button onClick={onDroppedStudents} className="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-2xl font-semibold transition-colors flex items-center justify-center gap-2">
+            🚪 Abandon
+            {droppedStudentsCount > 0 && <span className="bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full">{droppedStudentsCount}</span>}
+          </button>
+        )}
         <button onClick={onDeleteClass} className="w-full bg-red-500 hover:bg-red-600 py-3 rounded-2xl font-semibold transition-colors">
           🗑️ Sterge Clasa
         </button>
