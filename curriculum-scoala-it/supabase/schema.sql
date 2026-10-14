@@ -721,7 +721,10 @@ create table public.tracker_student_transfers (
   to_group_id     uuid not null references public.tracker_groups(id) on delete cascade,
   transferred_by  uuid references public.profiles(id) on delete set null,
   transferred_at  timestamptz not null default now(),
-  note            text
+  note            text,
+  -- Ce s-a adus la noul profesor (carry_student_totals_on_transfer.sql); null = transfer vechi
+  -- sau in cadrul aceluiasi profesor.
+  carried_lessons      int
 );
 create index on public.tracker_student_transfers (student_id);
 create index on public.tracker_student_transfers (to_teacher_id);
@@ -729,6 +732,9 @@ alter table public.tracker_student_transfers enable row level security;
 create policy "adminul vede si gestioneaza transferurile" on public.tracker_student_transfers
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+-- La transferul catre ALT profesor, istoricul ramane la vechiul profesor; doar numarul de
+-- lectii efectuate se aduce automat in lesson_offset (restul il seteaza adminul din Editeaza
+-- Elev) - vezi supabase/migrations/carry_student_totals_on_transfer.sql.
 create or replace function public.transfer_student_teacher(
   p_student_id uuid, p_new_teacher_id uuid, p_new_group_id uuid, p_note text default null
 )
@@ -736,12 +742,16 @@ returns void language plpgsql security definer set search_path = public as $$
 declare
   v_old_teacher_id uuid;
   v_old_group_id uuid;
+  v_student public.tracker_students%rowtype;
+  v_done_old int := 0; v_done_new int := 0;
+  v_carried_lessons int;
 begin
   if not public.is_admin() then
     raise exception 'Doar administratorii pot transfera un elev.';
   end if;
-  select teacher_id, group_id into v_old_teacher_id, v_old_group_id
-    from public.tracker_students where id = p_student_id;
+  select * into v_student from public.tracker_students where id = p_student_id;
+  v_old_teacher_id := v_student.teacher_id;
+  v_old_group_id := v_student.group_id;
   if v_old_teacher_id is null then
     raise exception 'Elevul nu a fost găsit.';
   end if;
@@ -753,12 +763,29 @@ begin
   if v_old_teacher_id = p_new_teacher_id and v_old_group_id = p_new_group_id then
     return;
   end if;
+
+  if v_old_teacher_id <> p_new_teacher_id then
+    -- Ce vede Progress Tracker inainte (randurile vechiului profesor) si dupa (randurile noului).
+    select count(*) filter (where teacher_id = v_old_teacher_id and status in ('present', 'made_up')),
+           count(*) filter (where teacher_id = p_new_teacher_id and status in ('present', 'made_up'))
+      into v_done_old, v_done_new
+      from public.tracker_attendance where student_id = p_student_id;
+
+    v_carried_lessons := v_done_old - v_done_new;
+
+    update public.tracker_students
+      set lesson_offset = lesson_offset + v_carried_lessons
+      where id = p_student_id;
+  end if;
+
   update public.tracker_students
     set teacher_id = p_new_teacher_id, group_id = p_new_group_id
     where id = p_student_id;
   insert into public.tracker_student_transfers
-    (student_id, from_teacher_id, to_teacher_id, from_group_id, to_group_id, transferred_by, note)
-  values (p_student_id, v_old_teacher_id, p_new_teacher_id, v_old_group_id, p_new_group_id, auth.uid(), p_note);
+    (student_id, from_teacher_id, to_teacher_id, from_group_id, to_group_id, transferred_by, note,
+     carried_lessons)
+  values (p_student_id, v_old_teacher_id, p_new_teacher_id, v_old_group_id, p_new_group_id, auth.uid(), p_note,
+     v_carried_lessons);
 end;
 $$;
 grant execute on function public.transfer_student_teacher(uuid, uuid, uuid, text) to authenticated;
