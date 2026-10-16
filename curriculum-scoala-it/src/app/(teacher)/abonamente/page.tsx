@@ -6,11 +6,11 @@ import AbonamenteClient, { type SubscriptionRow } from './AbonamenteClient';
 
 export default async function AbonamentePage() {
   const profile = await requireUser();
-  const enabledModules = await getEnabledFeatureModules(profile);
+  // Verificarea accesului pleaca in paralel cu citirile de mai jos (asteptata inainte de orice
+  // afisare) - un drum pana la baza de date in loc de doua in serie.
+  const enabledModulesPromise = getEnabledFeatureModules(profile);
   // Modul nou, activabil per profesor de Super Admin (vezi src/lib/featureAccess.ts) - un
   // profesor caruia nu i s-a acordat acces e redirectionat, la fel ca requireAdmin().
-  if (!enabledModules.has('subscriptions')) redirect('/progress');
-
   const supabase = await createClient();
   const isAdmin = profile.role === 'admin';
 
@@ -28,13 +28,15 @@ export default async function AbonamentePage() {
   let groupsQuery = supabase.from('tracker_groups').select('id, group_name, teacher_id').is('deleted_at', null);
   if (!isAdmin) groupsQuery = groupsQuery.eq('teacher_id', profile.id);
 
-  const [{ data: students }, { data: groups }, teachersRes] = await Promise.all([
+  const [enabledModules, { data: students }, { data: groups }, teachersRes] = await Promise.all([
+    enabledModulesPromise,
     studentsQuery,
     groupsQuery,
     isAdmin
       ? supabase.from('profiles').select('id, full_name, email')
       : Promise.resolve({ data: null as { id: string; full_name: string; email: string }[] | null }),
   ]);
+  if (!enabledModules.has('subscriptions')) redirect('/progress');
 
   const groupNameById = new Map((groups ?? []).map((g) => [g.id as string, g.group_name as string]));
   const teacherNameById = new Map((teachersRes.data ?? []).map((t) => [t.id, t.full_name || t.email]));

@@ -41,6 +41,8 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// manifest.webmanifest e public (browserul il cere fara cookie-uri) - altfel ar fi redirectionat
+// la /login si instalarea pe ecranul de start n-ar functiona. Restul logicii de sesiune e neschimbat.
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };

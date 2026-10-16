@@ -10,10 +10,11 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
 
   // Verificare la nivel de rută: nu ne bazăm pe ce e ascuns vizual.
-  const allowed = await canAccessLesson(id);
+  // Cele doua citiri pleaca in paralel; continutul (citit oricum prin RLS) e afisat DOAR daca
+  // verificarea de acces trece - ordinea deciziei e aceeasi ca inainte.
+  const [allowed, ctx] = await Promise.all([canAccessLesson(id), getLessonContext(id)]);
   if (!allowed) return <div className="py-10"><AccessDenied /></div>;
 
-  const ctx = await getLessonContext(id);
   if (!ctx) return <div className="py-10"><AccessDenied /></div>;
 
   const { lesson, module: mod, course, platform } = ctx;

@@ -457,10 +457,10 @@ export default function DemoClient({ isAdmin }: { isAdmin: boolean }) {
   const rankedStudents = rankStudents([...students].sort((a, b) => b.progress - a.progress));
 
   return (
-    <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white flex flex-col overflow-x-hidden">
+    <div className="tracker-root -mx-4 -mt-4 -mb-[calc(6.5rem+env(safe-area-inset-bottom))] pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:-mx-10 lg:-my-9 lg:pb-0 min-h-screen bg-black text-white flex flex-col max-lg:overflow-x-clip lg:overflow-x-hidden">
       {/* Antet - aceeasi structura/clase ca antetul real din ProgressTracker.tsx (glass sticky,
           max-w-6xl, buton bg-gray-800), doar continutul difera. */}
-      <header className="glass sticky top-0 z-40 px-4 py-4 border-b border-white/10">
+      <header className="glass sticky top-[var(--mobile-header-h)] lg:top-0 z-40 px-4 py-3 lg:py-4 border-b border-white/10">
         <div className="flex items-center justify-between max-w-6xl mx-auto gap-3 flex-wrap gap-y-2">
           <h1 className="text-xl md:text-2xl font-bold shrink-0">🧪 Demo — Exerciții ghidate</h1>
           <button

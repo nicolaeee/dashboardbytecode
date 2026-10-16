@@ -61,6 +61,115 @@ body {
 }
 
 /* ============================================================================
+   MOBIL — tokenuri de miscare + suprafete (vezi Shell.tsx, BottomSheet.tsx)
+   Un singur loc pentru durate/curbe; animam DOAR transform/opacity (fara layout).
+   Iesirile sunt mai scurte decat intrarile, ca nimic sa nu intarzie o actiune.
+   ========================================================================= */
+:root {
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --surface: #17171a;          /* card opac, fara blur - pentru orice se repeta intr-o lista */
+  --surface-pop: #1b1b1f;      /* meniuri, foi de jos, dialoguri - opac, nu se vede textul prin el */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* inaltimea antetului mobil (56px) + zona sigura de sus - folosita de antetele lipite din pagini */
+  --mobile-header-h: calc(3.5rem + var(--safe-top));
+}
+
+.surface { background: var(--surface); border-color: rgba(255,255,255,.10); }
+.popover-surface { background: var(--surface-pop); box-shadow: 0 -20px 60px -20px rgba(0,0,0,.9); }
+
+/* Apasare = scale(0.97), doar transform - feedback instant la atingere. */
+.press { transition: transform var(--dur-fast) var(--ease-out); -webkit-tap-highlight-color: transparent; }
+.press:active { transform: scale(.97); }
+
+/* Tinte de atingere minim 44x44 DOAR pe ecrane tactile - pe desktop (mouse) dimensiunile raman
+   exact cele de acum. */
+@media (pointer: coarse) {
+  .tap { min-width: 44px; min-height: 44px; }
+}
+
+/* Foaia de jos (BottomSheet.tsx). sheet-out nu are "from" - porneste din pozitia curenta
+   (inclusiv cand foaia e trasa cu degetul), ca inchiderea prin swipe sa fie continua. */
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-out { to { transform: translateY(100%); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { to { opacity: 0; } }
+.sheet-in { animation: sheet-in var(--dur-slow) var(--ease-out); transition: transform var(--dur-base) var(--ease-out); }
+.sheet-out { animation: sheet-out 180ms var(--ease-in) forwards; }
+.sheet-backdrop-in { animation: fade-in var(--dur-base) var(--ease-out); }
+.sheet-backdrop-out { animation: fade-out 180ms var(--ease-in) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in { animation: fade-in var(--dur-base) linear; }
+  .sheet-out { animation: fade-out 150ms linear forwards; }
+}
+
+/* Badge-ul din bara de jos - un mic "pop" cand se schimba valoarea (cheia React se schimba). */
+@keyframes badge-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.badge-pop { animation: badge-pop var(--dur-base) var(--ease-out); }
+
+/* Skeleton-urile din loading.tsx - un puls discret de opacitate (ieftin, fara gradient animat). */
+@keyframes skeleton-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.skeleton { background: rgba(255,255,255,.06); border-radius: 14px; animation: skeleton-pulse 1.4s ease-in-out infinite; }
+
+/* Banner "Fara conexiune" (OfflineBanner.tsx) */
+@keyframes slide-down { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+@media (max-width: 1023px) {
+  /* Pe telefon iOS face zoom automat in orice camp cu text sub 16px - campurile primesc 16px
+     doar sub lg, pe desktop raman exact cum sunt. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  [contenteditable="true"] { font-size: 16px !important; }
+
+  /* Sticla cu blur pe elemente repetate costa mult la derulare pe telefoane slabe - sub lg,
+     .glass (carduri, campuri, randuri de lista) devine suprafata opaca de aceeasi nuanta.
+     Antetul mobil (.glass-header) isi pastreaza blur-ul - e un singur element. */
+  .glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+  .glass-strong {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface-pop);
+  }
+  /* Animatiile infinite de pe fiecare card de elev (shimmer pe bara, puls pe insigne) redesenau
+     ecranul continuu - pe telefon raman statice (aceleasi culori, fara bucla). */
+  .tracker-root .tracker-progress-bar,
+  .tracker-root .tracker-earned-badge { animation: none; }
+
+  /* Dialogurile din Progress Tracker (ModalShell): randul cu "Salvează" (ultimul rand al
+     formularului, cel care contine butonul submit) ramane lipit jos, cu fundal opac - in
+     dialogurile lungi (ex. Editează Elev) nu mai trebuie derulat pana la capat ca sa salvezi.
+     Doar CSS, fara nicio schimbare in formulare sau in ce salveaza ele. */
+  .tracker-modal:has(form > div:last-child > button[type="submit"]) { padding-bottom: 0; }
+  .tracker-modal form > div:last-child:has(> button[type="submit"]) {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin: 0 -1.5rem;
+    padding: .75rem 1.5rem 1.5rem;
+    background: #111827;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+}
+
+/* Antetul mobil din Shell - singurul element cu blur pe telefon. */
+.glass-header {
+  background: rgba(15,15,17,.82);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+}
+
+/* Liste lungi: browserul nu randeaza cardurile din afara ecranului pana nu ajungi la ele. */
+.cv-auto { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+
+/* ============================================================================
    PROGRESS TRACKER — efecte vizuale proprii (stelute, insigne, medalii, confetti)
    Scopate sub .tracker-root ca sa nu se amestece cu restul aplicatiei.
    ========================================================================= */

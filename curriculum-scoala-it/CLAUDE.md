@@ -69,6 +69,14 @@ profesorii, abonamentele și task-urile; **profesorii** își țin clasele în P
 - `public/diplome/<Curs>/Diploma_modulul<N>_<suffix>.html` — șabloane diplome (module 1–4);
   `src/lib/diplomas.ts` construiește URL-urile. `src/Diplome_feedback/` = variante vechi.
 - `RealtimeRefresher` — reîmprospătează paginile la schimbări din Supabase Realtime.
+- **Mobil (sub `lg`, 1024px)**: `Shell.tsx` randează antet mobil + bară de navigare jos (3 pagini
+  din `PRIMARY_HREFS` + „Mai mult”); sidebar-ul de desktop (lg+) e neschimbat. `BottomSheet.tsx` =
+  singura foaie de jos (folosită de `Select.tsx` și „Mai mult”). Paginile „tracker” (Progress,
+  Registru, Diplome, Demo) folosesc margini negative aliniate la `<main>` din Shell
+  (`-mx-4 -mt-4 ... lg:-mx-10 lg:-my-9`) și `top-[var(--mobile-header-h)]` pentru antetul lipit.
+  Tokenuri de mișcare/suprafețe + reguli doar-mobil în `globals.css`. Logo: `Logo.tsx` +
+  `public/icons/*` + `src/app/favicon.ico` + `manifest.ts` (fără service worker — intenționat).
+  Fiecare rută are `loading.tsx` cu skeleton (`Skeletons.tsx`).
 
 ## Logica de business din Progress Tracker (important)
 

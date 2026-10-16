@@ -5,7 +5,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: { serverActions: { bodySizeLimit: '2mb' } },
+  experimental: {
+    serverActions: { bodySizeLimit: '2mb' },
+    // CSS-ul (mic, ~30KB) e pus direct in HTML in loc de un fisier separat blocant - pe 3G primul
+    // ecran apare cu un drum de retea mai putin.
+    inlineCss: true,
+  },
   // Repo-ul git e cu un nivel mai sus (parinte), iar acolo a ramas accidental un
   // package-lock.json gol - fara asta, Next.js infera radacina workspace-ului
   // gresit (parintele) si "next build" pica la "Collecting page data" (nu gasea

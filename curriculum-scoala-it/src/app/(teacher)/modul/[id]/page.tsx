@@ -12,15 +12,17 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
   const { id } = await params;
 
   // Blocare la nivel de rută, chiar dacă linkul e introdus manual în bară.
-  if (!(await canAccessModule(id))) return <div className="py-10"><AccessDenied /></div>;
-
+  // Toate cele 4 citiri sunt independente -> un singur drum in paralel (inainte: 4 in serie).
+  // Continutul e afisat DOAR daca verificarea de acces trece, exact ca inainte.
   const supabase = await createClient();
-  const { data: mod } = await supabase.from('modules').select('*').eq('id', id).maybeSingle();
+  const [allowed, { data: mod }, { data: lessons }, access] = await Promise.all([
+    canAccessModule(id),
+    supabase.from('modules').select('*').eq('id', id).maybeSingle(),
+    supabase.from('lesson_index').select('*').eq('module_id', id).order('position'),
+    getAccessMap(profile),
+  ]);
+  if (!allowed) return <div className="py-10"><AccessDenied /></div>;
   if (!mod) return <div className="py-10"><AccessDenied /></div>;
-
-  const { data: lessons } = await supabase
-    .from('lesson_index').select('*').eq('module_id', id).order('position');
-  const access = await getAccessMap(profile);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

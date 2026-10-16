@@ -6,8 +6,9 @@ import TeacherCurriculumTree from './TeacherCurriculumTree';
 export default async function TeacherCurriculumPage() {
   const profile = await requireUser();
   const isAdmin = profile.role === 'admin';
-  const access = await getAccessMap(profile);
-  const fullTree = await getTree(access);
+  // Permisiunile si arborele pleaca in paralel (getTree asteapta singur promisiunea de acces).
+  const accessPromise = getAccessMap(profile);
+  const [access, fullTree] = await Promise.all([accessPromise, getTree(accessPromise)]);
   // "Strict necesar": profesorul vede doar ce are voie sa deschida - restul dispare
   // complet din listă, nu mai apare cu lacăt. Adminul continuă să vadă tot, nefiltrat.
   const tree = isAdmin ? fullTree : filterTreeForTeacher(fullTree, access);

@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
 
-export type NavItem = { href: string; label: string; icon: React.ReactNode; exact?: boolean };
+/** short = eticheta scurta din bara de jos de pe telefon (max ~10 caractere); badge = numar afisat
+ * ca bulina rosie pe telefon (ex. task-uri urgente noi). Ambele sunt ignorate pe desktop. */
+export type NavItem = { href: string; label: string; icon: React.ReactNode; exact?: boolean; short?: string; badge?: number };
 /** O categorie de tip acordeon (ex: "ECHIPĂ") - vezi getAdminNavItems in lib/adminNav.tsx.
  * O lista plata (profesor) nu contine niciun NavGroup, doar NavItem - NavLinks randeaza
  * ambele forme identic ca inainte pentru NavItem-urile de nivel superior. */

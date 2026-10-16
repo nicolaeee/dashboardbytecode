@@ -72,16 +72,19 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10 backdrop-blur-md">
-      <div className={`glass-strong w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl border border-line shadow-pop`}>
-        <header className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="font-display text-lg font-semibold">{title}</h2>
-          <button onClick={onClose} aria-label="Închide" className="rounded-lg p-1 text-lock hover:bg-slate-150 hover:text-ink">
+    // Pe telefon: centrat in zona sigura, inaltime maxima = ecranul minus zonele sigure minus 2rem,
+    // corpul face scroll intern iar footer-ul (butoanele) ramane mereu vizibil jos. Fundal fara blur
+    // (opac) - mai ieftin. Pe desktop: exact ca inainte.
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] lg:items-start lg:bg-black/70 lg:p-4 lg:py-10 lg:backdrop-blur-md">
+      <div className={`glass-strong flex w-full flex-col max-lg:max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl border border-line shadow-pop`}>
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b max-lg:items-start border-line px-5 py-4">
+          <h2 className="min-w-0 break-words font-display text-lg font-semibold">{title}</h2>
+          <button onClick={onClose} aria-label="Închide" className="-mr-1 shrink-0 rounded-lg p-1 text-lock hover:bg-slate-150 hover:text-ink max-lg:-my-1.5 max-lg:p-2.5">
             <X size={18} />
           </button>
         </header>
-        <div className="max-h-[65vh] space-y-4 overflow-y-auto px-5 py-5">{children}</div>
-        {footer && <footer className="flex justify-end gap-2 border-t border-line px-5 py-4">{footer}</footer>}
+        <div className="max-h-[65vh] space-y-4 overflow-y-auto overscroll-contain px-5 py-5 max-lg:max-h-none max-lg:min-h-0 max-lg:flex-1">{children}</div>
+        {footer && <footer className="flex shrink-0 justify-end gap-2 border-t border-line px-5 py-4">{footer}</footer>}
       </div>
     </div>
   );

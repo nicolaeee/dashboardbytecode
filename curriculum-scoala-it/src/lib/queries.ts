@@ -26,10 +26,14 @@ export async function getAccessMap(profile: Profile): Promise<AccessMap> {
  * Scheletul e vizibil pentru toți (ca profesorul să știe ce există), iar
  * `unlocked` spune dacă profesorul poate intra efectiv.
  */
-export async function getTree(access: AccessMap): Promise<Tree> {
+export async function getTree(accessInput: AccessMap | Promise<AccessMap>): Promise<Tree> {
   const supabase = await createClient();
-  const [{ data: platforms }, { data: courses }, { data: modules }, { data: lessons }] =
+  // accessInput poate fi si o promisiune (getAccessMap pornit in paralel de pagina) - cele 4
+  // citiri ale arborelui nu depind de permisiuni, deci pleaca toate deodata cu ele, intr-un
+  // singur drum pana la baza de date in loc de doua in serie.
+  const [access, { data: platforms }, { data: courses }, { data: modules }, { data: lessons }] =
     await Promise.all([
+      accessInput,
       supabase.from('platforms').select('*').order('position').order('created_at'),
       supabase.from('courses').select('*').order('position').order('created_at'),
       supabase.from('modules').select('*').order('position').order('created_at'),
@@ -71,7 +75,6 @@ export type LessonContext = {
   module: Module;
   course: Course;
   platform: Platform;
-  siblings: LessonStub[];
 };
 
 type LessonWithAncestors = Lesson & {
@@ -106,14 +109,10 @@ export async function getLessonContext(lessonId: string): Promise<LessonContext 
   const { course, ...moduleRest } = mod;
   const { platform, ...courseRest } = course;
 
-  const { data: siblings } = await supabase
-    .from('lesson_index').select('*').eq('module_id', moduleRest.id).order('position');
-
   return {
     lesson: lesson as Lesson,
     module: moduleRest as Module,
     course: courseRest as Course,
     platform: platform as Platform,
-    siblings: (siblings ?? []) as LessonStub[],
   };
 }

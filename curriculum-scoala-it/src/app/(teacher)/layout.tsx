@@ -25,7 +25,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   // (vezi getAdminNavItems, categoria MOTIVAȚIE) - ei folosesc /diplome si pentru generare ad-hoc.
   const nav = [
     { href: '/curriculum', label: 'Curriculum', icon: <Library size={16} /> },
-    { href: '/progress', label: 'Progress Tracker', icon: <Rocket size={16} /> },
+    { href: '/progress', label: 'Progress Tracker', short: 'Progres', icon: <Rocket size={16} /> },
     { href: '/registru', label: 'Registru', icon: <ClipboardList size={16} /> },
     { href: '/recompense', label: 'Recompense', icon: <Star size={16} /> },
     { href: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },

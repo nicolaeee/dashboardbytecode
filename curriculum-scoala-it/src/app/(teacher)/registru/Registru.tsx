@@ -107,8 +107,8 @@ export default function Registru({
   }, [monthEntries]);
 
   return (
-    <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white">
-      <header className="glass sticky top-0 z-40 px-4 py-4 border-b border-white/10">
+    <div className="tracker-root -mx-4 -mt-4 -mb-[calc(6.5rem+env(safe-area-inset-bottom))] pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:-mx-10 lg:-my-9 lg:pb-0 min-h-screen bg-black text-white">
+      <header className="glass sticky top-[var(--mobile-header-h)] lg:top-0 z-40 px-4 py-3 lg:py-4 border-b border-white/10">
         <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl md:text-2xl font-bold">📒 Registru — Raport Payslip</h1>

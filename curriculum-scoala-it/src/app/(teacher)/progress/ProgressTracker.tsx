@@ -1951,10 +1951,10 @@ export default function ProgressTracker({
 
   // ---- render ----
   return (
-    <div className="tracker-root -mx-5 -my-7 lg:-mx-10 lg:-my-9 min-h-screen bg-black text-white flex flex-col overflow-x-hidden">
-      <header className="glass sticky top-0 z-40 px-4 py-4 border-b border-white/10">
-        <div className="flex items-center justify-between max-w-6xl mx-auto gap-3 flex-wrap gap-y-2">
-          <h1 className="text-xl md:text-2xl font-bold shrink-0">🚀 Progress Tracker</h1>
+    <div className="tracker-root -mx-4 -mt-4 -mb-[calc(6.5rem+env(safe-area-inset-bottom))] pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:-mx-10 lg:-my-9 lg:pb-0 min-h-screen bg-black text-white flex flex-col max-lg:overflow-x-clip lg:overflow-x-hidden">
+      <header className="glass sticky top-[var(--mobile-header-h)] lg:top-0 z-40 px-4 py-2.5 lg:py-4 border-b border-white/10">
+        <div className="flex items-center justify-end lg:justify-between max-w-6xl mx-auto gap-3 flex-wrap gap-y-2">
+          <h1 className="hidden lg:block text-xl md:text-2xl font-bold shrink-0">🚀 Progress Tracker</h1>
           <div className="flex items-center gap-2 flex-wrap gap-y-2">
             {isAdmin && (
               <Select
@@ -2005,7 +2005,7 @@ export default function ProgressTracker({
           <div>
             <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
               <h2 className="text-lg md:text-xl font-semibold">📚 Clasele Tale</h2>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 max-lg:min-w-0 lg:shrink-0">
                 <a
                   href={TUTORIAL_RECUPERARI_URL} target="_blank" rel="noopener noreferrer"
                   title="Tutorial video: cum setezi disponibilitatea si link-ul de recuperari"
@@ -2284,7 +2284,7 @@ export default function ProgressTracker({
       </div>
 
       {/* Toasturi */}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div className="fixed inset-x-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 space-y-2 lg:inset-x-auto lg:bottom-4 lg:right-4">
         {toasts.map((t) => (
           <div key={t.id} className={`tracker-toast px-4 py-3 rounded-2xl font-semibold text-white shadow-lg ${t.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
             {t.message}
@@ -3257,7 +3257,7 @@ export default function ProgressTracker({
                 </div>
               ))}
             </div>
-            <div className="bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[90%] overflow-y-auto tracker-card-shadow text-center relative z-10">
+            <div className="bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] lg:max-h-[90%] overflow-y-auto overscroll-contain tracker-card-shadow text-center relative z-10">
               <div className="text-5xl mb-4">🎓</div>
               <h3 className="text-xl font-bold mb-2 text-[#C8F023]">Felicitări!</h3>
               <p className="text-sm text-gray-400 mb-6">
@@ -3418,9 +3418,18 @@ function DynamicContactList({
 
 // Exportat (doar `export`, fara alta modificare) - vezi comentariul de langa TimeInput mai sus.
 export function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Escape inchide, la fel ca atingerea fundalului (care exista deja).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  // Pe telefon: centrat in zona sigura (sub Dynamic Island, deasupra barei de acasa), inaltime
+  // maxima = ecranul minus zonele sigure minus 2rem, butoanele de salvare lipite jos (CSS, vezi
+  // .tracker-modal in globals.css). Pe desktop: exact ca inainte (max-h 90%).
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[90%] overflow-y-auto tracker-card-shadow">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] lg:p-4 bg-black/80" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="tracker-modal bg-gray-900 rounded-3xl p-6 w-full max-w-md max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] lg:max-h-[90%] overflow-y-auto overscroll-contain tracker-card-shadow">
         {children}
       </div>
     </div>
@@ -3570,10 +3579,10 @@ export function StudentHistoryModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] lg:p-4 bg-black/80 lg:bg-black/70 lg:backdrop-blur-sm" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="glass-strong tracker-card-shadow border border-white/10 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="glass-strong tracker-card-shadow border border-white/10 rounded-3xl w-full max-w-lg max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] lg:max-h-[90vh] overflow-y-auto overscroll-contain"
       >
         <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-white/10">
           <div>
@@ -4139,7 +4148,7 @@ function MeetLinkControl({
       </a>
       <button
         onClick={startEdit} title="Editeaza link-ul"
-        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
+        className="w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
       >
         <Pencil size={14} />
       </button>
@@ -4176,7 +4185,7 @@ function MakeupLinkButton({ link, onOpen }: { link: string | null; onOpen: () =>
       </a>
       <button
         onClick={onOpen} title="Editeaza link-ul"
-        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
+        className="w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors shrink-0"
       >
         <Pencil size={14} />
       </button>
@@ -4208,21 +4217,37 @@ export function ClassView({
   onSetConnectionStatus: (student: TrackerStudent, status: 'conectat' | 'neconectat') => void;
 }) {
   const rewardEmoji = getRewardEmoji(group.reward_type);
-  const groupLessons = lessons.filter((l) => l.group_id === group.id);
-  const groupLessonIds = new Set(groupLessons.map((l) => l.id));
-  const groupAttendance = attendance.filter((a) => groupLessonIds.has(a.lesson_id));
+  // Memoizate: la fiecare steluta/bifa ProgressTracker se re-randeaza de cateva ori (update optimist
+  // + confirmare + celebrari) - filtrele si numaratorile de mai jos se refac doar cand se schimba
+  // efectiv lectiile/prezentele, nu la fiecare randare. Rezultatele sunt identice cu cele de dinainte.
+  const groupLessons = useMemo(() => lessons.filter((l) => l.group_id === group.id), [lessons, group.id]);
+  const groupAttendance = useMemo(() => {
+    const groupLessonIds = new Set(groupLessons.map((l) => l.id));
+    return attendance.filter((a) => groupLessonIds.has(a.lesson_id));
+  }, [attendance, groupLessons]);
+  // O singura trecere prin prezente (in loc de cate un filter per elev, de doua ori).
+  const dynamicCounts = useMemo(() => {
+    const map = new Map<string, { present: number; absent: number }>();
+    for (const a of groupAttendance) {
+      const c = map.get(a.student_id) ?? { present: 0, absent: 0 };
+      if (a.status === 'present' || a.status === 'made_up') c.present += 1;
+      else if (a.status === 'absent') c.absent += 1;
+      map.set(a.student_id, c);
+    }
+    return map;
+  }, [groupAttendance]);
   // Modulul curent = modulul celei mai avansate lectii create - steluțele de pe card se numara
   // doar din lectiile lui, deci pornesc de la 0 odata cu prima lectie a unui modul nou.
   const currentModule = currentModuleOf(groupLessons, students);
   // Total afisat = istoric (presence_count/absence_count, salvat manual pt elevii cu istoric
   // dinainte de Tracker) + dinamic (calculat din lectiile bifate efectiv in platforma).
   const attendanceCountFor = (studentId: string) => {
-    const dynamic = groupAttendance.filter((a) => a.student_id === studentId && (a.status === 'present' || a.status === 'made_up')).length;
+    const dynamic = dynamicCounts.get(studentId)?.present ?? 0;
     const historic = students.find((s) => s.id === studentId)?.presence_count ?? 0;
     return dynamic + historic;
   };
   const absenceCountFor = (studentId: string) => {
-    const dynamic = groupAttendance.filter((a) => a.student_id === studentId && a.status === 'absent').length;
+    const dynamic = dynamicCounts.get(studentId)?.absent ?? 0;
     const historic = students.find((s) => s.id === studentId)?.absence_count ?? 0;
     return dynamic + historic;
   };
@@ -4303,6 +4328,14 @@ function AttendanceBoard({
 
   const selectedIndex = sortedLessons.findIndex((l) => l.id === selectedLessonId);
   const selectedLesson = selectedIndex >= 0 ? sortedLessons[selectedIndex] : null;
+  // Prezenta fiecarui elev la lectia selectata, indexata o singura data (in loc de attendance.find
+  // pe fiecare rand). Perechea (lectie, elev) e unica in tracker_attendance (upsert onConflict).
+  const recordByStudent = useMemo(() => {
+    const map = new Map<string, TrackerAttendance>();
+    if (!selectedLesson) return map;
+    for (const a of attendance) if (a.lesson_id === selectedLesson.id) map.set(a.student_id, a);
+    return map;
+  }, [attendance, selectedLesson]);
 
   // Notita de tema a lectiei selectate - stare locala (salvata la blur), resincronizata
   // ori de cate ori profesorul schimba lectia selectata din navigare.
@@ -4319,7 +4352,7 @@ function AttendanceBoard({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onRequestNewLesson(group.id)} title="Adauga lectie noua"
-            className="tracker-btn-primary w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+            className="tracker-btn-primary w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center shrink-0"
           >
             <Plus size={16} strokeWidth={3} />
           </button>
@@ -4327,7 +4360,7 @@ function AttendanceBoard({
             <button
               onClick={() => onDeleteLesson(selectedLesson.id)}
               title="Sterge lectia curenta"
-              className="text-gray-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-md transition-colors shrink-0"
+              className="text-gray-500 hover:text-red-400 hover:bg-red-500/10 p-2 max-lg:p-3 rounded-md transition-colors shrink-0"
             >
               <Trash2 size={16} />
             </button>
@@ -4346,7 +4379,7 @@ function AttendanceBoard({
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={goPrev} disabled={selectedIndex <= 0} title="Lectia anterioara"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                className="w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
               >
                 <ChevronLeft size={18} />
               </button>
@@ -4355,7 +4388,7 @@ function AttendanceBoard({
                   type="button"
                   onClick={() => setLessonMenuOpen((v) => !v)}
                   aria-expanded={lessonMenuOpen}
-                  className="flex items-center gap-1 bg-transparent font-bold text-base md:text-lg cursor-pointer focus:outline-none"
+                  className="flex items-center gap-1 bg-transparent font-bold text-base md:text-lg cursor-pointer focus:outline-none max-lg:min-h-10"
                 >
                   {formatModuleLesson(selectedLesson.curriculum_index)}
                   <ChevronDown size={16} className={`text-gray-500 transition-transform ${lessonMenuOpen ? 'rotate-180' : ''}`} />
@@ -4369,13 +4402,13 @@ function AttendanceBoard({
                 {lessonMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setLessonMenuOpen(false)} />
-                    <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-72 overflow-y-auto rounded-2xl border border-gray-700 bg-gray-900 shadow-xl">
+                    <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-72 max-w-[calc(100vw-5rem)] overflow-y-auto rounded-2xl border border-gray-700 bg-gray-900 shadow-xl">
                       {sortedLessons.map((l) => (
                         <button
                           key={l.id}
                           type="button"
                           onClick={() => { setSelectedLessonId(l.id); setLessonMenuOpen(false); }}
-                          className={`flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm transition-colors ${l.id === selectedLesson.id ? 'bg-gray-800 text-[#C8F023]' : 'text-white hover:bg-gray-800'}`}
+                          className={`flex w-full items-center gap-1.5 px-3 py-2 max-lg:min-h-11 text-left text-sm transition-colors ${l.id === selectedLesson.id ? 'bg-gray-800 text-[#C8F023]' : 'text-white hover:bg-gray-800'}`}
                         >
                           <span className="min-w-0 flex-1 truncate">
                             {formatModuleLesson(l.curriculum_index)} - {new Date(l.lesson_date).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -4397,7 +4430,7 @@ function AttendanceBoard({
               </div>
               <button
                 onClick={goNext} disabled={selectedIndex >= sortedLessons.length - 1} title="Lectia urmatoare"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                className="w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
               >
                 <ChevronRight size={18} />
               </button>
@@ -4408,7 +4441,7 @@ function AttendanceBoard({
               onChange={(e) => setHomeworkDraft(e.target.value)}
               onBlur={() => { if (homeworkDraft !== (selectedLesson.homework_note ?? '')) onSaveLessonHomework(selectedLesson.id, homeworkDraft); }}
               placeholder="Notează tema pentru data viitoare..."
-              className="min-w-[160px] flex-1 bg-gray-800/60 border border-gray-700 rounded-xl px-3 py-1.5 text-sm placeholder:text-gray-500 focus:outline-none focus:border-[#C8F023]/50"
+              className="min-w-[160px] max-lg:min-w-0 max-lg:basis-full max-lg:py-2.5 flex-1 bg-gray-800/60 border border-gray-700 rounded-xl px-3 py-1.5 text-sm placeholder:text-gray-500 focus:outline-none focus:border-[#C8F023]/50"
             />
           </div>
 
@@ -4417,15 +4450,17 @@ function AttendanceBoard({
               afisat in stanga sa fie mereu corect indiferent de ordinea primita ca prop. */}
           <div className="space-y-2">
             {[...students].sort((a, b) => b.progress - a.progress).map((s) => {
-              const record = attendance.find((a) => a.lesson_id === selectedLesson.id && a.student_id === s.id);
+              const record = recordByStudent.get(s.id);
               // Nemarcat inca (niciun rand in tracker_attendance) != 'absent' - ramane starea
               // neutra pana cand profesorul apasa explicit un buton, ca sa nu sugereze vizual
               // ca prezenta a fost deja marcata cand de fapt nu s-a intamplat nimic.
               const status: AttendanceStatus | undefined = record?.status;
               const starCount = record?.star_count ?? 0;
               const starDisabled = status !== 'present' && status !== 'made_up';
+              // Pe ecrane inguste (sub 640px), daca numele nu incape langa cele 4 butoane, butoanele trec
+              // pe randul urmator (aliniate la dreapta) - numele ramane lizibil, nu "Elen...".
               return (
-                <div key={s.id} className="flex flex-row items-center justify-between gap-2 px-3 py-2.5 border border-gray-700/60 rounded-2xl bg-gray-800/70">
+                <div key={s.id} className="flex flex-row max-sm:flex-wrap items-center justify-between gap-2 max-sm:gap-y-1.5 px-3 py-2.5 border border-gray-700/60 rounded-2xl bg-gray-800/70">
                   <button
                     type="button" onClick={() => onOpenHistory(s.id)} title="Vezi fisa elevului"
                     className="flex items-center gap-2 min-w-0 text-left group/name"
@@ -4440,13 +4475,13 @@ function AttendanceBoard({
                     </span>
                   </button>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 max-sm:gap-1 max-sm:ml-auto shrink-0">
                     <button
                       type="button"
                       onClick={() => !starDisabled && onCycleStar(s.id, selectedLesson.id)}
                       disabled={starDisabled}
                       title={starDisabled ? 'Elevul trebuie sa fie prezent sau sa fi recuperat lectia' : `Tema facuta x${starCount} - click pentru a schimba`}
-                      className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${starDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'}`}
+                      className={`relative w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center transition-colors ${starDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'}`}
                     >
                       <Star
                         size={18} strokeWidth={2}
@@ -4460,19 +4495,19 @@ function AttendanceBoard({
                     </button>
                     <button
                       onClick={() => onSetStatus(s.id, selectedLesson.id, 'present')} title="Prezent"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${status === 'present' ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                      className={`w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center transition-colors ${status === 'present' ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
                     >
                       <Check size={16} strokeWidth={3} />
                     </button>
                     <button
                       onClick={() => onSetStatus(s.id, selectedLesson.id, 'absent')} title="Absent"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${status === 'absent' ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                      className={`w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center transition-colors ${status === 'absent' ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
                     >
                       <XIcon size={16} strokeWidth={3} />
                     </button>
                     <button
                       onClick={() => onRequestRecovery(s.id, selectedLesson.id)} title="Recuperat"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${status === 'made_up' ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                      className={`w-8 h-8 max-lg:w-10 max-lg:h-10 rounded-full flex items-center justify-center transition-colors ${status === 'made_up' ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
                     >
                       <RotateCcw size={15} strokeWidth={2.5} />
                     </button>
@@ -4508,22 +4543,22 @@ function StudentCard({
   const progressPercent = (starsInCurrentModule / 16) * 100;
 
   return (
-    <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
+    <div className="bg-white text-black rounded-3xl p-5 tracker-card-shadow max-lg:[content-visibility:auto] max-lg:[contain-intrinsic-size:auto_420px]">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             {isAdmin ? (
               <button
                 type="button" onClick={onOpenHistory}
-                className="text-lg font-bold underline decoration-transparent hover:decoration-black/40 underline-offset-2 transition-colors text-left"
+                className="min-w-0 break-words text-lg font-bold underline decoration-transparent hover:decoration-black/40 underline-offset-2 transition-colors text-left"
                 title="Vezi fisa elevului"
               >
                 {student.name}
               </button>
             ) : (
-              <span className="text-lg font-bold">{student.name}</span>
+              <span className="min-w-0 break-words text-lg font-bold">{student.name}</span>
             )}
-            {totalStudents >= 2 && student.rank <= 3 && <span className="text-3xl ml-2">{MEDALS[student.rank - 1]}</span>}
+            {totalStudents >= 2 && student.rank <= 3 && <span className="shrink-0 text-3xl ml-2">{MEDALS[student.rank - 1]}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
             <div className="tracker-level-badge inline-block px-3 py-1 rounded-full text-white text-sm font-semibold">
@@ -4560,7 +4595,7 @@ function StudentCard({
       <div className="grid w-full grid-cols-8 gap-1 mb-4">
         {Array.from({ length: 16 }, (_, i) => (
           <div key={i} className="flex items-center justify-center">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${i < starsInCurrentModule ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
+            <div className={`w-8 h-8 max-sm:w-full max-sm:h-auto max-sm:aspect-square max-sm:max-w-8 max-sm:text-base rounded-lg flex items-center justify-center text-lg ${i < starsInCurrentModule ? 'bg-[#C8F023]' : 'bg-gray-700 opacity-50'}`}>
               {rewardEmoji}
             </div>
           </div>

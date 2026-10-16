@@ -21,13 +21,15 @@ export function getAdminNavItems(newTaskCount: number): NavSection[] {
       href: '/admin/task-uri-urgente',
       label: newTaskCount > 0 ? `Task-uri urgente (${newTaskCount})` : 'Task-uri urgente',
       icon: <AlertTriangle size={16} />,
+      short: 'Task-uri',
+      badge: newTaskCount,
     },
     {
       title: 'ECHIPĂ',
       items: [
         { href: '/admin/curriculum', label: 'Curriculum', icon: <Library size={16} /> },
         { href: '/admin/teachers', label: 'Profesori', icon: <Users size={16} /> },
-        { href: '/progress', label: 'Progress Tracker', icon: <Rocket size={16} /> },
+        { href: '/progress', label: 'Progress Tracker', short: 'Progres', icon: <Rocket size={16} /> },
         { href: '/registru', label: 'Registru', icon: <ClipboardList size={16} /> },
       ],
     },
